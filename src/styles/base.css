@@ -1,0 +1,201 @@
+/* ============================================================
+   ORBIT OPS — BASE STYLES
+   Reset, typography, body. Restrained. Mission control.
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+*::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: auto;
+}
+
+html, body {
+  background: var(--ink-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  /* Subtle vignetted backdrop — not a competing gradient */
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(111, 168, 255, 0.025), transparent),
+    var(--ink-void);
+}
+
+/* Smooth scroll only for in-page links; main scroll handled by Lenis */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+h1 { font-size: var(--text-5xl); letter-spacing: -0.025em; }
+h2 { font-size: var(--text-3xl); letter-spacing: -0.015em; }
+h3 { font-size: var(--text-xl); }
+h4 { font-size: var(--text-lg); }
+
+p {
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+a:hover {
+  color: var(--accent);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+img, svg, video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ink-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 5px;
+  border: 2px solid var(--ink-deep);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-3);
+}
+
+/* Selection on focus — subtle, not glowing */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Utility classes used everywhere */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-mute);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 16px;
+  height: 1px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-left: var(--space-7);
+  padding-right: var(--space-7);
+}
+
+@media (max-width: 720px) {
+  .container { padding-left: var(--space-5); padding-right: var(--space-5); }
+}
+
+/* Section spacing — consistent across all pages */
+.section {
+  padding-top: var(--space-13);
+  padding-bottom: var(--space-13);
+}
+
+@media (max-width: 720px) {
+  .section { padding-top: var(--space-11); padding-bottom: var(--space-11); }
+}
+
+.section__head {
+  max-width: 720px;
+  margin-bottom: var(--space-10);
+}
+
+.section__head--center {
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.section__title {
+  margin-top: var(--space-3);
+}
+
+.section__lede {
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: 1.65;
+  max-width: 60ch;
+}
+
+/* Generic text sizes */
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--text-mute); }
+.dim { color: var(--text-secondary); }

@@ -1,0 +1,308 @@
+/* ============================================================
+   ORBIT OPS — COMPONENT STYLES
+   Buttons, cards, forms, badges. Clean, professional, restrained.
+   ============================================================ */
+
+/* ============================================================
+   BUTTONS — 4 variants, 4 sizes
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-out);
+  user-select: none;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .btn { min-height: 44px; padding: 0 20px; font-size: 12px; }
+  .btn--sm { min-height: 40px; padding: 0 14px; }
+  .btn--lg { min-height: 52px; padding: 0 24px; font-size: 13px; }
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--ink-void);
+  border-color: var(--accent);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-press);
+  border-color: var(--accent-press);
+  color: var(--ink-void);
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: var(--line-2);
+}
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.btn--danger {
+  background: transparent;
+  color: var(--alert);
+  border-color: rgba(226, 92, 104, 0.3);
+}
+.btn--danger:hover:not(:disabled) {
+  background: rgba(226, 92, 104, 0.1);
+  border-color: var(--alert);
+}
+
+.btn--sm { height: 28px; padding: 0 12px; font-size: 10px; }
+.btn--lg { height: 44px; padding: 0 24px; font-size: 12px; }
+.btn--xl { height: 52px; padding: 0 32px; font-size: 13px; }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--ink-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--space-6);
+}
+
+.card--elevated {
+  background: var(--ink-card);
+  box-shadow: var(--shadow-md);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.card__title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   INPUTS — clean, mission-control feel
+   ============================================================ */
+.input, .select {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--ink-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.input:focus, .select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input::placeholder { color: var(--text-mute); }
+
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%236A7280'%3e%3cpath d='M3 4.5l3 3 3-3'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  padding-right: 32px;
+}
+
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-mute);
+  letter-spacing: 0.06em;
+}
+
+/* Range slider — subtle, professional */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--line-2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--dur-fast);
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ============================================================
+   BADGES — mission control style
+   ============================================================ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--ink-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--line);
+}
+
+.badge--ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.badge--warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.badge--alert { color: var(--alert); background: var(--alert-soft); border-color: transparent; }
+.badge--info { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+
+.badge__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.table thead th {
+  background: var(--ink-raised);
+  padding: 10px 14px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-secondary);
+}
+
+.table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.table--compact td, .table--compact th {
+  padding: 6px 12px;
+}
+
+/* ============================================================
+   PROGRESS / BARS
+   ============================================================ */
+.progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--ink-input);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.progress--ok .progress__fill { background: var(--ok); }
+.progress--warn .progress__fill { background: var(--warn); }
+.progress--alert .progress__fill { background: var(--alert); }
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+.divider {
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+  border: 0;
+}
+
+.divider--grad {
+  background: linear-gradient(90deg, transparent, var(--line-2) 50%, transparent);
+}

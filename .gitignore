@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+.cache/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env / secrets
+.env
+.env.local
+
+# Tests / coverage (none yet)
+coverage/
+.nyc_output/
+
+# Local-only
+*.local
+
+# Generated content (regenerable)
+src/data/generated/
+public/audio/generated/
+
+# Backups
+*.bak
+*.tmp

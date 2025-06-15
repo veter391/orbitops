@@ -1,0 +1,405 @@
+/**
+ * AI Agent panel — renders the reasoning chain and approval controls.
+ *
+ * Design philosophy: every step in the chain has structured data,
+ * displayed as proper cards/tables — never raw text dumps.
+ * Approval flow uses in-app modals, never browser alerts/prompts.
+ *
+ * Voice: "agent observes/proposes/recommends" — never "thinks/decides".
+ *
+ * @module ui/agent-panel
+ */
+
+'use strict';
+
+import { pct, formatNumber, formatDuration, uid } from '../utils.js';
+
+function renderText(s) {
+  if (!s) return '';
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+
+const PHASE_ICONS = {
+  OBSERVE: '◉',
+  THINK: '◆',
+  SCORE: '◈',
+  PROPOSE: '◇',
+  WAIT: '◌',
+};
+
+const PHASE_LABELS = {
+  OBSERVE: 'OBSERVE',
+  THINK: 'THINK',
+  SCORE: 'SCORE',
+  PROPOSE: 'PROPOSE',
+  WAIT: 'AWAITING APPROVAL',
+};
+
+export function mountAgentPanel(host, proposal, handlers = {}) {
+  const { onApprove, onReject, onClose, onModify } = handlers;
+
+  const confidenceColor =
+    proposal.confidence > 0.9 ? 'var(--ok)' :
+    proposal.confidence > 0.7 ? 'var(--accent)' : 'var(--warn)';
+
+  host.innerHTML = `
+    <div class="proposal">
+      <header class="proposal__head">
+        <div class="proposal__head-info">
+          <div class="proposal__eyebrow">AI proposal · ${proposal.scenarioId}</div>
+          <h3 class="proposal__title">${proposal.title}</h3>
+          <div class="proposal__chips">
+            <span class="proposal__chip">${proposal.satelliteId}</span>
+            <span class="proposal__chip proposal__chip--${proposal.confidence > 0.9 ? 'ok' : proposal.confidence > 0.7 ? 'accent' : 'warn'}">${(proposal.confidence * 100).toFixed(0)}% confidence</span>
+            <span class="proposal__chip">${proposal.chain.length} reasoning steps</span>
+          </div>
+        </div>
+        <button class="proposal__close" id="propClose" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+
+      <div class="proposal__confidence">
+        <div class="proposal__confidence-label">Model confidence</div>
+        <div class="proposal__confidence-bar">
+          <div class="proposal__confidence-fill" style="width: ${(proposal.confidence * 100).toFixed(0)}%; background: ${confidenceColor};"></div>
+        </div>
+        <div class="proposal__confidence-value" style="color: ${confidenceColor};">${pct(proposal.confidence, 0)}</div>
+      </div>
+
+      <div class="proposal__summary">
+        <div class="proposal__summary-label">Summary</div>
+        <div class="proposal__summary-text">${proposal.summary}</div>
+      </div>
+
+      <div class="proposal__section-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6"/></svg>
+        Reasoning chain · ${proposal.chain.length} steps
+      </div>
+
+      <div class="reasoning-chain">
+        ${proposal.chain.map((step, i) => renderStep(step, i, proposal.chain.length)).join('')}
+      </div>
+
+      ${renderBurnData(proposal)}
+
+      ${renderConsiderations(proposal)}
+
+      ${renderModificationControls(proposal)}
+
+      <footer class="proposal__actions">
+        <button class="btn btn--ghost" id="rejectBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          Reject
+        </button>
+        <button class="btn btn--secondary" id="modifyBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Modify & approve
+        </button>
+        <button class="btn btn--primary" id="approveBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg>
+          Approve proposal
+        </button>
+      </footer>
+
+      <div class="proposal__audit-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Every action is hash-chained and signed. Will be audited.
+      </div>
+    </div>
+  `;
+
+  // Wire up actions
+  host.querySelector('#propClose')?.addEventListener('click', () => onClose && onClose());
+  host.querySelector('#approveBtn')?.addEventListener('click', () => onApprove && onApprove());
+  host.querySelector('#modifyBtn')?.addEventListener('click', () => {
+    const modPanel = host.querySelector('#modifyPanel');
+    if (modPanel) modPanel.style.display = modPanel.style.display === 'none' ? 'block' : 'none';
+  });
+  host.querySelector('#modifyApprove')?.addEventListener('click', () => {
+    const mods = readModifications(host, proposal);
+    onModify && onModify(mods);
+  });
+
+  // Reject with proper modal (not browser prompt)
+  host.querySelector('#rejectBtn')?.addEventListener('click', () => {
+    openRejectModal(proposal, (reason) => {
+      onReject && onReject(reason);
+    });
+  });
+}
+
+/**
+ * Open a proper in-app reject modal — never window.prompt.
+ */
+function openRejectModal(proposal, onSubmit) {
+  // Remove existing modal if any
+  const existing = document.getElementById('reject-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'reject-modal';
+  modal.className = 'modal-backdrop is-show';
+  modal.innerHTML = `
+    <div class="modal modal--small">
+      <div class="modal__header">
+        <div>
+          <div class="modal__eyebrow">Action · Reject</div>
+          <h3 class="modal__title">Reject this proposal?</h3>
+        </div>
+        <button class="proposal__close" id="modalClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__proposal-info">
+          <span class="proposal__chip">${proposal.satelliteId}</span>
+          <span class="proposal__chip">${proposal.scenarioId}</span>
+        </div>
+        <div class="modal__proposal-title">${proposal.title}</div>
+        <div class="modal__proposal-summary">${proposal.summary}</div>
+        <label class="modal__field">
+          <span>Reason for rejection (optional)</span>
+          <textarea id="rejectReason" class="modal__textarea" rows="4" placeholder="e.g. Insufficient fuel, conflicts with current mission timeline…"></textarea>
+        </label>
+        <div class="modal__actions">
+          <button class="btn btn--ghost" id="modalCancel">Cancel</button>
+          <button class="btn btn--danger" id="modalConfirm">Reject proposal</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#modalClose')?.addEventListener('click', close);
+  modal.querySelector('#modalCancel')?.addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  modal.querySelector('#modalConfirm')?.addEventListener('click', () => {
+    const reason = modal.querySelector('#rejectReason').value.trim();
+    close();
+    onSubmit(reason);
+  });
+  // Focus textarea
+  setTimeout(() => modal.querySelector('#rejectReason')?.focus(), 100);
+}
+
+function renderStep(step, idx, total) {
+  const phaseColor = step.phase === 'WAIT' ? 'var(--accent)' :
+                    step.phase === 'PROPOSE' ? 'var(--ok)' : 'var(--accent-2, var(--accent))';
+
+  return `
+    <div class="chain-step">
+      <div class="chain-step__rail">
+        <div class="chain-step__num">${String(idx + 1).padStart(2, '0')}</div>
+        <div class="chain-step__phase-pill">${PHASE_LABELS[step.phase] || step.phase}</div>
+      </div>
+      <div class="chain-step__body">
+        <div class="chain-step__title">${renderText(step.title)}</div>
+        <div class="chain-step__text">${renderText(step.body)}</div>
+        ${renderStepData(step)}
+      </div>
+    </div>
+  `;
+}
+
+function renderStepData(step) {
+  if (!step.data) return '';
+
+  const d = step.data;
+
+  // Alternatives table (from SCORE step)
+  if (d.alternatives && Array.isArray(d.alternatives)) {
+    return `
+      <div class="data-block">
+        <div class="data-block__head">Candidate strategies</div>
+        <table class="data-table">
+          <thead>
+            <tr><th>Strategy</th><th>Δv</th><th>Fuel</th><th>Safety margin</th></tr>
+          </thead>
+          <tbody>
+            ${d.alternatives.map((alt) => `
+              <tr class="${alt.kind === 'Recommended' ? 'is-recommended' : ''}">
+                <td>
+                  <span class="data-table__kind">${alt.kind}</span>
+                  <span class="data-table__label">${alt.label}</span>
+                  ${alt.kind === 'Recommended' ? '<span class="data-table__badge">Winner</span>' : ''}
+                </td>
+                <td>${alt.dv.toFixed(2)} <span class="data-table__unit">m/s</span></td>
+                <td>${alt.fuel.toFixed(3)} <span class="data-table__unit">kg</span></td>
+                <td class="${alt.safetyMargin > 0 ? 'text-ok' : 'text-alert'}">
+                  ${alt.safetyMargin > 0 ? '+' : ''}${alt.safetyMargin.toFixed(1)} <span class="data-table__unit">km</span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Hypotheses (from THINK)
+  if (d.hypotheses && Array.isArray(d.hypotheses)) {
+    return `
+      <div class="data-block">
+        <div class="data-block__head">Ranked hypotheses</div>
+        <div class="data-list">
+          ${d.hypotheses.map((h) => `
+            <div class="data-list__row">
+              <span class="data-list__label">${h.label}</span>
+              <div class="data-list__bar">
+                <div class="data-list__bar-fill" style="width: ${(h.likelihood * 100).toFixed(0)}%;"></div>
+              </div>
+              <span class="data-list__val">${pct(h.likelihood, 0)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Options (from SCORE for battery)
+  if (d.options && Array.isArray(d.options)) {
+    return `
+      <div class="data-block">
+        <div class="data-block__head">Intervention options</div>
+        <div class="data-list">
+          ${d.options.map((o) => `
+            <div class="data-list__row ${o.id === d.winner ? 'is-recommended' : ''}">
+              <span class="data-list__label">
+                ${o.id === d.winner ? '<span class="data-table__badge">Recommended</span>' : ''}
+                ${o.label}
+              </span>
+              <span class="data-list__val">${typeof o.weeksGained === 'number' ? `+${o.weeksGained} weeks` : o.weeksGained} · ${o.impact}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Handoff data
+  if (d.gapSeconds !== undefined) {
+    return `
+      <div class="data-block">
+        <div class="data-block__head">Handoff plan</div>
+        <div class="data-grid">
+          <div class="data-grid__item">
+            <div class="data-grid__label">Coverage gap</div>
+            <div class="data-grid__val">${formatDuration(d.gapSeconds * 1000)}</div>
+          </div>
+          <div class="data-grid__item">
+            <div class="data-grid__label">Buffer</div>
+            <div class="data-grid__val">${formatNumber(d.storageUsed)} MB <span class="data-grid__sub">/ ${formatNumber(d.storageCapacity)} MB</span></div>
+          </div>
+          <div class="data-grid__item">
+            <div class="data-grid__label">Strategy</div>
+            <div class="data-grid__val" style="font-size: 12px;">${d.strategy}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Generic key-value display
+  const entries = Object.entries(d).filter(([k]) => !['source', 'sat', 'satA', 'satB'].includes(k));
+  if (entries.length === 0) return '';
+  return `
+    <div class="data-block">
+      <div class="data-grid">
+        ${entries.map(([k, v]) => `
+          <div class="data-grid__item">
+            <div class="data-grid__label">${prettifyKey(k)}</div>
+            <div class="data-grid__val">${formatVal(v)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderBurnData(proposal) {
+  if (!proposal.actionData?.burn) return '';
+  const burn = proposal.actionData.burn;
+  return `
+    <div class="proposal__section-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Maneuvre parameters
+    </div>
+    <div class="burn-grid">
+      <div class="burn-grid__item">
+        <div class="burn-grid__label">Δv required</div>
+        <div class="burn-grid__val">${burn.dvMs.toFixed(2)}<span class="burn-grid__unit"> m/s</span></div>
+      </div>
+      <div class="burn-grid__item">
+        <div class="burn-grid__label">Fuel cost</div>
+        <div class="burn-grid__val">${burn.fuelKg.toFixed(3)}<span class="burn-grid__unit"> kg</span></div>
+      </div>
+      <div class="burn-grid__item">
+        <div class="burn-grid__label">Direction</div>
+        <div class="burn-grid__val">${burn.direction || 'prograde'}</div>
+      </div>
+      <div class="burn-grid__item">
+        <div class="burn-grid__label">Duration</div>
+        <div class="burn-grid__val">${burn.durationSec || 30}<span class="burn-grid__unit"> s</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderConsiderations(proposal) {
+  if (!proposal.considerations?.length) return '';
+  return `
+    <div class="proposal__section-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Considerations
+    </div>
+    <div class="considerations">
+      ${proposal.considerations.map((c) => `
+        <div class="considerations__item">
+          <div class="considerations__bullet">→</div>
+          <div class="considerations__text">${c}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderModificationControls(proposal) {
+  if (!proposal.action.startsWith('maneuver') || !proposal.actionData?.burn) return '';
+  const burn = proposal.actionData.burn;
+  return `
+    <div id="modifyPanel" style="display: none; margin-top: 16px; padding: 16px; background: var(--ink-input); border-radius: var(--r-md); border: 1px solid var(--warn);">
+      <div style="font-family: var(--font-mono); font-size: 10px; color: var(--warn); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 12px;">Modify parameters</div>
+      <label class="modal__field">
+        <span>Burn duration (seconds): <strong id="burnVal">${burn.durationSec}</strong></span>
+        <input type="range" min="5" max="120" value="${burn.durationSec}" id="burnSlider" style="width: 100%; margin-top: 8px;">
+      </label>
+      <button class="btn btn--primary" id="modifyApprove" style="width: 100%; margin-top: 16px;">Approve with modification</button>
+    </div>
+  `;
+}
+
+function readModifications(host, proposal) {
+  const slider = host.querySelector('#burnSlider');
+  if (!slider) return {};
+  return {
+    burnDurationSec: Number(slider.value),
+    deltaV: proposal.actionData.burn.dvMs * (Number(slider.value) / proposal.actionData.burn.durationSec),
+  };
+}
+
+function prettifyKey(k) {
+  return k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
+}
+
+function formatVal(v) {
+  if (typeof v === 'number') {
+    if (Math.abs(v) < 1) return v.toFixed(3);
+    if (Math.abs(v) < 100) return v.toFixed(2);
+    return formatNumber(v, 2);
+  }
+  return String(v);
+}

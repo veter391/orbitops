@@ -1,0 +1,116 @@
+/* ============================================================
+   ORBIT OPS — DESIGN TOKENS
+   SpaceX-inspired mission control aesthetic.
+   Restrained palette, generous whitespace, professional restraint.
+   ============================================================ */
+
+:root {
+  /* ----- Surface (deep, layered, subtle) ----- */
+  --ink-void: #07090F;        /* deepest — cosmic black */
+  --ink-deep: #0D1117;        /* primary surface */
+  --ink-raised: #13171F;      /* cards, panels */
+  --ink-card: #161B25;        /* elevated cards */
+  --ink-input: #1A1F2A;       /* form fields */
+
+  /* ----- Lines (almost invisible, on purpose) ----- */
+  --line: #1F242E;
+  --line-2: #2A313D;
+  --line-3: #353D4B;
+
+  /* ----- Text (cool grays, very subtle hierarchy) ----- */
+  --text-primary: #E8ECF2;
+  --text-secondary: #A3ACBC;
+  --text-mute: #6A7280;
+  --text-faint: #4A5260;
+
+  /* ----- Accent — restrained, single, used with intent ----- */
+  /* Inspired by SpaceX telemetry screens — a cooler, deeper blue */
+  --accent: #6FA8FF;          /* primary brand accent */
+  --accent-glow: rgba(111, 168, 255, 0.18);
+  --accent-soft: rgba(111, 168, 255, 0.06);
+  --accent-press: #5A93E8;
+
+  /* ----- Status (semantic, never decorative) ----- */
+  --ok: #4ADE80;              /* nominal, success */
+  --ok-soft: rgba(74, 222, 128, 0.12);
+  --warn: #F0B860;            /* caution */
+  --warn-soft: rgba(240, 184, 96, 0.12);
+  --alert: #E25C68;           /* critical */
+  --alert-soft: rgba(226, 92, 104, 0.12);
+  --info: #6FA8FF;
+
+  /* ----- Mission colors (for satellite categories, used sparingly) ----- */
+  --mission-comms: #6FA8FF;
+  --mission-eo: #88D9A0;
+  --mission-iot: #B58FFF;
+  --mission-weather: #F0B860;
+  --mission-pnt: #E25C68;
+  --mission-broadband: #67D5E5;
+
+  /* ----- Type scale (semantic, not arbitrary) ----- */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 48px;
+  --text-5xl: 64px;
+  --text-6xl: 80px;
+
+  /* ----- Spacing (8px grid, semantic names) ----- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 96px;
+  --space-13: 120px;
+  --space-14: 160px;
+
+  /* ----- Radii ----- */
+  --r-xs: 3px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-2xl: 16px;
+
+  /* ----- Fonts ----- */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ----- Motion (precise, not bouncy) ----- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 400ms;
+  --dur-xslow: 800ms;
+
+  /* ----- Shadows (subtle, no neon glows) ----- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.5);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,0.6);
+
+  /* ----- Z-index scale ----- */
+  --z-bg: 0;
+  --z-base: 1;
+  --z-elevated: 10;
+  --z-nav: 100;
+  --z-modal-backdrop: 1000;
+  --z-modal: 1010;
+  --z-toast: 2000;
+  --z-tooltip: 3000;
+  --z-boot: 9999;
+}
