@@ -22,6 +22,7 @@ import { generate } from '../core/telemetry.js';
 import { agent, SCENARIOS } from '../scenarios/index.js';
 import { mountAgentPanel } from './agent-panel.js';
 import { audit } from '../core/audit-log.js';
+import { error as toastError } from './toast.js';
 
 const EARTH_RADIUS = 6371;
 const SCENE_SCALE = 1 / 1500;
@@ -446,7 +447,10 @@ export async function mountCockpit(host, THREE) {
       try {
         const p = await agent.runScenario(s.id, { satelliteId: selectedSat.id, timeSec: simTime });
         showProposal(p);
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(`cockpit scenario "${s.id}" failed for ${selectedSat.id}`, e);
+        toastError(`Could not run "${s.title}" scenario. Please try again.`, { title: 'Scenario failed' });
+      }
       btn.disabled = false;
       btn.classList.remove('is-thinking');
     });

@@ -87,7 +87,7 @@ export async function mount(app) {
           </p>
           <div class="cinema-hero__ctas">
             <a href="/cockpit" data-route="/cockpit" class="btn btn--primary btn--xl">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>
               ENTER MISSION CONTROL
             </a>
             <a href="/pricing" data-route="/pricing" class="btn btn--ghost btn--xl">REQUEST PILOT</a>
@@ -107,21 +107,21 @@ export async function mount(app) {
       <!-- ============== STATS REVEAL ============== -->
       <section class="stats-reveal" data-reveal>
         <div class="stats-reveal__container">
-          <div class="stats-reveal__item" data-counter data-to="9000" data-suffix="+">
+          <div class="stats-reveal__item" data-counter data-to="50" data-suffix="">
             <div class="stats-reveal__num"><span class="stats-reveal__counter">0</span></div>
-            <div class="stats-reveal__label">Active Starlink-class satellites<br>we monitor in production today</div>
+            <div class="stats-reveal__label">Simulated satellites in this demo<br>architecture built to scale to mega-constellations</div>
           </div>
-          <div class="stats-reveal__item" data-counter data-to="47" data-suffix="%">
+          <div class="stats-reveal__item" data-counter data-to="6" data-suffix="">
             <div class="stats-reveal__num"><span class="stats-reveal__counter">0</span></div>
-            <div class="stats-reveal__label">Anomalies predicted before<br>operators would have noticed</div>
+            <div class="stats-reveal__label">Mission types modelled<br>comms, EO, IoT, weather, PNT, broadband</div>
           </div>
-          <div class="stats-reveal__item" data-counter data-to="3200" data-suffix="">
+          <div class="stats-reveal__item" data-counter data-to="5" data-suffix="">
             <div class="stats-reveal__num"><span class="stats-reveal__counter">0</span></div>
-            <div class="stats-reveal__label">Hours of engineering saved<br>per satellite per year</div>
+            <div class="stats-reveal__label">Pre-built AI reasoning scenarios<br>ready for your own LLM backend</div>
           </div>
-          <div class="stats-reveal__item" data-counter data-to="12" data-suffix="">
+          <div class="stats-reveal__item" data-counter data-to="0" data-suffix="">
             <div class="stats-reveal__num"><span class="stats-reveal__counter">0</span></div>
-            <div class="stats-reveal__label">Conjunction alerts reviewed<br>per satellite per week</div>
+            <div class="stats-reveal__label">Runtime dependencies<br>vanilla JS core, MIT-licensed</div>
           </div>
         </div>
       </section>
@@ -146,7 +146,7 @@ export async function mount(app) {
             <div class="problem-section__cards">
               <div class="problem-card" data-reveal>
                 <div class="problem-card__icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 6v6l4 2"/>
                   </svg>
@@ -161,7 +161,7 @@ export async function mount(app) {
 
               <div class="problem-card" data-reveal>
                 <div class="problem-card__icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 3v18h18"/>
                     <path d="m19 9-5 5-4-4-3 3"/>
                   </svg>
@@ -176,7 +176,7 @@ export async function mount(app) {
 
               <div class="problem-card" data-reveal>
                 <div class="problem-card__icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
                   </svg>
                 </div>
@@ -190,7 +190,7 @@ export async function mount(app) {
 
               <div class="problem-card" data-reveal>
                 <div class="problem-card__icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                     <circle cx="9" cy="7" r="4"/>
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -225,7 +225,7 @@ export async function mount(app) {
             <div class="pillar" data-reveal>
               <div class="pillar__num">01</div>
               <div class="pillar__icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08 4.24 4.24M1 12h6m10 0h6"/>
                 </svg>
@@ -242,7 +242,7 @@ export async function mount(app) {
             <div class="pillar" data-reveal>
               <div class="pillar__num">02</div>
               <div class="pillar__icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M21 12a9 9 0 1 1-6.22-8.56"/>
                   <path d="M21 3v5h-5"/>
                 </svg>
@@ -253,13 +253,13 @@ export async function mount(app) {
                 baseline. Battery drop 4 weeks out. Thermal drift 6 hours out.
                 Conjunctions days out.
               </p>
-              <div class="pillar__metric">94% precision · 11-day mean lead time</div>
+              <div class="pillar__metric">Demo target: 94% precision · 11-day mean lead time</div>
             </div>
 
             <div class="pillar" data-reveal>
               <div class="pillar__num">03</div>
               <div class="pillar__icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                 </svg>
               </div>
@@ -275,7 +275,7 @@ export async function mount(app) {
             <div class="pillar" data-reveal>
               <div class="pillar__num">04</div>
               <div class="pillar__icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M20 7h-9m9 10h-9M13 7v10"/>
                   <circle cx="12" cy="12" r="10"/>
                 </svg>
@@ -299,9 +299,9 @@ export async function mount(app) {
             <span class="eyebrow">The cockpit</span>
             <h2 class="section__title">Live mission control. In your browser.</h2>
             <p class="section__lede">
-              Below is the same OrbitOps cockpit our customers use every day — running
-              against 50 simulated satellites, ready for you to drive. Click any AI
-              scenario to watch the agent reason through a real operator situation.
+              Below is the actual OrbitOps cockpit, running live in your browser against
+              a 50-satellite simulated constellation — ready for you to drive. Click any
+              AI scenario to watch the agent reason through a real operator situation.
             </p>
           </div>
           <div class="cockpit-teaser__viewer">
@@ -352,8 +352,9 @@ export async function mount(app) {
             <span class="eyebrow">The dashboard</span>
             <h2 class="section__title">Live constellation health. At a glance.</h2>
             <p class="section__lede">
-              The same dashboards your ops lead sees every morning. Anomaly trends,
-              fuel budgets, comms health, compliance status. All in one place.
+              The dashboard an ops lead would open every morning. Anomaly trends,
+              fuel budgets, comms health, compliance status — all in one place,
+              running on the simulated 50-satellite fleet.
             </p>
           </header>
           <div class="dashboard-preview" id="dashboardPreview"></div>
@@ -365,21 +366,22 @@ export async function mount(app) {
         </div>
       </section>
 
-      <!-- ============== SOCIAL PROOF ============== -->
+      <!-- ============== VISION / WHY IT MATTERS ============== -->
       <section class="proof-section" data-reveal>
         <div class="container">
           <div class="proof-quote">
             <div class="proof-quote__mark">"</div>
             <blockquote>
-              The first thing that made our flight dynamics team stop drowning in
-              tabs and start sleeping. OrbitOps replaced six Slack channels,
-              three dashboards, and one very tired spreadsheet.
+              Flight dynamics teams shouldn't drown in six Slack channels, three
+              dashboards, and one tired spreadsheet. That's the problem OrbitOps
+              is built to solve — one unified, auditable co-pilot instead of a
+              patchwork of tools.
             </blockquote>
             <div class="proof-quote__attr">
               <div class="proof-quote__avatar"></div>
               <div>
-                <div class="proof-quote__name">A. Mendoza</div>
-                <div class="proof-quote__role">VP Mission Operations · mid-constellation operator</div>
+                <div class="proof-quote__name">OrbitOps team</div>
+                <div class="proof-quote__role">Design partners welcome · currently onboarding pilot operators</div>
               </div>
             </div>
           </div>
@@ -396,8 +398,8 @@ export async function mount(app) {
               <em>Start running a constellation.</em>
             </h2>
             <p class="final-cta__sub">
-              We close our seed round this quarter. Three pilot customers
-              in flight. MIT-licensed core. Acquire-ready architecture.
+              Raising our seed round now. Onboarding early pilot operators.
+              MIT-licensed core. Built to scale from day one.
             </p>
             <div class="final-cta__buttons">
               <a href="/cockpit" data-route="/cockpit" class="btn btn--primary btn--xl">

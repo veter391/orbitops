@@ -15,7 +15,7 @@ All notable changes to OrbitOps are documented here. The format follows
 - Audit log with hash-chained entries
 - HITL approval flow UI
 
-## [0.1.0] — 2025-06-15 — "First Light"
+## [0.1.0] — 2026-06-27 — "First Light"
 
 ### Added
 - Initial public release

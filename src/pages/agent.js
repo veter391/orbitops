@@ -16,6 +16,15 @@ import { agent, SCENARIOS } from '../scenarios/index.js';
 import { mountAgentPanel } from '../ui/agent-panel.js';
 import { audit } from '../core/audit-log.js';
 import { toast } from '../ui/toast.js';
+import { getStoredKey, setStoredKey, hasLiveAI } from '../core/openrouter-client.js';
+
+const AI_STAGE_LABELS = {
+  analyst: 'LIVE AI · ANALYST THINKING…',
+  strategist: 'LIVE AI · STRATEGIST WEIGHING OPTIONS…',
+  safety: 'LIVE AI · SAFETY REVIEWER CHECKING…',
+  fallback: 'LIVE AI UNAVAILABLE · USING DEMO REASONING',
+  done: 'LIVE AI COMPLETE',
+};
 
 let abortRun = null;
 let auditRefreshTimer = null;
@@ -31,8 +40,12 @@ export async function mount(app) {
             <span class="eyebrow">DEEP DIVE · MODULE 03</span>
             <span class="agent-status-pill" id="agentStatus">
               <span class="agent-status-pill__dot"></span>
-              <span>AGENT ONLINE · 5 SCENARIOS · SHA-256 AUDIT</span>
+              <span id="agentStatusText">AGENT ONLINE · 5 SCENARIOS · SHA-256 AUDIT</span>
             </span>
+            <button class="agent-status-pill ai-settings-btn" id="aiSettingsBtn" title="Configure live AI (OpenRouter)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span id="aiSettingsLabel">AI: SIMULATED</span>
+            </button>
           </div>
           <h1 class="page-header__title">The AI agent.</h1>
           <p class="page-header__sub">
@@ -182,17 +195,98 @@ export async function mount(app) {
 
   mountSideNav(app.querySelector('#sideNav'));
   wireScenarioPicker(app);
+  wireAISettings(app);
   refreshAuditTable(app.querySelector('#auditTable'));
   auditRefreshTimer = setInterval(() => {
     refreshAuditTable(app.querySelector('#auditTable'));
     updateChainStatus();
   }, 1500);
 
+  const onAIStage = ({ stage }) => {
+    const phase = app.querySelector('#agentPhase');
+    if (phase && AI_STAGE_LABELS[stage]) {
+      phase.textContent = AI_STAGE_LABELS[stage];
+      phase.className = `agent-console__phase agent-console__phase--${stage === 'fallback' ? 'alert' : 'running'}`;
+    }
+  };
+  agent.on('ai-stage', onAIStage);
+
   return {
     unmount() {
       if (abortRun) abortRun();
       if (auditRefreshTimer) clearInterval(auditRefreshTimer);
+      agent.off('ai-stage', onAIStage);
     },
+  };
+}
+
+function updateAILabel(app) {
+  const label = app.querySelector('#aiSettingsLabel');
+  if (label) label.textContent = hasLiveAI() ? 'AI: LIVE (OpenRouter)' : 'AI: SIMULATED';
+}
+
+function wireAISettings(app) {
+  updateAILabel(app);
+  app.querySelector('#aiSettingsBtn')?.addEventListener('click', () => openAISettingsModal(app));
+}
+
+function openAISettingsModal(app) {
+  const existing = document.getElementById('ai-settings-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ai-settings-modal';
+  modal.className = 'modal-backdrop is-show';
+  modal.innerHTML = `
+    <div class="modal modal--small">
+      <div class="modal__header">
+        <div>
+          <div class="modal__eyebrow">Live AI · OpenRouter</div>
+          <h3 class="modal__title">Bring your own API key</h3>
+        </div>
+        <button class="proposal__close" id="aiModalClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 12px;">
+          OrbitOps is a static site with no backend — your key is stored only in this browser's
+          <code>localStorage</code> and sent directly to <code>openrouter.ai</code>, never to any OrbitOps server
+          (there isn't one). Get a free key at
+          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noreferrer">openrouter.ai/settings/keys</a>.
+        </p>
+        <label class="modal__field">
+          <span>OpenRouter API key</span>
+          <input type="password" id="aiKeyInput" class="modal__textarea" style="min-height:auto; padding:10px 12px;"
+            placeholder="sk-or-v1-…" value="${getStoredKey() ? '••••••••••••••••••••••••' : ''}" autocomplete="off" />
+        </label>
+        <div class="modal__actions">
+          <button class="btn btn--ghost" id="aiKeyClear">Clear key</button>
+          <button class="btn btn--primary" id="aiKeySave">Save &amp; enable live AI</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#aiModalClose').onclick = close;
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  modal.querySelector('#aiKeyClear').onclick = () => {
+    setStoredKey('');
+    updateAILabel(app);
+    toast.info('OpenRouter key cleared — back to simulated reasoning', { title: 'AI settings', durationMs: 3000 });
+    close();
+  };
+  modal.querySelector('#aiKeySave').onclick = () => {
+    const input = modal.querySelector('#aiKeyInput');
+    const value = input.value.trim();
+    if (value && !value.startsWith('••')) {
+      setStoredKey(value);
+      toast.success('Live AI enabled — scenarios now reason via OpenRouter', { title: 'AI settings', durationMs: 3500 });
+    }
+    updateAILabel(app);
+    close();
   };
 }
 
@@ -373,9 +467,11 @@ function renderText(s) {
 function renderStep(step) {
   const wrap = document.createElement('div');
   wrap.className = 'agent-step';
+  const isLive = step.source === 'live-ai';
   wrap.innerHTML = `
     <div class="agent-step__head">
       <span class="agent-step__phase">${step.phase}</span>
+      ${isLive ? `<span class="chain-step__source chain-step__source--live" title="Genuine LLM call via OpenRouter">LIVE AI · ${step.model || ''}</span>` : ''}
       <span class="agent-step__ts">+${Date.now() % 10000} ms</span>
     </div>
     <div class="agent-step__title">${renderText(step.title)}</div>

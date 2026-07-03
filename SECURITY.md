@@ -142,9 +142,9 @@ We commit to:
 
 | Standard | Target date | Status |
 |---|---|---|
-| SOC 2 Type I | Q3 2025 | Planned |
-| SOC 2 Type II | Q1 2026 | Planned |
-| ISO 27001 | Q3 2026 | Planned |
+| SOC 2 Type I | Q3 2026 | Planned |
+| SOC 2 Type II | Q1 2027 | Planned |
+| ISO 27001 | Q3 2027 | Planned |
 | GDPR | Day 1 | In force |
 | CCPA | Day 1 | In force |
 | ITAR | Year 2 if we enter defense | TBD |

@@ -32,6 +32,7 @@ import { detect } from '../core/anomaly-detector.js';
 import { avoidanceBurn, planAvoidance, findBurnWindows } from '../core/maneuver-planner.js';
 import { audit } from '../core/audit-log.js';
 import { Emitter } from '../utils.js';
+import { hasLiveAI, runLiveAgentPipeline } from '../core/llm-agents.js';
 
 /* ---------- Reasoning chain shape ---------- */
 
@@ -84,16 +85,97 @@ class AIAgent extends Emitter {
     this.activeScenario = scenarioId;
 
     const proposal = await runner(this, context);
+    proposal.aiMode = 'simulated';
+
+    if (hasLiveAI()) {
+      await this._enhanceWithLiveAI(proposal);
+    }
+
     this.proposals.set(proposal.id, proposal);
 
     await audit.append('ai:orbit-agent', `scenario.${scenarioId}.proposed`, {
       proposalId: proposal.id,
       satelliteId: proposal.satelliteId,
       confidence: proposal.confidence,
+      aiMode: proposal.aiMode,
     });
 
     this.emit('proposal', proposal);
     return proposal;
+  }
+
+  /**
+   * Layer genuine LLM reasoning on top of an already-computed deterministic
+   * proposal. Never mutates the OBSERVE/THINK data steps (real telemetry
+   * and orbital-mechanics numbers) — only adds new chain steps authored by
+   * the live agent pipeline, and updates confidence/considerations if the
+   * pipeline succeeds. On any failure, the proposal is left exactly as the
+   * deterministic runner produced it (aiMode stays 'simulated').
+   *
+   * @param {AgentProposal} proposal
+   */
+  async _enhanceWithLiveAI(proposal) {
+    const scoreStep = proposal.chain.find((s) => s.phase === 'SCORE');
+    const alternatives =
+      scoreStep?.data?.alternatives || scoreStep?.data?.options || (scoreStep?.data ? [scoreStep.data] : []);
+
+    const result = await runLiveAgentPipeline(proposal.title, proposal, alternatives, (stage) =>
+      this.emit('ai-stage', { stage, scenarioId: proposal.scenarioId })
+    );
+
+    if (!result.ok) {
+      proposal.aiError = result.error;
+      this.emit('ai-stage', { stage: 'fallback', scenarioId: proposal.scenarioId, error: result.error });
+      return;
+    }
+
+    const { analyst, strategist, safety } = result;
+    const now = Date.now();
+    proposal.chain.forEach((s) => {
+      if (!s.source) s.source = 'simulated';
+    });
+    proposal.chain.push(
+      {
+        phase: 'THINK',
+        title: `Analyst AI — ${analyst.riskLevel.toUpperCase()} risk read`,
+        body: analyst.thinkNarrative,
+        data: { riskLevel: analyst.riskLevel, keyFactors: analyst.keyFactors },
+        source: 'live-ai',
+        model: analyst.model,
+        ts: now,
+      },
+      {
+        phase: 'SCORE',
+        title: 'Strategist AI — tradeoff analysis',
+        body: strategist.scoreNarrative,
+        data: strategist.recommendedLabel ? { recommendedLabel: strategist.recommendedLabel } : undefined,
+        source: 'live-ai',
+        model: strategist.model,
+        ts: now + 1,
+      },
+      {
+        phase: 'PROPOSE',
+        title: 'Strategist AI — recommendation',
+        body: strategist.proposeNarrative,
+        source: 'live-ai',
+        model: strategist.model,
+        ts: now + 2,
+      },
+      {
+        phase: 'SAFETY',
+        title: `Safety Reviewer AI — ${safety.verdict.replace(/_/g, ' ')}`,
+        body: safety.notes,
+        source: 'live-ai',
+        model: safety.model,
+        ts: now + 3,
+      }
+    );
+
+    proposal.confidence = Math.max(0.3, Math.min(0.99, strategist.confidence + safety.confidenceAdjustment));
+    proposal.aiConsiderations = strategist.considerations;
+    proposal.aiMode = 'live';
+    proposal.aiModels = { analyst: analyst.model, strategist: strategist.model, safety: safety.model };
+    this.emit('ai-stage', { stage: 'done', scenarioId: proposal.scenarioId });
   }
 
   /**

@@ -2899,12 +2899,41 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .chain-step__text {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.chain-step__source {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  color: var(--text-mute);
+  background: var(--ink-input);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chain-step__source--live {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.ai-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
 }
 
 /* Data blocks (structured rendering, not raw text) */
