@@ -44,6 +44,16 @@ body {
   html { scroll-behavior: smooth; }
 }
 
+/* The site footer is static and always below the fold — let the browser skip
+   its layout/paint until it scrolls near the viewport. Scoped deliberately to
+   this one region: NOT applied to canvas containers or scroll-animated page
+   sections, where content-visibility would fight ScrollTrigger's measurement.
+   contain-intrinsic-size reserves the height so the scrollbar doesn't jump. */
+.site-footer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   font-weight: 600;

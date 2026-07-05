@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Minimal client for OpenRouter's chat completions API.
  *
@@ -66,6 +67,10 @@ export function hasLiveAI() {
 /**
  * Call one model in the chat completions API. Internal — use
  * `chatJSON` / `chatText` below, which add the fallback chain.
+ * @param {string} model
+ * @param {Array<{role: string, content: string}>} messages
+ * @param {{temperature?: number, maxTokens?: number, apiKey: string, signal: AbortSignal}} opts
+ * @returns {Promise<string>}
  */
 async function callOnce(model, messages, { temperature, maxTokens, apiKey, signal }) {
   const res = await fetch(API_URL, {
@@ -89,6 +94,7 @@ async function callOnce(model, messages, { temperature, maxTokens, apiKey, signa
 
   if (!res.ok) {
     const message = body?.error?.message || `HTTP ${res.status}`;
+    /** @type {Error & {status?: number, retryable?: boolean}} */
     const err = new Error(message);
     err.status = res.status;
     err.retryable = res.status === 429 || res.status === 404 || res.status >= 500;
@@ -132,11 +138,12 @@ export async function chatText(messages, opts = {}) {
       return { ok: true, content, model, latencyMs: Math.round(performance.now() - started) };
     } catch (e) {
       clearTimeout(timer);
-      lastError = e.message;
-      if (e.name === 'AbortError') lastError = `${model} timed out after ${REQUEST_TIMEOUT_MS}ms`;
+      const err = /** @type {Error & {status?: number}} */ (e);
+      lastError = err.message;
+      if (err.name === 'AbortError') lastError = `${model} timed out after ${REQUEST_TIMEOUT_MS}ms`;
       // Non-retryable (e.g. bad API key -> 401) — stop walking the chain.
-      if (e.status === 401 || e.status === 403) {
-        return { ok: false, error: `OpenRouter rejected the API key (${e.status}).`, isConfigError: true };
+      if (err.status === 401 || err.status === 403) {
+        return { ok: false, error: `OpenRouter rejected the API key (${err.status}).`, isConfigError: true };
       }
       // Otherwise try the next model in the fallback chain.
     }
@@ -152,7 +159,8 @@ export async function chatText(messages, opts = {}) {
  * instructions.
  *
  * @param {{role: string, content: string}[]} messages
- * @param {object} [opts]
+ * @param {{temperature?: number, maxTokens?: number, models?: string[]}} [opts]
+ * @returns {Promise<{ok: true, content: string, model: string, latencyMs: number, parsed: any} | {ok: false, error: string, isConfigError: boolean}>}
  */
 export async function chatJSON(messages, opts = {}) {
   const result = await chatText(messages, opts);

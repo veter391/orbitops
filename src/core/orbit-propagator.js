@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Orbit propagator — simplified Keplerian model.
  *
@@ -19,6 +20,7 @@ const RAD = 180 / Math.PI;
 const EARTH_OMEGA = 7.2921159e-5;
 const MU = 398600.4418;
 const EARTH_RADIUS_KM = 6378.137;
+// OrbitalElements is a global domain type — see src/types.d.ts.
 
 /**
  * Solve Kepler's equation M = E - e*sin(E) for E using Newton-Raphson.
@@ -41,16 +43,10 @@ export function solveKepler(M, e) {
 /**
  * Compute satellite position in Earth-Centered Inertial (ECI) frame at time t.
  *
- * @param {Object} elements - classical orbital elements
- * @param {number} elements.inclination - inclination (rad)
- * @param {number} elements.raan - right ascension of ascending node (rad)
- * @param {number} elements.eccentricity - eccentricity (0..1)
- * @param {number} elements.argPerigee - argument of perigee (rad)
- * @param {number} elements.meanAnomaly - mean anomaly at epoch (rad)
- * @param {number} elements.meanMotion - mean motion (rad/s) — derived from semi-major axis
+ * @param {OrbitalElements} elements - classical orbital elements
  * @param {number} t - time since epoch (seconds)
- * @returns {{x: number, y: number, z: number, alt: number, lat: number, lon: number, vx: number, vy: number, vz: number}}
- *          position in km (ECI), altitude in km, lat/lon in degrees
+ * @returns {{x: number, y: number, z: number, alt: number, lat: number, lon: number, vx: number, vy: number, vz: number, r: number}}
+ *          position in km (ECI/ECEF), altitude in km, lat/lon in degrees, r = orbital radius (km)
  */
 export function propagate(elements, t) {
   const { inclination, raan, eccentricity, argPerigee, meanAnomaly, meanMotion } = elements;
@@ -127,7 +123,7 @@ export function propagate(elements, t) {
 
 /**
  * Propagate ECI position only (no ECEF, no velocity) — fast path for animation loops.
- * @param {Object} elements - classical orbital elements
+ * @param {OrbitalElements} elements - classical orbital elements
  * @param {number} t - time since epoch (s)
  * @returns {{x: number, y: number, z: number}}
  */
@@ -173,9 +169,10 @@ export function latLonAltToECEF(lat, lon, alt) {
 }
 
 /**
- * Compute great-circle distance (km) between two satellites.
- * @param {Object} a - position from propagate()
- * @param {Object} b - position from propagate()
+ * Compute straight-line distance (km) between two satellite positions.
+ * @param {Vec3} a - position from propagate()
+ * @param {Vec3} b - position from propagate()
+ * @returns {number}
  */
 export function distanceKm(a, b) {
   const dx = a.x - b.x;
@@ -190,8 +187,8 @@ export function distanceKm(a, b) {
  * Brute-force search over the window with step `stepSec`. Adequate for the demo;
  * production uses convex-hull or Keplerian propagation with closed-form solution.
  *
- * @param {Object} elA - orbital elements A
- * @param {Object} elB - orbital elements B
+ * @param {OrbitalElements} elA - orbital elements A
+ * @param {OrbitalElements} elB - orbital elements B
  * @param {number} tStart - start time (s, since epoch)
  * @param {number} tEnd - end time (s)
  * @param {number} stepSec - step size (s)

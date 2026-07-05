@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Live multi-agent reasoning pipeline for the OrbitOps cockpit agent.
  *
@@ -30,6 +31,7 @@
 'use strict';
 
 import { chatJSON, hasLiveAI } from './openrouter-client.js';
+import { modelsFor } from './model-routing.js';
 
 const SYSTEM_ANALYST = `You are the Flight Dynamics Analyst inside OrbitOps, an AI co-pilot for satellite constellation operators. You are given verified telemetry and orbital-mechanics data that has already been computed by deterministic flight-dynamics code — you must never contradict or invent numbers, only interpret them. Write in the terse, precise register of a real flight dynamics engineer briefing at 03:00: no hype, no hedging filler, state findings and their operational significance. Respond with ONLY a JSON object: {"thinkNarrative": string (2-4 sentences), "riskLevel": "low"|"medium"|"high"|"critical", "keyFactors": string[] (2-4 short bullet phrases)}.`;
 
@@ -37,10 +39,15 @@ const SYSTEM_STRATEGIST = `You are the Mission Strategist inside OrbitOps. You r
 
 const SYSTEM_SAFETY = `You are the Safety Reviewer inside OrbitOps. OrbitOps's core principle is that AI proposes, a human always approves — nothing here executes autonomously. Your job is to adversarially review the Mission Strategist's proposal: does the reasoning hold up, is anything glossed over, is the confidence level justified by the evidence, is there a safer alternative being underweighted? You do not block anything — a human will always make the final call — you only annotate the proposal with an honest second opinion. Respond with ONLY a JSON object: {"verdict": "sound"|"sound_with_caveats"|"concerns", "notes": string (1-3 sentences, your honest independent take), "confidenceAdjustment": number (-0.15 to 0, how much to reduce the strategist's confidence if you found gaps; 0 if none)}.`;
 
+/** @typedef {{ok: true, thinkNarrative: string, riskLevel: string, keyFactors: string[], model: string}} AnalystOk */
+/** @typedef {{ok: true, scoreNarrative: string, proposeNarrative: string, recommendedLabel: string, confidence: number, considerations: string[], model: string}} StrategistOk */
+/** @typedef {{ok: true, verdict: string, notes: string, confidenceAdjustment: number, model: string}} SafetyOk */
+/** @typedef {{ok: false, error: string}} AgentErr */
+
 /**
  * @param {string} scenarioTitle
  * @param {Array<{phase: string, title: string, body: string, data?: object}>} observeThinkSteps
- * @returns {Promise<{ok: true, thinkNarrative: string, riskLevel: string, keyFactors: string[], model: string} | {ok: false, error: string}>}
+ * @returns {Promise<AnalystOk | AgentErr>}
  */
 async function runAnalyst(scenarioTitle, observeThinkSteps) {
   const context = observeThinkSteps
@@ -49,7 +56,7 @@ async function runAnalyst(scenarioTitle, observeThinkSteps) {
   const result = await chatJSON([
     { role: 'system', content: SYSTEM_ANALYST },
     { role: 'user', content: `Scenario: ${scenarioTitle}\n\nVerified data so far:\n${context}` },
-  ]);
+  ], { models: modelsFor('analyst') });
   if (!result.ok) return result;
   const { thinkNarrative, riskLevel, keyFactors } = result.parsed || {};
   if (!thinkNarrative || !riskLevel) {
@@ -62,7 +69,7 @@ async function runAnalyst(scenarioTitle, observeThinkSteps) {
  * @param {string} scenarioTitle
  * @param {{thinkNarrative: string, riskLevel: string, keyFactors: string[]}} analysis
  * @param {Array<object>} alternatives - deterministically computed candidate strategies
- * @returns {Promise<object>}
+ * @returns {Promise<StrategistOk | AgentErr>}
  */
 async function runStrategist(scenarioTitle, analysis, alternatives) {
   const result = await chatJSON([
@@ -71,7 +78,7 @@ async function runStrategist(scenarioTitle, analysis, alternatives) {
       role: 'user',
       content: `Scenario: ${scenarioTitle}\n\nAnalyst assessment:\n${JSON.stringify(analysis)}\n\nCandidate strategies (real computed data):\n${JSON.stringify(alternatives)}`,
     },
-  ]);
+  ], { models: modelsFor('strategist') });
   if (!result.ok) return result;
   const { scoreNarrative, proposeNarrative, recommendedLabel, confidence, considerations } =
     result.parsed || {};
@@ -92,7 +99,7 @@ async function runStrategist(scenarioTitle, analysis, alternatives) {
 /**
  * @param {string} scenarioTitle
  * @param {object} strategistOutput
- * @returns {Promise<object>}
+ * @returns {Promise<SafetyOk | AgentErr>}
  */
 async function runSafetyReviewer(scenarioTitle, strategistOutput) {
   const result = await chatJSON([
@@ -101,7 +108,7 @@ async function runSafetyReviewer(scenarioTitle, strategistOutput) {
       role: 'user',
       content: `Scenario: ${scenarioTitle}\n\nStrategist proposal:\n${JSON.stringify(strategistOutput)}`,
     },
-  ]);
+  ], { models: modelsFor('safety') });
   if (!result.ok) return result;
   const { verdict, notes, confidenceAdjustment } = result.parsed || {};
   if (!verdict || !notes) return { ok: false, error: 'Safety Reviewer returned incomplete JSON.' };
@@ -125,12 +132,13 @@ async function runSafetyReviewer(scenarioTitle, strategistOutput) {
  * the deterministic/simulated proposal in that case.
  *
  * @param {string} scenarioTitle
- * @param {object} deterministicProposal - the full proposal object returned
- *   by a SCENARIO_RUNNER in scenarios/index.js (chain + alternatives, etc.)
+ * @param {{chain: Array<{phase: string, title: string, body: string, data?: object}>}} deterministicProposal
+ *   - the full proposal object returned by a SCENARIO_RUNNER in
+ *   scenarios/index.js (chain + alternatives, etc.)
  * @param {Array<object>} alternatives - the SCORE step's `data.alternatives`
  * @param {(stage: 'analyst'|'strategist'|'safety') => void} [onStage] - called
  *   right before each agent call starts, so the UI can show live progress.
- * @returns {Promise<{ok: true, analyst: object, strategist: object, safety: object} | {ok: false, error: string, stage: string}>}
+ * @returns {Promise<{ok: true, analyst: AnalystOk, strategist: StrategistOk, safety: SafetyOk} | {ok: false, error: string, stage: string}>}
  */
 export async function runLiveAgentPipeline(scenarioTitle, deterministicProposal, alternatives, onStage) {
   if (!hasLiveAI()) {

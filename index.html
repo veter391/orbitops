@@ -10,7 +10,7 @@
 
   <meta name="description" content="OrbitOps is the AI co-pilot for commercial satellite constellation operators. Real-time monitoring, predictive anomaly detection, and AI reasoning with humans always in command.">
   <meta name="keywords" content="satellite operations, constellation management, flight dynamics, SpaceX, Starlink, Kuiper, anomaly detection, AI, HITL">
-  <meta name="author" content="OrbitOps, Inc.">
+  <meta name="author" content="OrbitOps">
   <meta name="robots" content="index, follow">
 
   <meta property="og:title" content="OrbitOps · AI co-pilot for satellite constellation operators">
@@ -19,6 +19,23 @@
   <meta property="og:url" content="https://orbitops.io">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="canonical" href="https://orbitops.io/">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "OrbitOps",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Open-source, browser-native mission control for satellite constellation operators. Real CelesTrak catalogue propagated with SGP4, an accountable AI co-pilot with a human in every loop, and a hash-chained audit log.",
+    "url": "https://orbitops.io",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
 
   <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,14 +49,17 @@
   <link rel="stylesheet" href="/src/styles/components.css">
   <link rel="stylesheet" href="/src/styles/pages.css">
   <link rel="stylesheet" href="/src/styles/chrome.css">
+  <link rel="stylesheet" href="/src/styles/os.css">
+  <link rel="stylesheet" href="/src/styles/cockpit-v2.css">
 
   <script type="importmap">
     {
       "imports": {
-        "three": "/public/vendor/three.module.js",
+        "three": "/public/vendor/three.module.min.js",
         "gsap": "/public/vendor/gsap/gsap.js",
         "gsap/ScrollTrigger": "/public/vendor/gsap/ScrollTrigger.js",
-        "lenis": "/public/vendor/lenis/lenis.min.js"
+        "lenis": "/public/vendor/lenis/lenis.min.js",
+        "satellite": "/public/vendor/satellite/satellite.es.js"
       }
     }
   </script>
@@ -153,36 +173,75 @@
   <main id="app"></main>
 
   <footer class="site-footer">
-    <div class="container site-footer__inner">
-      <div>
-        <div class="site-footer__brand">◉ ORBIT OPS</div>
+    <div class="site-footer__statusbar">
+      <div class="container site-footer__status">
+        <span class="site-footer__seg site-footer__seg--brand">ORBITOPS OS</span>
+        <span class="site-footer__sep" aria-hidden="true">·</span>
+        <span class="site-footer__seg">DATA: CELESTRAK</span>
+        <span class="site-footer__sep" aria-hidden="true">·</span>
+        <span class="site-footer__seg">SGP4 PROPAGATION</span>
+        <span class="site-footer__sep" aria-hidden="true">·</span>
+        <span class="site-footer__seg">MIT LICENSE</span>
+        <span class="site-footer__tray">
+          <span class="site-footer__chip" id="footCatalog" hidden></span>
+          <span class="site-footer__chip" id="footFresh">SNAPSHOT</span>
+          <span class="site-footer__seg site-footer__clock" id="footClock">--:--:-- UTC</span>
+        </span>
+      </div>
+    </div>
+    <div class="container site-footer__grid">
+      <nav class="site-footer__block" aria-label="Footer — product">
+        <div class="site-footer__block-head"><span class="site-footer__block-idx" aria-hidden="true">01</span>Product</div>
+        <ul class="site-footer__list">
+          <li><a href="/cockpit" data-route="/cockpit">Cockpit</a></li>
+          <li><a href="/agent" data-route="/agent">AI Agent</a></li>
+          <li><a href="/dashboard" data-route="/dashboard">Dashboard</a></li>
+          <li><a href="/tools" data-route="/tools">Tools</a></li>
+        </ul>
+      </nav>
+      <nav class="site-footer__block" aria-label="Footer — project">
+        <div class="site-footer__block-head"><span class="site-footer__block-idx" aria-hidden="true">02</span>Project</div>
+        <ul class="site-footer__list">
+          <li><a href="/pricing" data-route="/pricing">Pricing</a></li>
+          <li><a href="https://github.com/veter391/orbitops" target="_blank" rel="noreferrer">GitHub</a></li>
+          <li><a href="https://github.com/veter391/orbitops/issues" target="_blank" rel="noreferrer">Issues</a></li>
+        </ul>
+      </nav>
+      <nav class="site-footer__block" aria-label="Footer — developers">
+        <div class="site-footer__block-head"><span class="site-footer__block-idx" aria-hidden="true">03</span>Developers</div>
+        <ul class="site-footer__list">
+          <li><a href="/docs" data-route="/docs">Docs</a></li>
+          <li><a href="/docs" data-route="/docs">API reference</a></li>
+          <li><a href="/LICENSE" target="_blank">MIT License</a></li>
+        </ul>
+      </nav>
+      <nav class="site-footer__block" aria-label="Footer — legal">
+        <div class="site-footer__block-head"><span class="site-footer__block-idx" aria-hidden="true">04</span>Legal</div>
+        <ul class="site-footer__list">
+          <li><a href="/docs/terms" data-route="/docs/terms">Terms of Use</a></li>
+          <li><a href="/docs/privacy" data-route="/docs/privacy">Privacy &amp; GDPR</a></li>
+          <li><a href="/docs/data" data-route="/docs/data">Data policy</a></li>
+        </ul>
+      </nav>
+      <div class="site-footer__ident">
+        <div class="site-footer__brand">
+          <svg class="site-footer__brand-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <ellipse cx="16" cy="16" rx="14" ry="5" stroke="currentColor" stroke-width="1.4" opacity="0.55"/>
+            <ellipse cx="16" cy="16" rx="14" ry="5" stroke="currentColor" stroke-width="1.4" opacity="0.55" transform="rotate(60 16 16)"/>
+            <ellipse cx="16" cy="16" rx="14" ry="5" stroke="currentColor" stroke-width="1.4" opacity="0.55" transform="rotate(-60 16 16)"/>
+            <circle cx="16" cy="16" r="3.5" fill="currentColor"/>
+          </svg>
+          <span>ORBIT OPS</span>
+        </div>
         <p class="site-footer__tagline">
-          Real-time AI co-pilot for commercial satellite constellation operators.
-          MIT-licensed core. Production-ready.
+          Real-time mission control demo for satellite constellations.
+          Open source, MIT-licensed core.
         </p>
-      </div>
-      <div class="site-footer__col">
-        <div class="site-footer__head">Product</div>
-        <a href="/cockpit" data-route="/cockpit">Cockpit</a>
-        <a href="/agent" data-route="/agent">AI Agent</a>
-        <a href="/dashboard" data-route="/dashboard">Dashboard</a>
-        <a href="/tools" data-route="/tools">Tools</a>
-      </div>
-      <div class="site-footer__col">
-        <div class="site-footer__head">Company</div>
-        <a href="/pricing" data-route="/pricing">Pricing</a>
-        <a href="mailto:hello@orbitops.io">Contact</a>
-        <a href="https://github.com/orbitops/orbitops" target="_blank" rel="noreferrer">GitHub</a>
-      </div>
-      <div class="site-footer__col">
-        <div class="site-footer__head">Developers</div>
-        <a href="/docs" data-route="/docs">Docs</a>
-        <a href="/docs" data-route="/docs">API reference</a>
-        <a href="/LICENSE" target="_blank">MIT License</a>
+        <div class="site-footer__coords" aria-hidden="true">LEO · 400–1200 KM BAND · TLE REFRESH ~2H</div>
       </div>
     </div>
     <div class="site-footer__bottom container">
-      © <span id="year"></span> OrbitOps, Inc. · Open source core · MIT license · Built for acquisition-target architecture.
+      © <span id="year"></span> OrbitOps · Open source · MIT
     </div>
   </footer>
 

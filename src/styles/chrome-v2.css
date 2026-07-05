@@ -1,0 +1,1202 @@
+/* ============================================================
+   ORBIT OPS — CHROME V3
+   Global command bar (header) + statusbar footer.
+   Loaded LAST via main.js — intentionally overrides chrome.css
+   and the os.css chrome layer (which uses !important; we answer
+   in kind only where required).
+   Design language: aerospace premium. Near-black surfaces,
+   1px hairlines, mono data labels, one ice accent — no neon.
+   ============================================================ */
+
+:root {
+  --v3-bg: #050708;
+  --v3-surface: rgba(14, 17, 21, 0.72);
+  --v3-surface-2: rgba(20, 24, 29, 0.6);
+  --v3-hairline: rgba(255, 255, 255, 0.08);
+  --v3-hairline-2: rgba(255, 255, 255, 0.16);
+  --v3-text: #F4F6F8;
+  --v3-text-2: #9BA3AD;
+  --v3-mute: #5A6169;
+  --v3-ice: #8FC6FF;
+  --v3-ok: #3ECF74;
+  --v3-warn: #E0B568;
+  --v3-alert: #E0606E;
+  --v3-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================================
+   COMMAND BAR — frame
+   ============================================================ */
+.top-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  height: 64px !important;
+  padding: 0 24px;
+  background: linear-gradient(180deg, rgba(8, 10, 12, 0.92), rgba(5, 7, 8, 0.86)) !important;
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border-bottom: 1px solid var(--v3-hairline) !important;
+  box-shadow: 0 12px 40px -20px rgba(0, 0, 0, 0.8);
+}
+
+/* Bottom rail: the border-bottom above IS the single 1px hairline.
+   os.css paints a cyan→violet gradient on ::before — extinguish it. */
+.top-nav::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: none;
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Animated sweep — os.css declares os-scan-x 7s on .top-nav::after inside
+   a prefers-reduced-motion guard. Keep the mechanism, mute the light:
+   a faint ice pass at .25 opacity, no glow filter. Under reduced motion
+   os.css never creates the element, so nothing moves. */
+@media (prefers-reduced-motion: no-preference) {
+  .top-nav::after {
+    bottom: -1px;
+    background: linear-gradient(90deg, transparent, var(--v3-ice), transparent);
+    opacity: 0.25;
+    filter: none;
+    pointer-events: none;
+  }
+}
+
+.top-nav__left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  justify-self: start;
+}
+
+.top-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+}
+
+/* ============================================================
+   COMMAND BAR — segmented instrument cluster
+   brand · UTC clock · SYS NOMINAL, split by hairline dividers,
+   framed by tiny corner ticks (top-left / bottom-right).
+   ============================================================ */
+.top-nav__cluster {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  border: 1px solid var(--v3-hairline);
+}
+
+.top-nav__cluster::before,
+.top-nav__cluster::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.top-nav__cluster::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+}
+
+.top-nav__cluster::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1px 1px 0;
+}
+
+.top-nav__seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+/* hairline divider between segments, with a small bright tick at its top */
+.top-nav__seg + .top-nav__seg { border-left: 1px solid var(--v3-hairline); }
+
+.top-nav__seg + .top-nav__seg::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.top-nav__brand { gap: 10px; }
+
+.top-nav__brand-logo {
+  width: 24px;
+  height: 24px;
+  color: var(--v3-text) !important;
+  filter: none;
+}
+
+.top-nav__brand-text {
+  color: var(--v3-text) !important;
+  font-size: 12px;
+  letter-spacing: 0.2em !important;
+}
+
+.top-nav__clock {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--v3-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.top-nav__sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v3-ok);
+}
+
+.top-nav__sys-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--v3-ok);
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+/* --- live catalog chip (B2): "11,356 TRACKED" from the local TLE cache.
+   Honest instrument — main.js hides it when nothing is cached. --- */
+.top-nav__seg--tracked {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* .top-nav__seg's inline-flex would defeat [hidden] — restore it */
+.top-nav__seg--tracked[hidden] { display: none; }
+
+/* ============================================================
+   COMMAND BAR — nav tabs
+   "01 COCKPIT" mono index prefix; the active tab is framed by a
+   thin ice bracket pair drawn with the two pseudo-elements.
+   ============================================================ */
+.top-nav__links {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* more breathing room now that the 01/02… indices are gone */
+  justify-self: center;
+}
+
+/* indices retired (owner) — hide any that a stale template still emits */
+.top-nav__tab-idx { display: none !important; }
+
+.top-nav__links a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase !important;
+  letter-spacing: 0.16em !important;
+  color: var(--v3-mute) !important;
+  padding: 10px 14px !important;
+  border-radius: 0 !important;
+  background: transparent;
+  text-shadow: none !important;
+  transition: color 300ms var(--v3-ease);
+}
+
+/* --- tab icon: hairline glyph, inherits the tab's color ramp --- */
+.top-nav__tab-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 7px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 300ms var(--v3-ease), color 300ms var(--v3-ease);
+}
+
+.top-nav__links a:hover .top-nav__tab-icon { opacity: 1; }
+
+.top-nav__links a.is-active .top-nav__tab-icon {
+  color: var(--v3-ice);
+  opacity: 1;
+}
+
+/* --- dock fisheye (B1): main.js sets --dock-s per tab from pointer
+   distance (1.22 peak, ~1.08 neighbours). translateY derives from the
+   same var: (1 − 1.22) · 9px ≈ −2px rise at full scale. Scoped to
+   desktop + motion-OK; the transition also eases the return to rest
+   when pointerleave removes the var. Reduced motion / mobile: tabs
+   never transform — color/bracket hover only. --- */
+@media (min-width: 881px) and (prefers-reduced-motion: no-preference) {
+  .top-nav__links a[data-route]:not(.top-nav__menu-cta) {
+    transform-origin: 50% 100%;
+    transform: translateY(calc((1 - var(--dock-s, 1)) * 9px)) scale(var(--dock-s, 1));
+    transition: color 300ms var(--v3-ease), transform 180ms var(--v3-ease);
+    will-change: transform;
+  }
+}
+
+/* --- holographic shimmer (B1): dedicated overlay span (both anchor
+   pseudo-elements are taken by the ice brackets). A soft ice gradient
+   sweeps across once per hover — shimmer, not neon. --- */
+.top-nav__tab-shine {
+  position: absolute;
+  inset: 4px 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.top-nav__tab-shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%);
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(143, 198, 255, 0.13) 50%,
+    transparent 70%
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .top-nav__links a:hover .top-nav__tab-shine::before,
+  .top-nav__links a:focus-visible .top-nav__tab-shine::before {
+    transform: translateX(130%);
+    transition: transform 700ms var(--v3-ease);
+  }
+}
+
+.top-nav__links a:hover,
+.top-nav__links a:focus-visible {
+  color: var(--v3-text) !important;
+  background: transparent !important;
+}
+
+.top-nav__tab-idx {
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--v3-mute);
+  margin-right: 7px;
+  font-variant-numeric: tabular-nums;
+  transition: color 300ms var(--v3-ease);
+}
+
+.top-nav__links a:hover .top-nav__tab-idx,
+.top-nav__links a.is-active .top-nav__tab-idx { color: var(--v3-ice); }
+
+/* Bracket frame — repurposes the pseudo-elements os.css uses for its
+   underline (transform/box-shadow are explicitly neutralised here). */
+.top-nav .top-nav__links a::before,
+.top-nav .top-nav__links a::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  height: auto;
+  width: 5px;
+  background: none;
+  box-shadow: none;
+  border-top: 1px solid var(--v3-ice);
+  border-bottom: 1px solid var(--v3-ice);
+  opacity: 0;
+  transform: none;
+  transition: opacity 300ms var(--v3-ease);
+  pointer-events: none;
+}
+
+.top-nav .top-nav__links a::before {
+  left: 3px;
+  right: auto;
+  border-left: 1px solid var(--v3-ice);
+}
+
+.top-nav .top-nav__links a::after {
+  right: 3px;
+  left: auto;
+  border-right: 1px solid var(--v3-ice);
+}
+
+.top-nav .top-nav__links a:hover::before,
+.top-nav .top-nav__links a:hover::after {
+  opacity: 0.35;
+  transform: none;
+}
+
+.top-nav .top-nav__links a.is-active::before,
+.top-nav .top-nav__links a.is-active::after {
+  opacity: 1;
+  transform: none;
+}
+
+.top-nav__links a.is-active {
+  color: var(--v3-text) !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
+/* In-menu CTA (mobile only — surfaced ≤560px); never gets brackets */
+.top-nav__links .top-nav__menu-cta { display: none !important; }
+
+.top-nav .top-nav__links .top-nav__menu-cta::before,
+.top-nav .top-nav__links .top-nav__menu-cta::after { content: none; }
+
+/* ============================================================
+   COMMAND BAR — data rail
+   1px track hugging the bar's bottom hairline; an ice tick slides
+   to sit under the active tab. Driven by --rail-x / --rail-w set
+   from main.js (measured from the active link) — CSS anchor
+   positioning is not cross-browser yet.
+   ============================================================ */
+.top-nav__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.top-nav__rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  width: var(--rail-w, 0px);
+  transform: translateX(var(--rail-x, 0px));
+  background: var(--v3-ice);
+  transition: transform 450ms var(--v3-ease), width 450ms var(--v3-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-nav__rail::before { transition: none; }
+}
+
+/* ============================================================
+   COMMAND BAR — right cluster
+   ============================================================ */
+.top-nav__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 2px;
+  border-color: var(--v3-hairline) !important;
+  background: transparent;
+  color: var(--v3-text-2);
+  transition: color 300ms var(--v3-ease), border-color 300ms var(--v3-ease);
+}
+
+.top-nav__icon:hover {
+  border-color: var(--v3-hairline-2) !important;
+  color: var(--v3-text) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* CTA — white-bordered chip that inverts to white/black on hover */
+.top-nav .top-nav__cta-btn {
+  position: relative;
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 2px;
+  background: transparent !important;
+  color: var(--v3-text) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  box-shadow: none !important;
+  text-shadow: none;
+  transition:
+    background 300ms var(--v3-ease),
+    color 300ms var(--v3-ease),
+    border-color 300ms var(--v3-ease);
+}
+
+.top-nav .top-nav__cta-btn:hover,
+.top-nav .top-nav__cta-btn:focus-visible {
+  background: #ffffff !important;
+  color: #060809 !important;
+  border-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.top-nav .top-nav__cta-btn::before,
+.top-nav .top-nav__cta-btn::after { content: none; }
+
+/* Burger — hairline treatment (open/close mechanics stay in chrome.css).
+   Doubles as the drawer's close X, so it stays ≥48px at every width. */
+.top-nav__burger {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-color: var(--v3-hairline);
+  border-radius: 2px;
+  color: var(--v3-text);
+}
+
+.top-nav__burger span { background: var(--v3-text); }
+
+.top-nav__burger:hover {
+  border-color: var(--v3-hairline-2);
+  box-shadow: none;
+}
+
+/* ============================================================
+   COMMAND BAR — responsive
+   ============================================================ */
+@media (max-width: 1280px) {
+  .top-nav__seg--sys,
+  .top-nav__seg--tracked { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .top-nav__seg--clock,
+  .top-nav__seg--sys,
+  .top-nav__seg--tracked { display: none; }
+  .top-nav__left { gap: 0; }
+  .top-nav__links a {
+    padding: 10px 9px !important;
+    letter-spacing: 0.12em !important;
+    font-size: 10px;
+  }
+  .top-nav__tab-idx { margin-right: 5px; }
+}
+
+@media (max-width: 880px) {
+  .top-nav {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  /* Rail is a desktop instrument — the drawer takes over below 880 */
+  .top-nav__rail { display: none; }
+
+  /* chrome.css hides brand text here — keep it, smaller */
+  .top-nav__brand-text {
+    display: inline-block !important;
+    font-size: 11px;
+  }
+
+  /* Drawer — FULL-BLEED glass takeover from under the bar to the bottom
+     of the viewport. chrome.css sets `.top-nav__links { display:none }`
+     at ≤880px and its drawer block never restores display — force the
+     panel back on and gate it with opacity + visibility instead. */
+  .top-nav__links {
+    display: flex !important;
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: none;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 14px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(8, 10, 12, 0.96), rgba(5, 7, 8, 0.99)) !important;
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border-bottom: 0;
+    box-shadow: none;
+    transform: none;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 300ms var(--v3-ease),
+      visibility 0s linear 300ms;
+    z-index: calc(var(--z-nav) + 1);
+    overflow-y: auto;
+  }
+
+  .top-nav.is-mobile-open .top-nav__links {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 300ms var(--v3-ease);
+  }
+
+  /* Big mono index rows — hairline separated, staggered entrance */
+  .top-nav__links a {
+    display: flex;
+    align-items: center;
+    min-height: 56px;
+    padding: 0 6px !important;
+    font-size: 14px;
+    letter-spacing: 0.14em !important;
+    border-bottom: 1px solid var(--v3-hairline);
+    border-radius: 0 !important;
+    opacity: 0;
+    transform: translateY(10px);
+    transition:
+      opacity 400ms var(--v3-ease),
+      transform 400ms var(--v3-ease),
+      color 300ms var(--v3-ease);
+  }
+
+  .top-nav__links .top-nav__tab-idx {
+    font-size: 12px;
+    min-width: 34px;
+    margin-right: 6px;
+    color: var(--v3-mute);
+  }
+
+  /* drawer rows: bigger glyph, no shimmer overlay (touch has no hover) */
+  .top-nav__tab-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 12px;
+  }
+
+  .top-nav__tab-shine { display: none; }
+
+  .top-nav .top-nav__links a::before,
+  .top-nav .top-nav__links a::after { display: none; }
+
+  .top-nav.is-mobile-open .top-nav__links a {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Stagger: 01..07 rows fade in top-to-bottom */
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(1) { transition-delay: 40ms, 40ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(2) { transition-delay: 80ms, 80ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(3) { transition-delay: 120ms, 120ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(4) { transition-delay: 160ms, 160ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(5) { transition-delay: 200ms, 200ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(6) { transition-delay: 240ms, 240ms, 0ms; }
+  .top-nav.is-mobile-open .top-nav__links a:nth-child(7) { transition-delay: 280ms, 280ms, 0ms; }
+
+  .top-nav__links a.is-active {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-color: var(--v3-hairline) !important;
+    box-shadow: inset 2px 0 0 var(--v3-ice) !important;
+    text-shadow: none !important;
+  }
+
+  .top-nav__links a.is-active .top-nav__tab-idx { color: var(--v3-ice); }
+
+  /* CTA stays in the bar while it fits (chrome.css hides it here) */
+  .top-nav .top-nav__cta-btn { display: inline-flex; }
+}
+
+@media (max-width: 560px) {
+  /* CTA no longer fits in the bar — move it into the menu */
+  .top-nav .top-nav__cta-btn { display: none; }
+
+  .top-nav__links .top-nav__menu-cta {
+    display: flex !important;
+    justify-content: center;
+    margin-top: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    background: transparent !important;
+    color: var(--v3-text) !important;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    box-shadow: none !important;
+  }
+
+  .top-nav__links .top-nav__menu-cta:hover {
+    background: #ffffff !important;
+    color: #060809 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-nav { padding: 0 12px; }
+  .top-nav__brand-text {
+    font-size: 10px;
+    letter-spacing: 0.14em !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .top-nav__brand-text { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-nav__links,
+  .top-nav__links a,
+  .top-nav .top-nav__links a::before,
+  .top-nav .top-nav__links a::after,
+  .top-nav__tab-idx,
+  .top-nav__icon,
+  .top-nav .top-nav__cta-btn { transition: none; }
+
+  /* drawer rows appear instantly, no stagger */
+  .top-nav.is-mobile-open .top-nav__links a { transition-delay: 0ms; }
+}
+
+/* ============================================================
+   FOOTER — frame
+   ============================================================ */
+.site-footer {
+  position: relative;
+  background: var(--v3-bg) !important;
+  border-top: 1px solid var(--v3-hairline) !important;
+  padding: 0 0 var(--space-9) !important;
+}
+
+/* os.css paints a glowing gradient rail on ::before — extinguish it;
+   the border-top above is the single hairline. */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  background: none;
+  box-shadow: none;
+  opacity: 0;
+}
+
+/* ============================================================
+   FOOTER — statusbar strip
+   ============================================================ */
+.site-footer__statusbar {
+  border-bottom: 1px solid var(--v3-hairline);
+  background: var(--v3-surface-2);
+  margin-bottom: var(--space-9);
+}
+
+.site-footer__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  /* longhands survive the mobile `.container { padding: … !important }`
+     shorthand in pages.css */
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v3-mute);
+}
+
+.site-footer__seg { white-space: nowrap; }
+
+.site-footer__seg--brand {
+  color: var(--v3-text);
+  text-shadow: none;
+}
+
+.site-footer__sep { color: var(--v3-hairline-2); }
+
+.site-footer__clock {
+  margin-left: auto;
+  color: var(--v3-text-2);
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- system tray (B3): right-side live chip group — catalog count +
+   data freshness, both fed from the real TLE cache by main.js. --- */
+.site-footer__tray {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-left: auto;
+}
+
+/* clock now lives inside the tray — the tray owns the auto margin */
+.site-footer__tray .site-footer__clock { margin-left: 0; }
+
+.site-footer__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 9px;
+  border: 1px solid var(--v3-hairline);
+  color: var(--v3-text-2);
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* tiny ice status tick — square, per the instrument grammar */
+.site-footer__chip::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  background: var(--v3-ice);
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.site-footer__chip[hidden] { display: none; }
+
+/* ============================================================
+   FOOTER — system panel grid
+   Four bracketed mono blocks (01 PRODUCT … 04 LEGAL) + a wide
+   ident cell (orbit mark, tagline, coordinates flourish).
+   New class names on purpose: the legacy .site-footer__inner /
+   __col rules in chrome.css + pages.css (with mobile !important
+   shorthands) no longer apply, which is what caused the old
+   wrap/glue bug.
+   ============================================================ */
+.site-footer__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 1.6fr;
+  column-gap: 24px;
+  row-gap: 32px;
+  margin-bottom: var(--space-9);
+}
+
+.site-footer__block {
+  position: relative;
+  padding: 6px 14px;
+  min-width: 0;
+}
+
+/* bracket corners: [ top-left / bottom-right ] */
+.site-footer__block::before,
+.site-footer__block::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.site-footer__block::before {
+  top: 0;
+  left: 0;
+  border-width: 1px 0 0 1px;
+}
+
+.site-footer__block::after {
+  bottom: 0;
+  right: 0;
+  border-width: 0 1px 1px 0;
+}
+
+.site-footer__block-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--v3-hairline);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+}
+
+.site-footer__block-idx {
+  font-size: 9px;
+  color: var(--v3-ice);
+  font-variant-numeric: tabular-nums;
+}
+
+/* links: one per line, always — explicit block li, no inline gluing */
+.site-footer__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-footer__list li {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.site-footer__list a {
+  position: relative;
+  display: block;
+  padding: 5px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--v3-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 300ms var(--v3-ease);
+}
+
+.site-footer__list a:hover,
+.site-footer__list a:focus-visible {
+  color: var(--v3-text) !important;
+  text-shadow: none !important;
+}
+
+/* holographic hover sweep — same shimmer grammar as the header tabs;
+   the anchor's own overflow:hidden clips the pass */
+.site-footer__list a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%);
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(143, 198, 255, 0.1) 50%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .site-footer__list a:hover::after,
+  .site-footer__list a:focus-visible::after {
+    transform: translateX(130%);
+    transition: transform 650ms var(--v3-ease);
+  }
+}
+
+/* ident cell — orbit mark + tagline + coordinates flourish */
+.site-footer__ident {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 6px 28px;
+  border-left: 1px solid var(--v3-hairline);
+  min-width: 0;
+}
+
+.site-footer__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--v3-text) !important;
+  text-shadow: none;
+  margin: 0;
+}
+
+.site-footer__brand-logo {
+  width: 22px;
+  height: 22px;
+  color: var(--v3-text);
+  filter: none;
+  flex-shrink: 0;
+}
+
+.site-footer__tagline {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--v3-text-2);
+  max-width: 360px;
+  margin: 0;
+}
+
+.site-footer__coords {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--v3-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   FOOTER — bottom line
+   ============================================================ */
+.site-footer__bottom {
+  border-top: 1px solid var(--v3-hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--v3-mute);
+  letter-spacing: 0.08em;
+}
+
+/* ============================================================
+   FOOTER — responsive
+   ============================================================ */
+@media (max-width: 1080px) {
+  .site-footer__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 28px;
+  }
+
+  .site-footer__ident {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--v3-hairline);
+    padding: 24px 14px 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .site-footer__grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .site-footer__status {
+    font-size: 9px;
+    gap: 6px 10px;
+    padding-top: 13px !important;
+    padding-bottom: 13px !important;
+  }
+
+  /* tray drops to its own full-width row; chips wrap cleanly inside it */
+  .site-footer__tray {
+    margin-left: 0;
+    flex-basis: 100%;
+    gap: 6px 8px;
+  }
+
+  .site-footer__clock {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* FINAL drawer override — beats every legacy high-specificity block. Full-glass
+   takeover: the mobile menu is a full-width, full-height OS panel. */
+@media (max-width: 880px) {
+  .top-nav.is-mobile-open .top-nav__links {
+    position: fixed !important;
+    inset: 64px 0 0 0 !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 2px !important;
+    padding: 16px 18px !important;
+    background: rgba(5, 7, 8, 0.96) !important;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    overflow-y: auto !important;
+    z-index: 200 !important;
+    visibility: visible !important;
+    transform: none !important;
+    border: none !important;
+  }
+  .top-nav.is-mobile-open .top-nav__links a {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+    width: 100% !important;
+    min-height: 56px !important;
+    font-size: 13px !important;
+    letter-spacing: 0.18em !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07) !important;
+  }
+}
+
+/* Drawer sizing must survive the transformed/filtered header ancestor (it
+   becomes the containing block for fixed descendants) — viewport units do. */
+@media (max-width: 880px) {
+  .top-nav.is-mobile-open .top-nav__links {
+    left: 0 !important;
+    top: 64px !important;
+    width: 100vw !important;
+    height: calc(100vh - 64px) !important;
+    height: calc(100dvh - 64px) !important;
+  }
+}
+
+/* ============================================================
+   GLOBAL POLISH — shared micro-interaction grammar (v3)
+   Appended last on purpose so the grammar wins over legacy CSS
+   at equal specificity. One language everywhere:
+     · links    — ice underline sweep
+     · panels   — translateY(-2px) lift + hairline brighten
+     · buttons  — pressed scale(.985)
+     · focus    — ice outline on :focus-visible
+   All movement 200–300ms on the house ease, and fully disabled
+   under prefers-reduced-motion (state changes remain).
+   Note: header tabs keep their bracket hover only — a per-letter
+   rise needs per-letter spans, and the header stays JS-free.
+   ============================================================ */
+
+/* --- film grain: 3% SVG noise over the page (atmosphere, not dead black).
+   Apply on a page root <main>; content inside should sit at z-index 1,
+   the ambient layer (ambient.js) at 0, grain floats at 2. --- */
+.chrome-grain { position: relative; }
+
+.chrome-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* --- links: ice underline sweep. Unclassed content links get it for
+   free; framed/button-like links opt in with .link-sweep. --- */
+.link-sweep,
+main a:where(:not([class])) {
+  background-image: linear-gradient(var(--v3-ice), var(--v3-ice));
+  background-size: 0% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 1px;
+  transition:
+    background-size 250ms var(--v3-ease),
+    color 250ms var(--v3-ease);
+}
+
+.link-sweep:hover,
+.link-sweep:focus-visible,
+main a:where(:not([class])):hover,
+main a:where(:not([class])):focus-visible {
+  background-size: 100% 1px;
+}
+
+/* --- panels: -2px lift + hairline brighten (opt-in utility) --- */
+.hover-lift {
+  transition:
+    transform 250ms var(--v3-ease),
+    border-color 250ms var(--v3-ease);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--v3-hairline-2);
+}
+
+/* --- buttons: pressed state. Transform composes with any existing
+   background/color transitions without overriding them. --- */
+button:not(:disabled):active,
+.btn:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+/* --- focus: ice outline everywhere, keyboard only --- */
+:focus-visible {
+  outline: 2px solid rgba(143, 198, 255, 0.85);
+  outline-offset: 2px;
+}
+
+/* --- reduced motion: keep the states, drop the movement --- */
+@media (prefers-reduced-motion: reduce) {
+  .link-sweep,
+  main a:where(:not([class])),
+  .hover-lift {
+    transition: none;
+  }
+
+  .hover-lift:hover { transform: none; }
+
+  button:not(:disabled):active,
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+
+  .top-nav__tab-icon,
+  .site-footer__list a { transition: none; }
+}
+
+/* ============================================================
+   GLOBAL CURSOR SATELLITE (B4) — element mounted by
+   ui/cursor-sat.js on non-home routes (home.js keeps its own
+   .hv3-cursat twin, whose CSS is home-scoped — hence this
+   global copy of the treatment). Never interactive.
+   ============================================================ */
+.oo-cursat {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.65;
+  will-change: transform;
+}
+
+.oo-cursat svg { display: block; transition: stroke 180ms ease, filter 180ms ease; }
+
+/* Locked to the pointer tip over the globe (cockpit object hover) — the body
+   warms to the ice accent and lifts a faint glow so it reads as "captured".
+   The stroke here overrides the SVG's inline presentation attribute. */
+.oo-cursat.is-locked { opacity: 0.95; }
+.oo-cursat.is-locked svg {
+  stroke: rgba(143, 198, 255, 0.95);
+  filter: drop-shadow(0 0 4px rgba(143, 198, 255, 0.45));
+}
+
+/* belt-and-braces: the module gates on width too, but a resize to
+   mobile mid-session must not leave a satellite over the drawer */
+@media (max-width: 880px) {
+  .oo-cursat { display: none; }
+}
+
+/* ============================================================
+   SIDE RAIL (B5) — label clipping override. os.css caps the
+   revealed label at 90px; DASHBOARD at 9px mono + 0.16em
+   tracking sits close enough to clip on some rasterizers.
+   Same selectors, later sheet — these win by order and lift the
+   ceiling to a safe 110px. Font locked to 9px mono.
+   ============================================================ */
+.side-nav__label {
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+}
+
+.side-nav:hover .side-nav__label,
+.side-nav__item.is-active .side-nav__label {
+  max-width: 110px;
+}
+
+/* G-gate fix: at 1281-1600px the left cluster (clock + SYS NOMINAL + tracked)
+   collides with the centered "01 COCKPIT" tab — shed status segments earlier. */
+@media (max-width: 1600px) {
+  #navTracked { display: none !important; }
+}
+@media (max-width: 1500px) {
+  .top-nav__sys { display: none !important; }
+}
+
+/* Owner: the left dot-rail duplicated the top nav and read clumsy (labels
+   clipped, redundant tooltip). Navigation lives in the top dock; retire the
+   secondary rail entirely rather than ship two nav systems. */
+.side-nav { display: none !important; }

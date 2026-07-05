@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AI Agent panel — renders the reasoning chain and approval controls.
  *
@@ -14,6 +15,7 @@
 
 import { pct, formatNumber, formatDuration, uid } from '../utils.js';
 
+/** @param {string} [s] */
 function renderText(s) {
   if (!s) return '';
   return s
@@ -21,6 +23,7 @@ function renderText(s) {
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 }
 
+/** @type {Record<string, string>} */
 const PHASE_ICONS = {
   OBSERVE: '◉',
   THINK: '◆',
@@ -30,6 +33,7 @@ const PHASE_ICONS = {
   WAIT: '◌',
 };
 
+/** @type {Record<string, string>} */
 const PHASE_LABELS = {
   OBSERVE: 'OBSERVE',
   THINK: 'THINK',
@@ -39,6 +43,11 @@ const PHASE_LABELS = {
   WAIT: 'AWAITING APPROVAL',
 };
 
+/**
+ * @param {HTMLElement} host
+ * @param {any} proposal - AgentProposal from scenarios (rendered dynamically)
+ * @param {{onApprove?: () => void, onReject?: (reason: string) => void, onClose?: () => void, onModify?: (mods: any) => void}} [handlers]
+ */
 export function mountAgentPanel(host, proposal, handlers = {}) {
   const { onApprove, onReject, onClose, onModify } = handlers;
 
@@ -85,7 +94,7 @@ export function mountAgentPanel(host, proposal, handlers = {}) {
       </div>
 
       <div class="reasoning-chain">
-        ${proposal.chain.map((step, i) => renderStep(step, i, proposal.chain.length)).join('')}
+        ${proposal.chain.map((/** @type {any} */ step, /** @type {number} */ i) => renderStep(step, i, proposal.chain.length)).join('')}
       </div>
 
       ${renderBurnData(proposal)}
@@ -122,7 +131,7 @@ export function mountAgentPanel(host, proposal, handlers = {}) {
   host.querySelector('#propClose')?.addEventListener('click', () => onClose && onClose());
   host.querySelector('#approveBtn')?.addEventListener('click', () => onApprove && onApprove());
   host.querySelector('#modifyBtn')?.addEventListener('click', () => {
-    const modPanel = host.querySelector('#modifyPanel');
+    const modPanel = /** @type {HTMLElement|null} */ (host.querySelector('#modifyPanel'));
     if (modPanel) modPanel.style.display = modPanel.style.display === 'none' ? 'block' : 'none';
   });
   host.querySelector('#modifyApprove')?.addEventListener('click', () => {
@@ -140,6 +149,8 @@ export function mountAgentPanel(host, proposal, handlers = {}) {
 
 /**
  * Open a proper in-app reject modal — never window.prompt.
+ * @param {any} proposal
+ * @param {(reason: string) => void} onSubmit
  */
 function openRejectModal(proposal, onSubmit) {
   // Remove existing modal if any
@@ -185,14 +196,16 @@ function openRejectModal(proposal, onSubmit) {
   modal.querySelector('#modalCancel')?.addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
   modal.querySelector('#modalConfirm')?.addEventListener('click', () => {
-    const reason = modal.querySelector('#rejectReason').value.trim();
+    const ta = /** @type {HTMLTextAreaElement|null} */ (modal.querySelector('#rejectReason'));
+    const reason = ta ? ta.value.trim() : '';
     close();
     onSubmit(reason);
   });
   // Focus textarea
-  setTimeout(() => modal.querySelector('#rejectReason')?.focus(), 100);
+  setTimeout(() => /** @type {HTMLElement|null} */ (modal.querySelector('#rejectReason'))?.focus(), 100);
 }
 
+/** @param {any} step @param {number} idx @param {number} total */
 function renderStep(step, idx, total) {
   const phaseColor = step.phase === 'WAIT' ? 'var(--accent)' :
                     step.phase === 'PROPOSE' ? 'var(--ok)' : 'var(--accent-2, var(--accent))';
@@ -217,6 +230,7 @@ function renderStep(step, idx, total) {
   `;
 }
 
+/** @param {any} step */
 function renderStepData(step) {
   if (!step.data) return '';
 
@@ -232,7 +246,7 @@ function renderStepData(step) {
             <tr><th>Strategy</th><th>Δv</th><th>Fuel</th><th>Safety margin</th></tr>
           </thead>
           <tbody>
-            ${d.alternatives.map((alt) => `
+            ${d.alternatives.map((/** @type {any} */ alt) => `
               <tr class="${alt.kind === 'Recommended' ? 'is-recommended' : ''}">
                 <td>
                   <span class="data-table__kind">${alt.kind}</span>
@@ -258,7 +272,7 @@ function renderStepData(step) {
       <div class="data-block">
         <div class="data-block__head">Ranked hypotheses</div>
         <div class="data-list">
-          ${d.hypotheses.map((h) => `
+          ${d.hypotheses.map((/** @type {any} */ h) => `
             <div class="data-list__row">
               <span class="data-list__label">${h.label}</span>
               <div class="data-list__bar">
@@ -278,7 +292,7 @@ function renderStepData(step) {
       <div class="data-block">
         <div class="data-block__head">Intervention options</div>
         <div class="data-list">
-          ${d.options.map((o) => `
+          ${d.options.map((/** @type {any} */ o) => `
             <div class="data-list__row ${o.id === d.winner ? 'is-recommended' : ''}">
               <span class="data-list__label">
                 ${o.id === d.winner ? '<span class="data-table__badge">Recommended</span>' : ''}
@@ -332,6 +346,7 @@ function renderStepData(step) {
   `;
 }
 
+/** @param {any} proposal */
 function renderBurnData(proposal) {
   if (!proposal.actionData?.burn) return '';
   const burn = proposal.actionData.burn;
@@ -361,6 +376,7 @@ function renderBurnData(proposal) {
   `;
 }
 
+/** @param {any} proposal */
 function renderConsiderations(proposal) {
   if (!proposal.considerations?.length) return '';
   return `
@@ -369,7 +385,7 @@ function renderConsiderations(proposal) {
       Considerations
     </div>
     <div class="considerations">
-      ${proposal.considerations.map((c) => `
+      ${proposal.considerations.map((/** @type {any} */ c) => `
         <div class="considerations__item">
           <div class="considerations__bullet">→</div>
           <div class="considerations__text">${c}</div>
@@ -379,6 +395,7 @@ function renderConsiderations(proposal) {
   `;
 }
 
+/** @param {any} proposal */
 function renderAIConsiderations(proposal) {
   if (!proposal.aiConsiderations?.length) return '';
   return `
@@ -387,7 +404,7 @@ function renderAIConsiderations(proposal) {
       Strategist AI — operator considerations
     </div>
     <div class="considerations">
-      ${proposal.aiConsiderations.map((c) => `
+      ${proposal.aiConsiderations.map((/** @type {any} */ c) => `
         <div class="considerations__item">
           <div class="considerations__bullet">→</div>
           <div class="considerations__text">${renderText(c)}</div>
@@ -397,6 +414,7 @@ function renderAIConsiderations(proposal) {
   `;
 }
 
+/** @param {any} proposal */
 function renderModificationControls(proposal) {
   if (!proposal.action.startsWith('maneuver') || !proposal.actionData?.burn) return '';
   const burn = proposal.actionData.burn;
@@ -412,8 +430,9 @@ function renderModificationControls(proposal) {
   `;
 }
 
+/** @param {HTMLElement} host @param {any} proposal */
 function readModifications(host, proposal) {
-  const slider = host.querySelector('#burnSlider');
+  const slider = /** @type {HTMLInputElement|null} */ (host.querySelector('#burnSlider'));
   if (!slider) return {};
   return {
     burnDurationSec: Number(slider.value),
@@ -421,10 +440,12 @@ function readModifications(host, proposal) {
   };
 }
 
+/** @param {string} k */
 function prettifyKey(k) {
   return k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
 }
 
+/** @param {any} v */
 function formatVal(v) {
   if (typeof v === 'number') {
     if (Math.abs(v) < 1) return v.toFixed(3);

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AI Agent deep-dive page — interactive live demo.
  *
@@ -15,9 +16,49 @@
 import { agent, SCENARIOS } from '../scenarios/index.js';
 import { mountAgentPanel } from '../ui/agent-panel.js';
 import { audit } from '../core/audit-log.js';
-import { toast } from '../ui/toast.js';
+import { info, success } from '../ui/toast.js';
 import { getStoredKey, setStoredKey, hasLiveAI } from '../core/openrouter-client.js';
+import { mountAmbient } from '../ui/ambient.js';
 
+/** Phase rail order shown in the console header. */
+const PHASE_ORDER = ['OBSERVE', 'THINK', 'SCORE', 'PROPOSE', 'WAIT'];
+
+/**
+ * Chain phases that are not on the rail map onto the nearest rail chip.
+ * @type {Record<string, string>}
+ */
+const PHASE_ALIAS = { SAFETY: 'PROPOSE' };
+
+/**
+ * Hairline-white instrument glyphs, one per scenario (fallback: scenario.icon).
+ * @type {Record<string, string>}
+ */
+const SCENARIO_GLYPHS = {
+  // warning triangle + dotted conjunction arc
+  conjunction: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true">
+    <path d="M12 6.5 19.5 19h-15z"/><path d="M12 11v3.5"/><path d="M12 16.8v.4"/>
+    <path d="M3.5 7a12 12 0 0 1 17 0" stroke-dasharray="1 3"/></svg>`,
+  // battery cell with charge bar
+  battery: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true">
+    <rect x="4" y="9" width="14" height="8" rx="1"/><path d="M20 11.5v3"/><path d="M7 12v2M10 12v2"/></svg>`,
+  // thermometer, rising
+  thermal: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true">
+    <path d="M10.5 5.5a1.5 1.5 0 0 1 3 0v8a3.5 3.5 0 1 1-3 0z"/><path d="M12 9v7"/><path d="M17 7h3M17 10h2"/></svg>`,
+  // maneuver vector, up and prograde
+  commanded: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true">
+    <path d="M5 19 17 7"/><path d="M11.5 7H17v5.5"/><circle cx="5" cy="19" r="1.4"/></svg>`,
+  // ground station dish + uplink
+  handoff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true">
+    <path d="M5 12a7.4 7.4 0 0 0 7.4 7.4"/><circle cx="9.5" cy="15" r="2.6"/>
+    <path d="M11.4 13 19 5.5"/><path d="M15.8 5.5H19V8.7"/><path d="M9.5 19.5V21"/></svg>`,
+};
+
+/** @param {{ id: string, icon: string }} s */
+function scenarioGlyph(s) {
+  return SCENARIO_GLYPHS[s.id] || s.icon;
+}
+
+/** @type {Record<string, string>} */
 const AI_STAGE_LABELS = {
   analyst: 'LIVE AI · ANALYST THINKING…',
   strategist: 'LIVE AI · STRATEGIST WEIGHING OPTIONS…',
@@ -26,21 +67,59 @@ const AI_STAGE_LABELS = {
   done: 'LIVE AI COMPLETE',
 };
 
+/** @type {(() => void) | null} */
 let abortRun = null;
+/** @type {ReturnType<typeof setInterval> | null} */
 let auditRefreshTimer = null;
+/** @type {{ unmount: () => void } | null} */
+let ambient = null;
+/** @type {IntersectionObserver | null} */
+let deckIo = null;
+/** @type {(() => void) | null} */
+let unmountDepthGrid = null;
 
+/** agent-v3.css loads after the base stylesheets; inject once (idempotent). */
+function ensureStyles() {
+  if (document.getElementById('agent-v3')) return;
+  const link = document.createElement('link');
+  link.id = 'agent-v3';
+  link.rel = 'stylesheet';
+  link.href = '/src/styles/agent-v3.css';
+  document.head.appendChild(link);
+}
+
+/** @param {HTMLElement} app */
 export async function mount(app) {
+  ensureStyles();
   app.innerHTML = `
-    <main class="agent-page page-bg page-bg--agent">
+    <main class="agent-page">
+      <!-- depth layer 2: faint hairline grid gliding at 0.3x scroll (layer 1 = ambient stars) -->
+      <div class="agent-depth-grid" aria-hidden="true"></div>
+
       <nav class="side-nav" id="sideNav"></nav>
 
-      <header class="page-header">
+      <header class="page-header" data-deck="right">
+        <!-- reasoning constellation — hairline nodes + links behind the title -->
+        <svg class="agent-constellation" viewBox="0 0 640 300" fill="none" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+          <g class="agent-constellation__links" stroke="rgba(255,255,255,0.10)" stroke-width="1">
+            <path d="M60 210 180 120 320 160 430 70 560 130" stroke-dasharray="3 9"/>
+            <path d="M180 120 250 40 430 70" stroke-dasharray="3 9"/>
+            <path d="M320 160 380 240 560 130" stroke-dasharray="3 9"/>
+          </g>
+          <g fill="rgba(255,255,255,0.28)">
+            <circle cx="60" cy="210" r="1.6"/><circle cx="180" cy="120" r="2"/>
+            <circle cx="250" cy="40" r="1.4"/><circle cx="320" cy="160" r="2"/>
+            <circle cx="380" cy="240" r="1.4"/><circle cx="430" cy="70" r="2"/>
+            <circle cx="560" cy="130" r="1.6"/>
+          </g>
+          <circle cx="320" cy="160" r="5.5" stroke="rgba(143,198,255,0.35)" stroke-width="1"/>
+        </svg>
         <div class="container">
           <div class="page-header__top">
             <span class="eyebrow">DEEP DIVE · MODULE 03</span>
             <span class="agent-status-pill" id="agentStatus">
               <span class="agent-status-pill__dot"></span>
-              <span id="agentStatusText">AGENT ONLINE · 5 SCENARIOS · SHA-256 AUDIT</span>
+              <span id="agentStatusText">AGENT ONLINE · ${SCENARIOS.length} SCENARIOS · SHA-256 AUDIT</span>
             </span>
             <button class="agent-status-pill ai-settings-btn" id="aiSettingsBtn" title="Configure live AI (OpenRouter)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -49,14 +128,14 @@ export async function mount(app) {
           </div>
           <h1 class="page-header__title">The AI agent.</h1>
           <p class="page-header__sub">
-            Real Kepler physics. Real anomaly detection. Real audit chain.
-            The agent proposes — the operator decides. Always.
+            Real Kepler physics. Anomaly detection running on simulated telemetry, clearly labelled.
+            Real audit chain. The agent proposes — the operator decides. Always.
           </p>
         </div>
       </header>
 
       <!-- LIVE DEMO CONSOLE — the centerpiece -->
-      <section class="agent-console">
+      <section class="agent-console" data-deck="left">
         <div class="container">
           <header class="section__head section__head--inline">
             <div>
@@ -75,7 +154,7 @@ export async function mount(app) {
             <aside class="agent-picker" id="agentPicker">
               ${SCENARIOS.map((s, i) => `
                 <button class="agent-pick ${i === 0 ? 'is-active' : ''}" data-scenario="${s.id}">
-                  <div class="agent-pick__icon">${s.icon}</div>
+                  <div class="agent-pick__icon">${scenarioGlyph(s)}</div>
                   <div class="agent-pick__body">
                     <div class="agent-pick__title">${s.title}</div>
                     <div class="agent-pick__desc">${s.description}</div>
@@ -88,17 +167,21 @@ export async function mount(app) {
               `).join('')}
             </aside>
 
-            <!-- Reasoning console — animated step-by-step -->
+            <!-- Reasoning console — flight-ops terminal -->
             <div class="agent-console__panel">
               <div class="agent-console__head">
+                <span class="agent-console__scenario" id="consoleScenario">FLIGHT-OPS // STANDBY</span>
+                <div class="agent-console__phases" id="phaseRail" aria-hidden="true">
+                  ${PHASE_ORDER.map((p) => `<span class="phase-chip" data-phase="${p}">${p}</span>`).join('')}
+                </div>
                 <span class="agent-console__phase" id="agentPhase">READY</span>
                 <span class="agent-console__timer" id="agentTimer">0 ms</span>
               </div>
 
               <div class="agent-console__stream" id="agentStream">
                 <div class="agent-console__hint">
-                  <div class="agent-console__hint-icon">▶</div>
-                  <div>Click any scenario to run. Each step takes ~250 ms to display.</div>
+                  <div class="agent-console__ready">READY<span class="agent-console__cursor">_</span></div>
+                  <div class="agent-console__hint-text">Select a scenario to start a run · each step renders in ~400 ms · real elapsed time</div>
                 </div>
               </div>
 
@@ -120,7 +203,7 @@ export async function mount(app) {
       </section>
 
       <!-- AUDIT LOG — live feed of every action -->
-      <section class="agent-audit">
+      <section class="agent-audit" data-deck="right">
         <div class="container">
           <header class="section__head section__head--inline">
             <div>
@@ -129,7 +212,7 @@ export async function mount(app) {
             </div>
             <div class="agent-audit__chain-status">
               <span class="agent-audit__chain-status-dot"></span>
-              <span>Chain verified · <span id="chainLen">0</span> entries</span>
+              <span>CHAIN VERIFIED · <span id="chainLen">0</span> ENTRIES · SHA-256</span>
             </div>
           </header>
           <div class="agent-audit__table" id="auditTable"></div>
@@ -137,51 +220,102 @@ export async function mount(app) {
       </section>
 
       <!-- ARCHITECTURE — short flow diagram -->
-      <section class="agent-architecture">
+      <section class="agent-architecture" data-deck="left">
         <div class="container">
           <header class="section__head">
             <span class="eyebrow">Architecture</span>
             <h2 class="section__title">How the agent reasons.</h2>
           </header>
-          <div class="arch-flow">
-            <div class="arch-step">
-              <div class="arch-step__num">01</div>
-              <div class="arch-step__title">OBSERVE</div>
-              <div class="arch-step__body">Pull telemetry · cross-reference with LeoLabs, 18 SDS, ExoAnalytic</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-step">
-              <div class="arch-step__num">02</div>
-              <div class="arch-step__title">THINK</div>
-              <div class="arch-step__body">Kepler propagation · Welford stats · hypothesis generation</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-step">
-              <div class="arch-step__num">03</div>
-              <div class="arch-step__title">SCORE</div>
-              <div class="arch-step__body">Rank candidates by safety, fuel cost, mission impact, time</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-step">
-              <div class="arch-step__num">04</div>
-              <div class="arch-step__title">PROPOSE</div>
-              <div class="arch-step__body">Generate proposal with full chain · alternatives · audit hash</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-step arch-step--wait">
-              <div class="arch-step__num">05</div>
-              <div class="arch-step__title">WAIT</div>
-              <div class="arch-step__body">Agent halts. Operator reviews and decides.</div>
-            </div>
+          <div class="arch-pipeline">
+            ${[
+              { n: '01', t: 'OBSERVE', b: 'Pull telemetry · designed to ingest public SSA feeds (planned)',
+                g: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true"><path d="M3 12s3.5-5.5 9-5.5S21 12 21 12s-3.5 5.5-9 5.5S3 12 3 12z"/><circle cx="12" cy="12" r="2.2"/></svg>' },
+              { n: '02', t: 'THINK', b: 'Kepler propagation · Welford stats · hypothesis generation',
+                g: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true"><circle cx="7" cy="12" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="17" cy="18" r="2"/><path d="M9 11.2 15 6.8M9 12.8l6 4.4"/></svg>' },
+              { n: '03', t: 'SCORE', b: 'Rank candidates by safety, fuel cost, mission impact, time',
+                g: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-7"/><path d="M3.5 19h17"/></svg>' },
+              { n: '04', t: 'PROPOSE', b: 'Generate proposal with full chain · alternatives · audit hash',
+                g: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true"><path d="M7 3.5h7L18.5 8v12.5h-11z"/><path d="M14 3.5V8h4.5"/><path d="M9.5 13.5l1.8 1.8 3.4-3.4"/></svg>' },
+              { n: '05', t: 'WAIT', b: 'Agent halts. Operator reviews and decides.', wait: true,
+                g: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" width="18" height="18" aria-hidden="true"><path d="M9 8v8M15 8v8"/><circle cx="12" cy="12" r="9"/></svg>' },
+            ].map((s, i, arr) => `
+              <div class="arch-node ${s.wait ? 'arch-node--wait' : ''}">
+                <div class="arch-node__head">
+                  <span class="arch-node__idx">${s.n}</span>
+                  <span class="arch-node__glyph">${s.g}</span>
+                </div>
+                <div class="arch-node__title">${s.t}</div>
+                <div class="arch-node__body">${s.b}</div>
+              </div>
+              ${i < arr.length - 1 ? `
+              <div class="arch-link" aria-hidden="true">
+                <svg viewBox="0 0 40 8" preserveAspectRatio="none">
+                  <line class="arch-link__dash" x1="0" y1="4" x2="40" y2="4"
+                    stroke="rgba(255,255,255,0.22)" stroke-width="1" stroke-dasharray="3 5"/>
+                </svg>
+              </div>` : ''}
+            `).join('')}
           </div>
         </div>
       </section>
 
-      <section class="agent-cta">
+      <!-- F1 · THE GATE, STEP BY STEP — approval flow as a drawn timeline -->
+      <section class="agent-gate" data-deck="right">
+        <div class="container">
+          <header class="section__head section__head--inline">
+            <div>
+              <span class="eyebrow">Approval flow</span>
+              <h2 class="section__title">The gate, step by step.</h2>
+            </div>
+            <span class="agent-gate__tag">HUMAN-IN-THE-LOOP · ENFORCED IN ARCHITECTURE</span>
+          </header>
+          <ol class="gate-flow">
+            <li class="gate-step">
+              <div class="gate-step__idx">01</div>
+              <div class="gate-step__title">ALERT RECEIVED</div>
+              <div class="gate-step__body">A conjunction or anomaly trips the watchline.
+                In this demo, alerts come from the five simulated scenarios above.
+                Live SSA feed <span class="planned-chip">PLANNED</span></div>
+            </li>
+            <li class="gate-step">
+              <div class="gate-step__idx">02</div>
+              <div class="gate-step__title">AGENT DRAFTS</div>
+              <div class="gate-step__body">The agent runs the physics, scores the
+                alternatives, and drafts one proposal with its full reasoning chain
+                attached. It cannot execute anything.</div>
+            </li>
+            <li class="gate-step gate-step--gate">
+              <div class="gate-step__idx">03</div>
+              <div class="gate-step__title">HUMAN REVIEWS</div>
+              <div class="gate-step__body">A named operator reads the chain, then
+                approves, modifies, or rejects. The gate is architecture, not policy —
+                there is no autopilot code path.</div>
+            </li>
+            <li class="gate-step">
+              <div class="gate-step__idx">04</div>
+              <div class="gate-step__title">DECISION HASH-CHAINED</div>
+              <div class="gate-step__body">The decision is appended to the SHA-256
+                audit chain, sealed by the entry before it. Alter one record and the
+                chain breaks — visibly.</div>
+            </li>
+            <li class="gate-step">
+              <div class="gate-step__idx">05</div>
+              <div class="gate-step__title">EXPORTABLE EVIDENCE</div>
+              <div class="gate-step__body">The full chain exports as JSON — who
+                decided what, when, on which reasoning. Runs in this browser today;
+                insurer/regulator pack formats <span class="planned-chip">PLANNED</span></div>
+            </li>
+          </ol>
+          <p class="gate-flow__note">Steps 02–05 run in this demo on the real in-browser
+            hash chain. Step 01 uses simulated scenarios until a live feed ships.</p>
+        </div>
+      </section>
+
+      <section class="agent-cta" data-deck="left">
         <div class="container">
           <div class="agent-cta__inner">
             <h2>Ready to add the agent to your ops?</h2>
-            <p>MIT-licensed. Self-host or managed. SOC 2 roadmap in flight.</p>
+            <p>MIT-licensed. Self-host or managed.</p>
             <a href="/pricing" data-route="/pricing" class="btn btn--primary btn--lg">PRICING &amp; PILOT →</a>
           </div>
         </div>
@@ -193,7 +327,15 @@ export async function mount(app) {
     </div>
   `;
 
-  mountSideNav(app.querySelector('#sideNav'));
+  // Ambient space layer — starfield + drifting hairline satellite.
+  ambient = mountAmbient(/** @type {HTMLElement} */ (app.querySelector('.agent-page')), { object: 'satellite' });
+
+  // Console decks slide in laterally as they enter the viewport (once each),
+  // and the hairline grid layer glides at 0.3x scroll behind them.
+  deckIo = setupDeckReveals(app);
+  unmountDepthGrid = mountDepthGrid(/** @type {HTMLElement|null} */ (app.querySelector('.agent-depth-grid')));
+
+  mountSideNav(/** @type {HTMLElement|null} */ (app.querySelector('#sideNav')));
   wireScenarioPicker(app);
   wireAISettings(app);
   refreshAuditTable(app.querySelector('#auditTable'));
@@ -202,6 +344,7 @@ export async function mount(app) {
     updateChainStatus();
   }, 1500);
 
+  /** @param {{ stage: string }} arg */
   const onAIStage = ({ stage }) => {
     const phase = app.querySelector('#agentPhase');
     if (phase && AI_STAGE_LABELS[stage]) {
@@ -216,20 +359,75 @@ export async function mount(app) {
       if (abortRun) abortRun();
       if (auditRefreshTimer) clearInterval(auditRefreshTimer);
       agent.off('ai-stage', onAIStage);
+      if (deckIo) { deckIo.disconnect(); deckIo = null; }
+      if (unmountDepthGrid) { unmountDepthGrid(); unmountDepthGrid = null; }
+      if (ambient) { ambient.unmount(); ambient = null; }
     },
   };
 }
 
+/**
+ * Deck reveals — each [data-deck] section slides in laterally (side per its
+ * data-deck value, styled in agent-v3.css) the first time it enters the
+ * viewport. Once-only: targets are unobserved after docking.
+ * @param {HTMLElement} app
+ * @returns {IntersectionObserver|null} the observer (for unmount), or null.
+ */
+function setupDeckReveals(app) {
+  const decks = app.querySelectorAll('[data-deck]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced || !('IntersectionObserver' in window)) {
+    decks.forEach((d) => d.classList.add('is-docked'));
+    return null;
+  }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('is-docked');
+      io.unobserve(entry.target);
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+  decks.forEach((d) => io.observe(d));
+  return io;
+}
+
+/**
+ * Depth grid — the fixed hairline grid layer translates its background at
+ * 0.3x scroll speed, so scrolling reads as gliding past console decks.
+ * rAF-throttled, passive listener; disabled under prefers-reduced-motion.
+ * @param {HTMLElement|null} grid
+ * @returns {() => void} cleanup for unmount.
+ */
+function mountDepthGrid(grid) {
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!grid || reduced) return () => {};
+  let raf = 0;
+  const sync = () => {
+    raf = 0;
+    grid.style.backgroundPosition = `0 ${(-(window.scrollY || 0) * 0.3).toFixed(1)}px`;
+  };
+  const onScroll = () => { if (!raf) raf = requestAnimationFrame(sync); };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  sync();
+  return () => {
+    window.removeEventListener('scroll', onScroll);
+    if (raf) cancelAnimationFrame(raf);
+  };
+}
+
+/** @param {HTMLElement} app */
 function updateAILabel(app) {
   const label = app.querySelector('#aiSettingsLabel');
   if (label) label.textContent = hasLiveAI() ? 'AI: LIVE (OpenRouter)' : 'AI: SIMULATED';
 }
 
+/** @param {HTMLElement} app */
 function wireAISettings(app) {
   updateAILabel(app);
   app.querySelector('#aiSettingsBtn')?.addEventListener('click', () => openAISettingsModal(app));
 }
 
+/** @param {HTMLElement} app */
 function openAISettingsModal(app) {
   const existing = document.getElementById('ai-settings-modal');
   if (existing) existing.remove();
@@ -270,44 +468,54 @@ function openAISettingsModal(app) {
   document.body.appendChild(modal);
 
   const close = () => modal.remove();
-  modal.querySelector('#aiModalClose').onclick = close;
+  const closeBtn = /** @type {HTMLElement|null} */ (modal.querySelector('#aiModalClose'));
+  if (closeBtn) closeBtn.onclick = close;
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-  modal.querySelector('#aiKeyClear').onclick = () => {
+  const clearBtn = /** @type {HTMLElement|null} */ (modal.querySelector('#aiKeyClear'));
+  if (clearBtn) clearBtn.onclick = () => {
     setStoredKey('');
     updateAILabel(app);
-    toast.info('OpenRouter key cleared — back to simulated reasoning', { title: 'AI settings', durationMs: 3000 });
+    info('OpenRouter key cleared — back to simulated reasoning', { title: 'AI settings', durationMs: 3000 });
     close();
   };
-  modal.querySelector('#aiKeySave').onclick = () => {
-    const input = modal.querySelector('#aiKeyInput');
+  const saveBtn = /** @type {HTMLElement|null} */ (modal.querySelector('#aiKeySave'));
+  if (saveBtn) saveBtn.onclick = () => {
+    const input = /** @type {HTMLInputElement|null} */ (modal.querySelector('#aiKeyInput'));
+    if (!input) return;
     const value = input.value.trim();
     if (value && !value.startsWith('••')) {
       setStoredKey(value);
-      toast.success('Live AI enabled — scenarios now reason via OpenRouter', { title: 'AI settings', durationMs: 3500 });
+      success('Live AI enabled — scenarios now reason via OpenRouter', { title: 'AI settings', durationMs: 3500 });
     }
     updateAILabel(app);
     close();
   };
 }
 
+/** @param {HTMLElement} app */
 function wireScenarioPicker(app) {
-  const picker = app.querySelector('#agentPicker');
-  const stream = app.querySelector('#agentStream');
-  const phase = app.querySelector('#agentPhase');
-  const timer = app.querySelector('#agentTimer');
-  const footer = app.querySelector('#agentFooter');
-  const confidenceFill = app.querySelector('#agentConfidenceFill');
-  const confidenceVal = app.querySelector('#agentConfidenceVal');
+  const picker = /** @type {HTMLElement|null} */ (app.querySelector('#agentPicker'));
+  const stream = /** @type {HTMLElement|null} */ (app.querySelector('#agentStream'));
+  const phase = /** @type {HTMLElement|null} */ (app.querySelector('#agentPhase'));
+  const timer = /** @type {HTMLElement|null} */ (app.querySelector('#agentTimer'));
+  const footer = /** @type {HTMLElement|null} */ (app.querySelector('#agentFooter'));
+  const confidenceFill = /** @type {HTMLElement|null} */ (app.querySelector('#agentConfidenceFill'));
+  const confidenceVal = /** @type {HTMLElement|null} */ (app.querySelector('#agentConfidenceVal'));
+  if (!picker || !stream || !phase || !timer || !footer || !confidenceFill || !confidenceVal) return;
 
   picker.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-scenario]');
+    const btn = /** @type {HTMLElement|null} */ (e.target)?.closest('[data-scenario]');
     if (!btn) return;
     picker.querySelectorAll('.agent-pick').forEach((b) => b.classList.toggle('is-active', b === btn));
-    const id = btn.dataset.scenario;
+    const id = /** @type {HTMLElement} */ (btn).dataset.scenario;
+    if (!id) return;
+    const scenario = SCENARIOS.find((s) => s.id === id);
 
     // Reset UI
     stream.innerHTML = '';
     footer.hidden = true;
+    setScenarioLabel(app, scenario ? scenario.title : id);
+    setPhaseRail(app, null);
     phase.textContent = 'RUNNING';
     phase.className = 'agent-console__phase agent-console__phase--running';
     const startTs = performance.now();
@@ -324,7 +532,7 @@ function wireScenarioPicker(app) {
       clearInterval(timerInt);
       phase.textContent = 'ERROR';
       phase.className = 'agent-console__phase agent-console__phase--alert';
-      stream.innerHTML = `<div class="agent-console__error">${e.message}</div>`;
+      stream.innerHTML = `<div class="agent-console__error">${e instanceof Error ? e.message : String(e)}</div>`;
       return;
     }
 
@@ -337,7 +545,8 @@ function wireScenarioPicker(app) {
       const step = proposal.chain[i];
       phase.textContent = step.phase;
       phase.className = 'agent-console__phase agent-console__phase--running';
-      const stepEl = renderStep(step);
+      setPhaseRail(app, step.phase);
+      const stepEl = renderStep(step, Math.round(performance.now() - startTs));
       stream.appendChild(stepEl);
       stepEl.classList.add('is-entering');
       requestAnimationFrame(() => stepEl.classList.add('is-shown'));
@@ -353,6 +562,7 @@ function wireScenarioPicker(app) {
     // Final state — WAIT for operator
     phase.textContent = 'WAITING FOR OPERATOR';
     phase.className = 'agent-console__phase agent-console__phase--wait';
+    setPhaseRail(app, 'WAIT');
     clearInterval(timerInt);
     timer.textContent = `${Math.round(performance.now() - startTs)} ms`;
 
@@ -362,39 +572,40 @@ function wireScenarioPicker(app) {
     footer.hidden = false;
 
     // Wire approve/reject/modify
-    const approveBtn = app.querySelector('#agentApproveBtn');
-    const rejectBtn = app.querySelector('#agentRejectBtn');
-    const modifyBtn = app.querySelector('#agentModifyBtn');
-    approveBtn.onclick = async () => {
+    const approveBtn = /** @type {HTMLElement|null} */ (app.querySelector('#agentApproveBtn'));
+    const rejectBtn = /** @type {HTMLElement|null} */ (app.querySelector('#agentRejectBtn'));
+    const modifyBtn = /** @type {HTMLElement|null} */ (app.querySelector('#agentModifyBtn'));
+    if (approveBtn) approveBtn.onclick = async () => {
       await agent.approve(proposal.id, 'demo-operator');
-      toast.success('Proposal approved · burn queued', { title: 'Agent', durationMs: 3500 });
+      success('Proposal approved · burn queued', { title: 'Agent', durationMs: 3500 });
       bumpCounter('agentApproveCount');
       refreshAuditTable(app.querySelector('#auditTable'));
     };
-    rejectBtn.onclick = () => {
+    if (rejectBtn) rejectBtn.onclick = () => {
       openRejectDialog(proposal, (reason) => {
         agent.reject(proposal.id, 'demo-operator', reason);
-        toast.info('Proposal rejected', { title: 'Agent', durationMs: 3500 });
+        info('Proposal rejected', { title: 'Agent', durationMs: 3500 });
         bumpCounter('agentRejectCount');
         refreshAuditTable(app.querySelector('#auditTable'));
       });
     };
-    modifyBtn.onclick = () => {
+    if (modifyBtn) modifyBtn.onclick = () => {
       const modal = app.querySelector('#proposalModal');
-      const card = app.querySelector('#proposalCard');
+      const card = /** @type {HTMLElement|null} */ (app.querySelector('#proposalCard'));
+      if (!modal || !card) return;
       mountAgentPanel(card, proposal, {
         onClose: () => modal.classList.remove('is-show'),
         onApprove: async () => {
           await agent.approve(proposal.id, 'demo-operator');
           modal.classList.remove('is-show');
-          toast.success('Modified proposal approved', { title: 'Agent', durationMs: 3500 });
+          success('Modified proposal approved', { title: 'Agent', durationMs: 3500 });
           bumpCounter('agentApproveCount');
           refreshAuditTable(app.querySelector('#auditTable'));
         },
         onReject: (r) => {
           agent.reject(proposal.id, 'demo-operator', r);
           modal.classList.remove('is-show');
-          toast.info('Proposal rejected', { title: 'Agent', durationMs: 3500 });
+          info('Proposal rejected', { title: 'Agent', durationMs: 3500 });
           bumpCounter('agentRejectCount');
           refreshAuditTable(app.querySelector('#auditTable'));
         },
@@ -407,6 +618,10 @@ function wireScenarioPicker(app) {
   });
 }
 
+/**
+ * @param {any} proposal - AgentProposal, rendered dynamically
+ * @param {(reason: string) => void} onSubmit
+ */
 function openRejectDialog(proposal, onSubmit) {
   // Remove existing modal if any
   const existing = document.getElementById('agent-reject-modal');
@@ -446,17 +661,48 @@ function openRejectDialog(proposal, onSubmit) {
   `;
   document.body.appendChild(modal);
   const close = () => modal.remove();
-  modal.querySelector('#rejectClose').onclick = close;
-  modal.querySelector('#rejectCancel').onclick = close;
+  const rejectClose = /** @type {HTMLElement|null} */ (modal.querySelector('#rejectClose'));
+  if (rejectClose) rejectClose.onclick = close;
+  const rejectCancel = /** @type {HTMLElement|null} */ (modal.querySelector('#rejectCancel'));
+  if (rejectCancel) rejectCancel.onclick = close;
   modal.onclick = (e) => { if (e.target === modal) close(); };
-  modal.querySelector('#rejectConfirm').onclick = () => {
-    const reason = modal.querySelector('#rejectReason').value.trim();
+  const rejectConfirm = /** @type {HTMLElement|null} */ (modal.querySelector('#rejectConfirm'));
+  if (rejectConfirm) rejectConfirm.onclick = () => {
+    const reasonEl = /** @type {HTMLTextAreaElement|null} */ (modal.querySelector('#rejectReason'));
+    const reason = reasonEl ? reasonEl.value.trim() : '';
     close();
     onSubmit(reason);
   };
-  setTimeout(() => modal.querySelector('#rejectReason')?.focus(), 100);
+  setTimeout(() => /** @type {HTMLElement|null} */ (modal.querySelector('#rejectReason'))?.focus(), 100);
 }
 
+/**
+ * Update the mono scenario label in the console header rail.
+ * @param {HTMLElement} app
+ * @param {string} title
+ */
+function setScenarioLabel(app, title) {
+  const el = app.querySelector('#consoleScenario');
+  if (el) el.textContent = `FLIGHT-OPS // ${String(title).toUpperCase()}`;
+}
+
+/**
+ * Light the phase chips as the run progresses.
+ * @param {Element} app
+ * @param {string|null} phase  Current chain phase (null = reset all chips).
+ */
+function setPhaseRail(app, phase) {
+  const rail = app.querySelector('#phaseRail');
+  if (!rail) return;
+  const resolved = phase ? (PHASE_ALIAS[phase] || phase) : null;
+  const idx = resolved ? PHASE_ORDER.indexOf(resolved) : -1;
+  rail.querySelectorAll('.phase-chip').forEach((chip, i) => {
+    chip.classList.toggle('is-done', idx >= 0 && i < idx);
+    chip.classList.toggle('is-active', i === idx);
+  });
+}
+
+/** @param {string} [s] */
 function renderText(s) {
   if (!s) return '';
   return s
@@ -464,15 +710,17 @@ function renderText(s) {
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 }
 
-function renderStep(step) {
+/** @param {any} step @param {number} elapsedMs */
+function renderStep(step, elapsedMs) {
   const wrap = document.createElement('div');
   wrap.className = 'agent-step';
+  wrap.dataset.phase = step.phase; // drives the thin left phase rail (CSS)
   const isLive = step.source === 'live-ai';
   wrap.innerHTML = `
     <div class="agent-step__head">
       <span class="agent-step__phase">${step.phase}</span>
       ${isLive ? `<span class="chain-step__source chain-step__source--live" title="Genuine LLM call via OpenRouter">LIVE AI · ${step.model || ''}</span>` : ''}
-      <span class="agent-step__ts">+${Date.now() % 10000} ms</span>
+      <span class="agent-step__ts">+${elapsedMs} ms</span>
     </div>
     <div class="agent-step__title">${renderText(step.title)}</div>
     <div class="agent-step__body">${renderText(step.body)}</div>
@@ -481,6 +729,7 @@ function renderStep(step) {
   return wrap;
 }
 
+/** @param {any} data */
 function renderStepData(data) {
   if (!data) return '';
   if (data.alternatives && Array.isArray(data.alternatives)) {
@@ -488,7 +737,7 @@ function renderStepData(data) {
       <table class="agent-step__table">
         <thead><tr><th>Strategy</th><th>Δv</th><th>Fuel</th><th>Margin</th></tr></thead>
         <tbody>
-          ${data.alternatives.map((alt) => `
+          ${data.alternatives.map((/** @type {any} */ alt) => `
             <tr class="${alt.kind === 'Recommended' ? 'is-recommended' : ''}">
               <td><span class="agent-step__kind">${alt.kind}</span> ${alt.label}${alt.kind === 'Recommended' ? ' <span class="agent-step__winner">WINNER</span>' : ''}</td>
               <td>${alt.dv.toFixed(2)} m/s</td>
@@ -503,7 +752,7 @@ function renderStepData(data) {
   if (data.hypotheses && Array.isArray(data.hypotheses)) {
     return `
       <div class="agent-step__bars">
-        ${data.hypotheses.map((h) => `
+        ${data.hypotheses.map((/** @type {any} */ h) => `
           <div class="agent-step__bar-row">
             <span class="agent-step__bar-label">${h.label}</span>
             <div class="agent-step__bar"><div class="agent-step__bar-fill" style="width: ${(h.likelihood * 100).toFixed(0)}%;"></div></div>
@@ -516,7 +765,7 @@ function renderStepData(data) {
   if (data.options && Array.isArray(data.options)) {
     return `
       <div class="agent-step__bars">
-        ${data.options.map((o) => `
+        ${data.options.map((/** @type {any} */ o) => `
           <div class="agent-step__bar-row ${o.id === data.winner ? 'is-recommended' : ''}">
             <span class="agent-step__bar-label">${o.id === data.winner ? '★ ' : ''}${o.label}</span>
             <div class="agent-step__bar"><div class="agent-step__bar-fill" style="width: ${Math.min(100, o.weeksGained * 8)}%;"></div></div>
@@ -538,6 +787,7 @@ function renderStepData(data) {
   return '';
 }
 
+/** @param {string} id */
 function bumpCounter(id) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -549,11 +799,14 @@ function updateChainStatus() {
   if (len) len.textContent = String(audit.all().length);
 }
 
+/** @param {number} ms @returns {Promise<void>} */
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** @param {HTMLElement|null} host */
 function mountSideNav(host) {
+  if (!host) return;
   host.innerHTML = `
     <a href="/" data-route="/" class="side-nav__item" title="Home"><span class="side-nav__dot"></span><span class="side-nav__label">HOME</span></a>
     <a href="/cockpit" data-route="/cockpit" class="side-nav__item" title="Cockpit"><span class="side-nav__dot"></span><span class="side-nav__label">COCKPIT</span></a>
@@ -565,6 +818,7 @@ function mountSideNav(host) {
   `;
 }
 
+/** @param {HTMLElement|null} host */
 function refreshAuditTable(host) {
   if (!host) return;
   const entries = audit.all().slice(-10).reverse();
@@ -579,6 +833,9 @@ function refreshAuditTable(host) {
     return;
   }
   host.innerHTML = `
+    <div class="agent-audit__headrow" aria-hidden="true">
+      <div>SEQ</div><div>TIME</div><div>ACTOR</div><div>ACTION</div><div>SHA-256</div>
+    </div>
     <div class="agent-audit__rows">
       ${entries.map((e) => `
         <div class="agent-audit__row">
@@ -586,7 +843,7 @@ function refreshAuditTable(host) {
           <div class="agent-audit__time">${new Date(e.ts).toLocaleTimeString()}</div>
           <div class="agent-audit__actor">${e.actor}</div>
           <div class="agent-audit__action">${e.action}</div>
-          <div class="agent-audit__hash">${e.hash.slice(0, 12)}…${e.hash.slice(-6)}</div>
+          <div class="agent-audit__hash">${/** @type {string} */ (e.hash).slice(0, 12)}…${/** @type {string} */ (e.hash).slice(-6)}</div>
         </div>
       `).join('')}
     </div>

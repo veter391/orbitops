@@ -1002,6 +1002,35 @@
   font-variant-numeric: tabular-nums;
 }
 
+.cockpit-datapill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  padding: 2px 7px;
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+.cockpit-search {
+  width: calc(100% - var(--space-5) * 2);
+  margin: var(--space-3) var(--space-5) var(--space-2);
+  padding: 7px 10px;
+  background: var(--ink-input);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cockpit-search:focus { outline: none; border-color: var(--accent); }
+.cockpit-search::placeholder { color: var(--text-mute); }
+
+.dash-note p { margin: 0 0 10px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.55; }
+.dash-note p:last-child { margin-bottom: 0; }
+
 .cockpit-sats {
   display: flex;
   flex-direction: column;

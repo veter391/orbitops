@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Audit log — append-only, hash-chained log of every operator action,
  * AI proposal, and system event.
@@ -19,8 +20,21 @@
 
 'use strict';
 
+/**
+ * @typedef {object} AuditEntry
+ * @property {number} seq
+ * @property {number} ts
+ * @property {string} actor
+ * @property {string} action
+ * @property {Record<string, unknown>} payload
+ * @property {string} prevHash
+ * @property {string|null} hash
+ */
+
 /** Cheap hash function for browser environments where SubtleCrypto may not be available.
  *  Production: use SubtleCrypto.digest('SHA-256', ...) when available.
+ *  @param {string} input
+ *  @returns {Promise<string>}
  */
 async function hash(input) {
   if (globalThis.crypto && globalThis.crypto.subtle) {
@@ -41,14 +55,23 @@ async function hash(input) {
 
 export class AuditLog {
   constructor() {
+    /** @type {AuditEntry[]} */
     this.entries = [];
+    /** @type {Set<(e: AuditEntry) => void>} */
     this.subscribers = new Set();
     this.lastHash = '0'.repeat(64);
   }
 
+  /**
+   * @param {string} actor
+   * @param {string} action
+   * @param {Record<string, unknown>} [payload]
+   * @returns {Promise<AuditEntry>}
+   */
   async append(actor, action, payload = {}) {
     const seq = this.entries.length;
     const ts = Date.now();
+    /** @type {AuditEntry} */
     const entry = {
       seq,
       ts,
@@ -67,17 +90,28 @@ export class AuditLog {
     return entry;
   }
 
+  /**
+   * @param {string} actor
+   * @param {string} action
+   * @param {Record<string, unknown>} [payload]
+   * @returns {Promise<AuditEntry>}
+   */
   async appendSync(actor, action, payload = {}) {
     // For testing: pre-compute hash synchronously with fallback
     return this.append(actor, action, payload);
   }
 
-  /** Subscribe to new entries. */
+  /**
+   * Subscribe to new entries.
+   * @param {(e: AuditEntry) => void} fn
+   * @returns {() => boolean}
+   */
   subscribe(fn) {
     this.subscribers.add(fn);
     return () => this.subscribers.delete(fn);
   }
 
+  /** @param {AuditEntry} entry */
   _notify(entry) {
     this.subscribers.forEach((fn) => {
       try {
@@ -112,7 +146,7 @@ export class AuditLog {
     return this.entries.slice();
   }
 
-  /** Filter by action prefix. */
+  /** Filter by action prefix. @param {string} prefix */
   filter(prefix) {
     return this.entries.filter((e) => e.action.startsWith(prefix));
   }

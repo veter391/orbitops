@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Maneuver planner — compute optimal avoidance burns and station-keeping burns.
  *
@@ -13,15 +14,59 @@
 import { propagate, distanceKm } from './orbit-propagator.js';
 
 /**
+ * A computed maneuver. Fields vary by kind (avoidance / phasing / none /
+ * monitor); the common ones are named, the rest are optional.
+ * @typedef {object} Maneuver
+ * @property {string} kind
+ * @property {string} [direction]
+ * @property {number} [dvMs]
+ * @property {number} [fuelKg]
+ * @property {number} [durationSec]
+ * @property {number} [deltaAlt]
+ * @property {number} [phaseShift]
+ * @property {number} [confidence]
+ * @property {string|string[]} [notes]
+ * @property {string} [reason]
+ * @property {any} [alternative]
+ * @property {any} [conjunction]
+ * @property {string} [satA]
+ * @property {string} [satB]
+ * @property {number} [tConjunction]
+ * @property {Maneuver} [burn]
+ */
+
+/**
+ * A predicted close approach between two objects.
+ * @typedef {object} Conjunction
+ * @property {number} missKm
+ * @property {number} probCollision
+ */
+
+/**
+ * The concrete result of avoidanceBurn — every field is always present (unlike
+ * the broader Maneuver union), so callers can read dvMs/fuelKg without guards.
+ * @typedef {object} AvoidanceBurn
+ * @property {string} kind
+ * @property {string} direction
+ * @property {number} dvMs
+ * @property {number} fuelKg
+ * @property {number} durationSec
+ * @property {number} deltaAlt
+ * @property {number} confidence
+ * @property {string[]} notes
+ * @property {{label: string, dvMs: number, fuelKg: number, notes: string}} alternative
+ */
+
+/**
  * Compute a Hohmann-like avoidance burn to increase altitude by deltaAlt.
  *
  * Real-world this requires solving Lambert's problem for the desired
  * separation. For the demo, we produce a prograde (along-velocity) burn
  * proportional to the desired altitude change.
  *
- * @param {Object} elements - orbital elements
- * @param {number} deltaAltKm - desired altitude change (km), positive = raise
- * @returns {{ dvMs: number, direction: string, fuelKg: number, durationSec: number, deltaAlt: number, confidence: number, alternative: Object|null }}
+ * @param {any} elements - orbital elements (unused in the demo solver)
+ * @param {number} [deltaAltKm=5] - desired altitude change (km), positive = raise
+ * @returns {AvoidanceBurn}
  */
 export function avoidanceBurn(elements, deltaAltKm = 5) {
   // Empirical: ~3.0 m/s per km altitude change for circular LEO
@@ -60,8 +105,9 @@ export function avoidanceBurn(elements, deltaAltKm = 5) {
 /**
  * Compute a station-keeping burn to correct altitude decay.
  *
- * @param {Object} elements
+ * @param {{altitude?: number}} elements
  * @param {number} targetAltitudeKm
+ * @returns {Maneuver}
  */
 export function stationKeepingBurn(elements, targetAltitudeKm) {
   const currentAlt = elements.altitude ?? 550;
@@ -73,7 +119,8 @@ export function stationKeepingBurn(elements, targetAltitudeKm) {
  * Compute phasing burn to delay/advance orbit by phase angle.
  *
  * @param {number} phaseDeg - desired phase shift (deg)
- * @param {Object} elements
+ * @param {any} [elements] - orbital elements (unused in the demo solver)
+ * @returns {Maneuver}
  */
 export function phasingBurn(phaseDeg, elements) {
   // Empirical: 0.4 m/s per degree of phase shift
@@ -97,10 +144,11 @@ export function phasingBurn(phaseDeg, elements) {
 /**
  * Compute full avoidance maneuver plan given a conjunction.
  *
- * @param {Object} conjunction
- * @param {Object} satA
- * @param {Object} satB
+ * @param {Conjunction} conjunction
+ * @param {Satellite} satA
+ * @param {Satellite} satB
  * @param {number} tConjunction - time of closest approach
+ * @returns {Maneuver}
  */
 export function planAvoidance(conjunction, satA, satB, tConjunction) {
   // If miss distance is acceptable, recommend no action
@@ -139,7 +187,7 @@ export function planAvoidance(conjunction, satA, satB, tConjunction) {
     satB: satB.id,
     tConjunction,
     burn,
-    reason: `Miss distance ${currentMiss.toFixed(2)} km below threshold. Recommend ${burn.direction} burn of ${burn.dvMs.toFixed(2)} m/s to raise orbit by ${burn.deltaAlt.toFixed(2)} km.`,
+    reason: `Miss distance ${currentMiss.toFixed(2)} km below threshold. Recommend ${burn.direction} burn of ${(burn.dvMs ?? 0).toFixed(2)} m/s to raise orbit by ${(burn.deltaAlt ?? 0).toFixed(2)} km.`,
     confidence: burn.confidence,
   };
 }
@@ -147,9 +195,9 @@ export function planAvoidance(conjunction, satA, satB, tConjunction) {
 /**
  * Find the next safe burn window (no eclipse, ground station visible).
  *
- * @param {Object} satellite
+ * @param {Satellite} satellite
  * @param {number} tStart
- * @param {number} windowHours
+ * @param {number} [windowHours=24]
  * @returns {Array<{start: number, end: number, eclipse: boolean, gsVisible: boolean}>}
  */
 export function findBurnWindows(satellite, tStart, windowHours = 24) {

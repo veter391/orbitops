@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Simulated satellite constellations for the OrbitOps demo.
  *
@@ -22,6 +23,12 @@
 /**
  * Build a satellite from compact orbital elements.
  * Mean motion (rad/s) = 2π / period (s); for LEO altitude ~550km, period ≈ 95 min.
+ * @param {string} id
+ * @param {string} name
+ * @param {string} customer
+ * @param {string} mission
+ * @param {SatOpts} opts
+ * @returns {Satellite}
  */
 function sat(id, name, customer, mission, opts) {
   const period = opts.periodSec ?? 95 * 60;

@@ -1,0 +1,645 @@
+/* ============================================================================
+   OrbitOps COCKPIT v2 — full instrument treatment.
+
+   Loaded LAST (after pages.css and os.css). Overrides both layers and pushes
+   the cockpit chrome to the "mission control OS from 2037" target. CSS only.
+
+   HARD CONSTRAINT — the 3D globe is approved and untouchable:
+   - no size/box-model/filter/transform changes on .cockpit-stage or
+     #cockpitCanvas (JS derives canvas size from the stage rect);
+   - .cockpit-stage::before/::after overlays stay pointer-events:none and are
+     only *lightened*, never darkened;
+   - ticker stays 32px tall (resize() in cockpit-immersive.js assumes it).
+
+   !important is used ONLY where pages.css mobile blocks or os.css already use
+   !important on the same property — cascade order alone cannot beat those.
+   Each such use is at equal specificity so this file (loaded last) wins.
+   ============================================================================ */
+
+:root {
+  --v2-glass: rgba(9, 15, 24, 0.78);
+  --v2-glass-deep: rgba(5, 10, 17, 0.85);
+  --v2-cyan: #8fc6ff;
+  --v2-violet: #8fc6ff;
+  --v2-cyan-06: rgba(143, 198, 255, 0.06);
+  --v2-cyan-12: rgba(143, 198, 255, 0.12);
+  --v2-cyan-25: rgba(143, 198, 255, 0.25);
+  --v2-cyan-45: rgba(143, 198, 255, 0.45);
+  --v2-cyan-70: rgba(143, 198, 255, 0.7);
+  --v2-line: rgba(90, 150, 190, 0.22);
+  --v2-line-dim: rgba(90, 150, 190, 0.12);
+  --v2-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================================================
+   1. TOP CHROME — command strip
+   ============================================================================ */
+
+.cockpit-immersive__title {
+  letter-spacing: 0.24em;
+  color: #bfe4f2;
+  text-shadow: 0 0 16px rgba(143, 198, 255, 0.3), 0 0 2px rgba(143, 198, 255, 0.4);
+}
+
+.cockpit-immersive__brand {
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+/* datapill → live-status chip with a lit indicator */
+.cockpit-datapill {
+  position: relative;
+  padding: 2px 8px 2px 17px;
+  border-radius: 2px;
+  background: var(--v2-cyan-06);
+  border-color: var(--v2-cyan-45);
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-datapill::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--v2-cyan);
+  box-shadow: 0 0 6px var(--v2-cyan);
+}
+
+.cockpit-immersive__status {
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-immersive__status-dot {
+  box-shadow: 0 0 8px var(--ok);
+}
+
+/* ============================================================================
+   2. LEFT ROSTER — dark glass instrument rack
+   ============================================================================ */
+
+/* command-field search: mono, prompt chevron, cyan caret, focus glow */
+.cockpit-search {
+  background-color: var(--v2-glass-deep);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M1 0l6 5-6 5z' fill='%2338e1ff' fill-opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  background-size: 7px 9px;
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  padding: 8px 10px 8px 26px;
+  caret-color: var(--v2-cyan);
+  letter-spacing: 0.04em;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), background-color var(--dur-fast);
+}
+.cockpit-search:focus {
+  outline: none;
+  border-color: var(--v2-cyan-70);
+  background-color: rgba(6, 12, 20, 0.95);
+  box-shadow:
+    0 0 0 1px var(--v2-cyan-25),
+    0 0 18px rgba(143, 198, 255, 0.14),
+    inset 0 0 14px var(--v2-cyan-06);
+}
+.cockpit-search::placeholder {
+  color: var(--text-mute);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+/* sat rows → instrument rows */
+.cockpit-sat-item {
+  position: relative;
+  padding: 8px 12px 8px 14px;
+  border-bottom: 1px solid var(--v2-line-dim);
+  background-color: transparent;
+  background-image: linear-gradient(100deg, rgba(143, 198, 255, 0) 0%, rgba(143, 198, 255, 0.09) 45%, rgba(143, 198, 255, 0) 90%);
+  background-size: 250% 100%;
+  background-position: 130% 0;
+  background-repeat: no-repeat;
+  transition:
+    background-position 0.5s var(--v2-ease),
+    background-color var(--dur-fast),
+    box-shadow var(--dur-fast),
+    color var(--dur-fast);
+}
+/* hover = sweep highlight + cyan left rail (must re-set image: os.css hover
+   uses the `background` shorthand, which would wipe the sweep gradient) */
+.cockpit-sat-item:hover {
+  background-color: rgba(143, 198, 255, 0.04);
+  background-image: linear-gradient(100deg, rgba(143, 198, 255, 0) 0%, rgba(143, 198, 255, 0.09) 45%, rgba(143, 198, 255, 0) 90%);
+  background-size: 250% 100%;
+  background-position: 0% 0;
+  background-repeat: no-repeat;
+  box-shadow: inset 1px 0 0 var(--v2-cyan);
+  color: var(--text-primary);
+}
+
+.cockpit-sat-item__name {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.cockpit-sat-item__sub {
+  font-size: 10px;
+  color: var(--v2-cyan-45);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+/* status dot: soft glow ring (inline style owns background + glow shadow;
+   outline adds the ring without fighting the inline declaration) */
+.cockpit-sat-item__dot {
+  outline: 1px solid rgba(255, 255, 255, 0.18);
+  outline-offset: 2px;
+}
+
+/* active = bracketed frame + brighter text (os.css keeps its cyan gradient
+   background via !important — it matches this design, left in place) */
+.cockpit-sat-item.is-active {
+  color: #eaf6ff;
+  box-shadow: inset 1px 0 0 var(--v2-cyan);
+}
+.cockpit-sat-item.is-active::before,
+.cockpit-sat-item.is-active::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px var(--v2-cyan));
+}
+.cockpit-sat-item.is-active::before {
+  top: 3px;
+  left: 3px;
+  border-top: 1.5px solid var(--v2-cyan);
+  border-left: 1.5px solid var(--v2-cyan);
+}
+.cockpit-sat-item.is-active::after {
+  bottom: 3px;
+  right: 3px;
+  border-bottom: 1.5px solid var(--v2-cyan);
+  border-right: 1.5px solid var(--v2-cyan);
+}
+.cockpit-sat-item.is-active .cockpit-sat-item__name {
+  color: #eaf6ff;
+  text-shadow: 0 0 10px rgba(143, 198, 255, 0.35);
+}
+.cockpit-sat-item.is-active .cockpit-sat-item__sub {
+  color: rgba(143, 198, 255, 0.75);
+}
+
+/* thin cyan scrollbars on every cockpit scroll region */
+.cockpit-side,
+.cockpit-sats,
+.cockpit-scenarios {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(143, 198, 255, 0.3) rgba(7, 11, 18, 0.6);
+}
+.cockpit-side::-webkit-scrollbar,
+.cockpit-sats::-webkit-scrollbar,
+.cockpit-scenarios::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.cockpit-side::-webkit-scrollbar-track,
+.cockpit-sats::-webkit-scrollbar-track,
+.cockpit-scenarios::-webkit-scrollbar-track {
+  background: rgba(7, 11, 18, 0.6);
+}
+.cockpit-side::-webkit-scrollbar-thumb,
+.cockpit-sats::-webkit-scrollbar-thumb,
+.cockpit-scenarios::-webkit-scrollbar-thumb {
+  background: rgba(143, 198, 255, 0.28);
+  border-radius: 3px;
+}
+.cockpit-side::-webkit-scrollbar-thumb:hover,
+.cockpit-sats::-webkit-scrollbar-thumb:hover,
+.cockpit-scenarios::-webkit-scrollbar-thumb:hover {
+  background: rgba(143, 198, 255, 0.5);
+}
+
+/* ============================================================================
+   3. RIGHT MISSION CARDS — bracketed glass chips
+   ============================================================================ */
+
+.cockpit-scenario {
+  position: relative;
+  align-items: flex-start;
+  background: var(--v2-glass);
+  border: 1px solid var(--v2-line);
+  border-radius: 3px;
+  padding: 10px;
+  transition:
+    border-color var(--dur-fast),
+    box-shadow var(--dur-fast),
+    background var(--dur-fast);
+}
+.cockpit-scenario::before,
+.cockpit-scenario::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  transition: border-color var(--dur-fast);
+}
+.cockpit-scenario::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1.5px solid var(--v2-cyan-25);
+  border-left: 1.5px solid var(--v2-cyan-25);
+}
+.cockpit-scenario::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1.5px solid var(--v2-cyan-25);
+  border-right: 1.5px solid var(--v2-cyan-25);
+}
+
+.cockpit-scenario__icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid rgba(143, 198, 255, 0.3);
+  border-radius: 2px;
+  background: rgba(143, 198, 255, 0.05);
+  box-shadow: inset 0 0 10px rgba(143, 198, 255, 0.08), 0 0 6px rgba(143, 198, 255, 0.1);
+}
+.cockpit-scenario__name {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 3px;
+}
+.cockpit-scenario__desc {
+  font-size: 10.5px;
+  color: var(--text-mute);
+  line-height: 1.45;
+}
+
+.cockpit-scenario:hover {
+  border-color: var(--v2-cyan);
+  background: rgba(11, 19, 30, 0.88);
+  box-shadow: inset 0 0 18px rgba(143, 198, 255, 0.07), 0 0 14px var(--v2-cyan-12);
+}
+.cockpit-scenario:hover::before,
+.cockpit-scenario:hover::after {
+  border-color: var(--v2-cyan);
+}
+
+/* AI-thinking = violet pulse (static violet frame under reduced motion) */
+.cockpit-scenario.is-thinking {
+  opacity: 1;
+  border-color: rgba(143, 198, 255, 0.6);
+  box-shadow: inset 0 0 14px rgba(143, 198, 255, 0.12), 0 0 12px rgba(143, 198, 255, 0.15);
+  cursor: wait;
+}
+.cockpit-scenario.is-thinking::before,
+.cockpit-scenario.is-thinking::after {
+  border-color: var(--v2-violet);
+}
+.cockpit-scenario.is-thinking .cockpit-scenario__icon {
+  border-color: rgba(143, 198, 255, 0.5);
+  box-shadow: inset 0 0 10px rgba(143, 198, 255, 0.14);
+}
+
+/* ============================================================================
+   4. HUD PANELS — sharper instruments (styling only; never the stage box)
+   ============================================================================ */
+
+/* larger, hotter corner brackets (os.css set these without !important) */
+.hud::before,
+.hud::after {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  filter: drop-shadow(0 0 6px rgba(143, 198, 255, 0.7));
+}
+
+.hud__label {
+  letter-spacing: 0.18em;
+  border-bottom: 1px solid rgba(143, 198, 255, 0.14);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.hud__value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 12px rgba(143, 198, 255, 0.3);
+}
+
+.hud__sub {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: rgba(140, 170, 195, 0.85);
+}
+
+/* segmented meter: tick mask slices the fill into instrument segments */
+.hud__bar {
+  position: relative;
+  height: 5px;
+  border-radius: 1px;
+  background: rgba(4, 9, 16, 0.9);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--v2-line-dim);
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+.hud__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(3, 7, 13, 0.85) 7px 8px);
+}
+
+/* stage overlays: refine only — LIGHTEN the os.css vignette so the globe
+   reads brighter; both pseudos remain pointer-events:none via os.css */
+.cockpit-stage::before {
+  opacity: 0.65;
+}
+.cockpit-stage::after {
+  opacity: 0.6;
+}
+
+/* ============================================================================
+   5. TICKER — data stream strip (height stays 32px: JS depends on it)
+   ============================================================================ */
+
+.cockpit-ticker {
+  position: relative;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(140, 170, 195, 0.9);
+}
+/* shimmer line along the top edge (animated only under no-preference) */
+.cockpit-ticker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -25%;
+  width: 22%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--v2-cyan-70), transparent);
+  opacity: 0.8;
+}
+.cockpit-ticker__arrow {
+  filter: drop-shadow(0 0 4px var(--v2-cyan));
+}
+
+/* ============================================================================
+   6. TELEMETRY FOOTER — mini instruments
+   ============================================================================ */
+
+.cockpit-telemetry {
+  border-top: none;
+  background: transparent;
+  padding: 6px 2px;
+}
+
+.cockpit-tlm__head {
+  letter-spacing: 0.16em;
+}
+.cockpit-tlm__sat {
+  color: var(--v2-cyan);
+  text-shadow: 0 0 10px rgba(143, 198, 255, 0.3);
+}
+
+/* SIMULATED TELEMETRY chip — must stay clearly visible (amber outline chip) */
+.cockpit-tlm__sub {
+  background: rgba(240, 184, 96, 0.08);
+  border-color: rgba(240, 184, 96, 0.55);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  box-shadow: 0 0 8px rgba(240, 184, 96, 0.12);
+}
+
+.cockpit-tlm__cell {
+  background: rgba(9, 15, 24, 0.6);
+  border: 1px solid var(--v2-line);
+  border-radius: 2px;
+  padding: 5px 9px 4px;
+}
+/* tiny corner tick on each cell header */
+.cockpit-tlm__cell::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+  border-top: 1.5px solid var(--v2-cyan-70);
+  border-left: 1.5px solid var(--v2-cyan-70);
+}
+.cockpit-tlm__cell-head {
+  letter-spacing: 0.2em;
+  padding-bottom: 2px;
+}
+
+/* dashed leader rule under each metric row */
+.cockpit-tlm__metric {
+  border-bottom: 1px dashed rgba(143, 198, 255, 0.09);
+  padding: 1px 0 2px;
+}
+.cockpit-tlm__metric:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.cockpit-tlm__metric-label {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.cockpit-tlm__metric-val {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* transport controls */
+.cockpit-control {
+  width: 30px;
+  height: 30px;
+  border-radius: 3px;
+  background: var(--v2-glass);
+}
+.cockpit-control:active {
+  transform: none;
+  background: rgba(143, 198, 255, 0.08);
+}
+
+/* keyboard focus — instrument outline on every interactive cockpit element */
+.cockpit-control:focus-visible,
+.cockpit-sat-item:focus-visible,
+.cockpit-scenario:focus-visible {
+  outline: 1px solid var(--v2-cyan);
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   7. MOTION — every animation gated behind no-preference
+   ============================================================================ */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes v2-ticker-scan {
+    from { transform: translateX(0); }
+    to { transform: translateX(580%); }
+  }
+  .cockpit-ticker::before {
+    animation: v2-ticker-scan 6s linear infinite;
+  }
+
+  @keyframes v2-pill-blink {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--v2-cyan); }
+    50% { opacity: 0.35; box-shadow: 0 0 2px var(--v2-cyan); }
+  }
+  .cockpit-datapill::before {
+    animation: v2-pill-blink 1.8s ease-in-out infinite;
+  }
+
+  @keyframes v2-think-pulse {
+    0%, 100% {
+      border-color: rgba(143, 198, 255, 0.35);
+      box-shadow: inset 0 0 10px rgba(143, 198, 255, 0.08), 0 0 6px rgba(143, 198, 255, 0.08);
+    }
+    50% {
+      border-color: var(--v2-violet);
+      box-shadow: inset 0 0 18px rgba(143, 198, 255, 0.16), 0 0 18px rgba(143, 198, 255, 0.25);
+    }
+  }
+  .cockpit-scenario.is-thinking {
+    animation: v2-think-pulse 1.3s ease-in-out infinite;
+  }
+}
+
+/* ============================================================================
+   8. MOBILE ≤980px — stacked cockpit
+   pages.css stacks at 880px with !important on the viewport grid; equal
+   specificity + later cascade means the !important here wins from 980 down.
+   ============================================================================ */
+
+@media (max-width: 980px) {
+  .cockpit-immersive {
+    overflow-x: hidden;
+  }
+
+  /* stack: roster strip / stage (>=52vh via the grid row, NOT via the stage
+     box itself) / scenario strip / ticker (implicit row) */
+  .cockpit-immersive__viewport {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto minmax(52vh, 1fr) auto !important;
+  }
+
+  .cockpit-side {
+    min-width: 0;
+    padding: 0 !important; /* pages.css @880 sets padding: 12px !important */
+  }
+
+  /* left roster → horizontal chip strip */
+  .cockpit-side--left {
+    max-height: 124px;
+    overflow: hidden;
+    border-right: none !important; /* os.css sets border-right !important */
+    border-bottom: 1px solid var(--v2-line);
+  }
+  .cockpit-side__head {
+    padding: 5px 12px;
+  }
+  .cockpit-search {
+    width: calc(100% - 20px);
+    margin: 4px 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .cockpit-sats {
+    flex-direction: row;
+    gap: 6px;
+    padding: 2px 10px 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cockpit-sat-item {
+    flex: 0 0 auto;
+    width: 172px;
+    grid-template-columns: 12px 1fr;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--v2-line);
+    border-radius: 3px;
+  }
+  .cockpit-sat-item.is-active {
+    border-color: var(--v2-cyan-70);
+  }
+
+  /* right scenarios → horizontal card strip */
+  .cockpit-side--right {
+    max-height: 132px;
+    overflow: hidden;
+    border-left: none !important; /* os.css sets border-left !important */
+    border-top: 1px solid var(--v2-line);
+  }
+  .cockpit-scenarios {
+    flex-direction: row;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cockpit-scenario {
+    flex: 0 0 auto;
+    width: 232px;
+  }
+  .cockpit-scenario__desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* footer stacks; telemetry 2-col (pages.css targets a non-existent
+     .cockpit-telemetry__grid class, so no !important needed here) */
+  .cockpit-immersive__footer {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  .cockpit-tlm__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cockpit-controls {
+    justify-content: center;
+  }
+  /* pages.css @720 forces 40px !important — 44px minimum touch target wins */
+  .cockpit-control {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .cockpit-control svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cockpit-sat-item {
+    width: 156px;
+  }
+  .cockpit-scenario {
+    width: 208px;
+  }
+  .cockpit-tlm__grid {
+    gap: 6px;
+  }
+}
+
+/* kill stray horizontal scrollbars in the side racks (bracket pseudos poke past the edge) */
+.cockpit-side, .cockpit-sats, .cockpit-scenarios { overflow-x: hidden; }

@@ -1,0 +1,1303 @@
+/* ==========================================================================
+   dash-v2.css — OrbitOps dashboard, v3 "aerospace premium" skin.
+   (File name kept because dashboard.js injects #dv2-styles → this path.)
+
+   Language: near-black surfaces, 1px hairlines, thin white corner ticks,
+   mono caps labels, huge clean numerals, ONE ice accent (#8FC6FF).
+   No neon glow, no photo backgrounds. Only dv2-* classes; loaded after all
+   other stylesheets, so it may override freely.
+   ========================================================================== */
+
+:root {
+  --v3-bg: #050708;
+  --v3-surface: rgba(14, 17, 21, 0.72);
+  --v3-surface-2: rgba(20, 24, 29, 0.6);
+  --v3-hairline: rgba(255, 255, 255, 0.08);
+  --v3-hairline-2: rgba(255, 255, 255, 0.16);
+  --v3-text: #F4F6F8;
+  --v3-text-2: #9BA3AD;
+  --v3-mute: #5A6169;
+  --v3-ice: #8FC6FF;
+  --v3-ok: #3ECF74;
+  --v3-warn: #E0B568;
+  --v3-alert: #E0606E;
+  --v3-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dv2 {
+  --dv2-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --dv2-display: 'Space Grotesk', system-ui, sans-serif;
+  --dv2-body: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--dv2-body);
+  color: var(--v3-text);
+  background:
+    radial-gradient(1100px 520px at 50% -8%, rgba(143, 198, 255, 0.045), transparent 62%),
+    radial-gradient(900px 640px at 85% 110%, rgba(255, 255, 255, 0.02), transparent 60%),
+    var(--v3-bg);
+  min-height: 100vh;
+  overflow-x: clip; /* nothing may leak past the viewport */
+  padding-bottom: 64px;
+}
+
+.dv2-wrap {
+  /* positioned + z-index 1 so header text and panels always paint above the
+     ambient star layer (z 0) and below the grain overlay (z 2) */
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 22px;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Orchestrated load reveal — header → gauges → charts → roster (JS adds
+   .dv2-reveal + a per-band transition-delay, then .is-in on the next frame)
+   -------------------------------------------------------------------------- */
+
+.dv2-reveal {
+  opacity: 0;
+  transform: translateY(16px) scale(0.994);
+}
+
+/* W4-B · C5 depth tuning: lower bands travel further and settle from a
+   slightly deeper scale, so the load reads as layered instrument decks
+   (header closest, KPI/charts behind, roster deepest) — a parallax feel
+   in entrance timing alone, no dashboard.js changes. */
+.dv2-band.dv2-reveal {
+  transform: translateY(24px) scale(0.99);
+}
+
+.dv2-band.dv2-band--roster.dv2-reveal {
+  transform: translateY(32px) scale(0.988);
+}
+
+.dv2-reveal.is-in,
+.dv2-band.dv2-reveal.is-in,
+.dv2-band.dv2-band--roster.dv2-reveal.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.7s var(--v3-ease),
+    transform 0.7s var(--v3-ease);
+}
+
+.dv2-band { padding: 9px 0; }
+.dv2-band--roster { padding-bottom: 24px; }
+
+/* --------------------------------------------------------------------------
+   Page header — display type, huge, tight
+   -------------------------------------------------------------------------- */
+
+.dv2-head { padding: clamp(84px, 12vh, 122px) 0 22px; }
+
+.dv2-eyebrow {
+  font-family: var(--dv2-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+}
+
+.dv2-title {
+  margin: 12px 0 10px;
+  font-family: var(--dv2-display);
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--v3-text);
+}
+
+.dv2-sub {
+  margin: 0 0 16px;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--v3-text-2);
+}
+
+.dv2-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  font-family: var(--dv2-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+}
+
+.dv2-meta__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.dv2-meta__k { color: var(--v3-mute); }
+
+/* live-data dot: the one ice accent up here; steady, no blinking */
+.dv2-meta__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--v3-ice);
+}
+
+/* --------------------------------------------------------------------------
+   Panel — subtle glass, 1px hairline, thin white corner ticks
+   -------------------------------------------------------------------------- */
+
+.dv2-panel {
+  position: relative;
+  min-width: 0;
+  padding: 16px 18px;
+  background: var(--v3-surface);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 2px;
+}
+
+/* thin white corner ticks: top-left + bottom-right */
+.dv2-panel::before,
+.dv2-panel::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-color: rgba(255, 255, 255, 0.35);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.dv2-panel::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.dv2-panel::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+
+.dv2-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--v3-hairline);
+}
+
+.dv2-panel__title {
+  margin: 0;
+  font-family: var(--dv2-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v3-text);
+}
+
+.dv2-panel__tag {
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v3-mute);
+  white-space: nowrap;
+  transition: color 0.25s var(--v3-ease);
+}
+
+/* panel hover: the tag wakes up alongside the hover-lift hairline brighten */
+.dv2-panel:hover .dv2-panel__tag { color: var(--v3-text-2); }
+
+/* --------------------------------------------------------------------------
+   KPI instrument tiles + gauges — huge clean numerals
+   -------------------------------------------------------------------------- */
+
+.dv2-gauges {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dv2-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px 12px;
+}
+
+.dv2-tile__label {
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v3-mute);
+}
+
+.dv2-tile__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 54px;
+}
+
+.dv2-tile__num {
+  min-width: 0;
+  font-family: var(--dv2-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(19px, 1.8vw, 26px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--v3-text);
+  /* ice value tick on hover/focus — background trick, zero layout shift */
+  background-image: linear-gradient(var(--v3-ice), var(--v3-ice));
+  background-repeat: no-repeat;
+  background-size: 0 2px;
+  background-position: 0 100%;
+  transition: background-size 0.25s var(--v3-ease);
+}
+
+.dv2-tile:hover .dv2-tile__num,
+.dv2-tile:focus-visible .dv2-tile__num { background-size: 20px 2px; }
+
+.dv2-tile__label { transition: color 0.25s var(--v3-ease); }
+
+.dv2-tile:hover .dv2-tile__label,
+.dv2-tile:focus-visible .dv2-tile__label { color: var(--v3-text-2); }
+
+/* keyboard parity with .hover-lift (tiles are focusable instruments) */
+.dv2-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--v3-hairline-2);
+}
+
+/* sparkline shares the leftover row width instead of forcing 84px and
+   overflowing the tile at mid viewports; the DPR fit reads clientWidth */
+.dv2-tile__viz { flex: 0 0 auto; display: block; }
+.dv2-tile__viz--ring { width: 44px; height: 44px; }
+
+.dv2-tile__viz--spark {
+  flex: 1 1 40px;
+  width: auto;
+  min-width: 0;
+  max-width: 84px;
+  height: 34px;
+  align-self: flex-end;
+  margin-bottom: 6px;
+}
+
+.dv2-tile__sub {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--v3-text-2);
+}
+
+.dv2-tile--gauge { align-items: center; text-align: center; }
+
+.dv2-gauge {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+
+.dv2-gauge__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dv2-gauge__num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background-position: 50% 100%; /* ice tick centred at the gauge base */
+}
+
+/* --------------------------------------------------------------------------
+   Command grid: histogram (2/3) + shells (right, tall), lower band
+   -------------------------------------------------------------------------- */
+
+.dv2-main {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dv2-panel--hist { grid-column: 1 / 3; }
+
+.dv2-panel--shells {
+  grid-column: 3 / 4;
+  display: flex;
+  flex-direction: column;
+}
+
+.dv2-panel--shells .dv2-chart-wrap { flex: 1; min-height: 240px; }
+
+/* new-section placement: launch years wide, extremes beside it */
+.dv2-panel--years { grid-column: 1 / 3; }
+.dv2-panel--extremes { grid-column: 3 / 4; }
+
+.dv2-chart-wrap {
+  position: relative;
+  min-width: 0;
+  overflow: hidden; /* canvases can never bleed past the panel bounds */
+}
+
+.dv2-chart {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.dv2-chart-wrap--hist .dv2-chart { height: 300px; cursor: crosshair; }
+.dv2-chart-wrap--shells .dv2-chart { height: 100%; min-height: 240px; cursor: crosshair; }
+
+/* cursor-following histogram tooltip — mono instrument readout */
+.dv2-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 9px;
+  border: 1px solid var(--v3-hairline-2);
+  border-radius: 2px;
+  background: rgba(8, 10, 13, 0.94);
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* the class display would otherwise beat the hidden attribute's UA rule */
+.dv2-tip[hidden] { display: none; }
+
+.dv2-tip__k { color: var(--v3-text-2); }
+.dv2-tip__v { color: var(--v3-ice); font-variant-numeric: tabular-nums; }
+
+/* shells legend (accessible mirror of the canvas) — rows are buttons that
+   highlight their arc on hover/focus; the canvas highlights them back */
+.dv2-shell-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--v3-hairline);
+  font-family: var(--dv2-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.dv2-shell-legend__row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 22px;
+  margin: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  box-shadow: inset 1px 0 0 transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.2s var(--v3-ease),
+    box-shadow 0.2s var(--v3-ease);
+}
+
+.dv2-shell-legend__row:hover,
+.dv2-shell-legend__row:focus-visible,
+.dv2-shell-legend__row.is-hot {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 1px 0 0 var(--v3-ice);
+}
+
+.dv2-shell-legend__row:hover .dv2-shell-legend__val,
+.dv2-shell-legend__row:focus-visible .dv2-shell-legend__val,
+.dv2-shell-legend__row.is-hot .dv2-shell-legend__val { color: var(--v3-ice); }
+
+.dv2-shell-legend__dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.dv2-shell-legend__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--v3-text-2);
+}
+
+.dv2-shell-legend__val {
+  font-variant-numeric: tabular-nums;
+  color: var(--v3-text);
+  transition: color 0.2s var(--v3-ease);
+}
+
+/* --------------------------------------------------------------------------
+   Launch decades — per-year horizontal band (real intl-designator years)
+   -------------------------------------------------------------------------- */
+
+.dv2-years {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dv2-year__decade {
+  margin: 6px 0 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--v3-hairline);
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  color: var(--v3-mute);
+}
+
+.dv2-year__decade:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
+.dv2-year {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  transition: background-color 0.2s var(--v3-ease);
+}
+
+.dv2-year:hover { background: rgba(255, 255, 255, 0.03); }
+
+.dv2-year__label {
+  font-family: var(--dv2-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--v3-text-2);
+  transition: color 0.2s var(--v3-ease);
+}
+
+.dv2-year:hover .dv2-year__label { color: var(--v3-text); }
+
+.dv2-year__track {
+  display: flex;
+  gap: 1px;
+  height: 5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.dv2-year__seg { height: 100%; }
+
+.dv2-year__val {
+  font-family: var(--dv2-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--v3-text);
+  transition: color 0.2s var(--v3-ease);
+}
+
+.dv2-year:hover .dv2-year__val { color: var(--v3-ice); }
+
+/* --------------------------------------------------------------------------
+   Extremes — four mono instrument chips (real record holders)
+   -------------------------------------------------------------------------- */
+
+.dv2-extremes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dv2-extreme {
+  min-width: 0;
+  padding: 11px 12px 10px;
+  border: 1px solid var(--v3-hairline);
+  border-radius: 2px;
+  background: var(--v3-surface-2);
+}
+
+.dv2-extreme__k {
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--v3-mute);
+  transition: color 0.25s var(--v3-ease);
+}
+
+.dv2-extreme:hover .dv2-extreme__k,
+.dv2-extreme:focus-visible .dv2-extreme__k { color: var(--v3-text-2); }
+
+.dv2-extreme__v {
+  margin-top: 6px;
+  font-family: var(--dv2-mono);
+  font-size: 19px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--v3-text);
+  /* same ice value tick as the KPI tiles */
+  background-image: linear-gradient(var(--v3-ice), var(--v3-ice));
+  background-repeat: no-repeat;
+  background-size: 0 2px;
+  background-position: 0 100%;
+  transition: background-size 0.25s var(--v3-ease);
+}
+
+.dv2-extreme:hover .dv2-extreme__v,
+.dv2-extreme:focus-visible .dv2-extreme__v { background-size: 18px 2px; }
+
+.dv2-extreme:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--v3-hairline-2);
+}
+
+.dv2-extreme__name {
+  margin-top: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v3-text-2);
+}
+
+.dv2-extreme__sub {
+  margin-top: 2px;
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v3-mute);
+}
+
+/* --------------------------------------------------------------------------
+   Segmented instrument bars (composition + inclination families)
+   -------------------------------------------------------------------------- */
+
+.dv2-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.dv2-bar {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  border-radius: 2px;
+  transition: background-color 0.2s var(--v3-ease);
+}
+
+.dv2-bar:hover { background: rgba(255, 255, 255, 0.03); }
+
+.dv2-bar__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--v3-text-2);
+  transition: color 0.2s var(--v3-ease);
+}
+
+.dv2-bar:hover .dv2-bar__label { color: var(--v3-text); }
+
+.dv2-bar__track {
+  position: relative;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* tick marks every 25% */
+.dv2-bar__track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(25% - 1px),
+    rgba(255, 255, 255, 0.16) calc(25% - 1px),
+    rgba(255, 255, 255, 0.16) 25%
+  );
+}
+
+.dv2-bar__fill {
+  position: relative;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--dv2-bar, var(--v3-text));
+  transition: width 0.5s var(--v3-ease);
+}
+
+/* crisp leading edge — light, not glow */
+.dv2-bar__fill::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  right: 0;
+  width: 1px;
+  background: #fff;
+  opacity: 0.75;
+}
+
+.dv2-bar__val {
+  font-family: var(--dv2-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  text-align: right;
+  color: var(--v3-text);
+  transition: color 0.2s var(--v3-ease);
+}
+
+.dv2-bar:hover .dv2-bar__val { color: var(--v3-ice); }
+
+/* --------------------------------------------------------------------------
+   Data & honesty note
+   -------------------------------------------------------------------------- */
+
+.dv2-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--v3-text-2);
+}
+
+.dv2-note p { margin: 0; }
+
+.dv2-note__k {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dv2-note__k--real {
+  color: var(--v3-ok);
+  border-color: rgba(62, 207, 116, 0.35);
+}
+
+.dv2-note__k--sim {
+  color: var(--v3-warn);
+  border-color: rgba(224, 181, 104, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Roster table — flight-ops log
+   -------------------------------------------------------------------------- */
+
+.dv2-panel--roster { padding: 16px 0 0; }
+.dv2-panel--roster .dv2-panel__head { margin: 0 18px 0; }
+
+.dv2-table-wrap {
+  overflow: auto;
+  max-height: 600px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dv2-table {
+  width: 100%;
+  min-width: 780px; /* horizontal scroll inside the wrap on small screens */
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.dv2-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 12px;
+  background: rgba(9, 11, 14, 0.96);
+  border-bottom: 1px solid var(--v3-hairline-2);
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--v3-mute);
+}
+
+.dv2-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--v3-hairline);
+  white-space: nowrap;
+  color: var(--v3-text-2);
+}
+
+.dv2-table tbody tr { transition: background-color 0.15s var(--v3-ease); }
+
+.dv2-table tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+
+/* one thin ice hairline on the active row edge — the allowed maximum */
+.dv2-table tbody tr:hover td:first-child {
+  box-shadow: inset 1px 0 0 var(--v3-ice);
+}
+
+/* row hover: name lifts to full white, numerics wake up */
+.dv2-td-name { transition: color 0.15s var(--v3-ease); }
+.dv2-table tbody tr:hover .dv2-td-name { color: #fff; }
+.dv2-table tbody tr:hover .dv2-num { color: var(--v3-text); }
+
+/* roster panel keeps its hairline-brighten hover without the lift
+   (a translating scroll container under a sticky header reads as jitter) */
+.dv2-panel--roster { transition: border-color 0.25s var(--v3-ease); }
+.dv2-panel--roster:hover { border-color: var(--v3-hairline-2); }
+
+.dv2-td-name {
+  font-weight: 600;
+  color: var(--v3-text);
+}
+
+.dv2-td-mono,
+.dv2-num {
+  font-family: var(--dv2-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.dv2-num { text-align: right; }
+
+.dv2-group {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dv2-group--starlink {
+  color: var(--v3-ice);
+  border-color: rgba(143, 198, 255, 0.3);
+  background: rgba(143, 198, 255, 0.05);
+}
+
+.dv2-group--oneweb {
+  color: rgba(255, 255, 255, 0.75);
+  border-color: var(--v3-hairline-2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dv2-group--other {
+  color: var(--v3-text-2);
+  border-color: var(--v3-hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dv2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.dv2-chip__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.dv2-chip--sunlit {
+  color: var(--v3-ok);
+  border-color: rgba(62, 207, 116, 0.3);
+  background: rgba(62, 207, 116, 0.05);
+}
+
+.dv2-chip--sunlit .dv2-chip__dot { background: var(--v3-ok); }
+
+.dv2-chip--eclipse {
+  color: var(--v3-text-2);
+  border-color: var(--v3-hairline);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dv2-chip--eclipse .dv2-chip__dot { background: var(--v3-mute); }
+
+/* --------------------------------------------------------------------------
+   Responsive: tablet
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1200px) {
+  .dv2-gauges { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dv2-main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dv2-panel--hist { grid-column: 1 / 3; }
+  .dv2-panel--shells { grid-column: auto; }
+  .dv2-panel--years { grid-column: 1 / 3; }
+  .dv2-panel--extremes { grid-column: auto; }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: mobile (≤880px) — single column, gauges 2-up, no h-overflow
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 880px) {
+  .dv2-wrap { padding: 0 14px; }
+  .dv2-head { padding-top: 76px; }
+  .dv2-gauges { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .dv2-main { grid-template-columns: minmax(0, 1fr); }
+  .dv2-panel--hist,
+  .dv2-panel--shells,
+  .dv2-panel--years,
+  .dv2-panel--extremes { grid-column: auto; }
+  .dv2-chart-wrap--hist .dv2-chart { height: 240px; }
+  .dv2-chart-wrap--shells .dv2-chart { min-height: 260px; }
+  .dv2-table-wrap { max-height: none; }
+  .dv2-table td { padding: 14px 12px; } /* rows ≥44px touch height */
+  .dv2-tile__num { font-size: 21px; }
+  .dv2-shell-legend__row { min-height: 44px; } /* touch targets */
+  .dv2-year { min-height: 28px; }
+  .dv2-extreme { min-height: 44px; }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion: JS already skips canvas tweens; kill CSS motion too
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .dv2-bar__fill { transition: none; }
+  .dv2-table tbody tr { transition: none; }
+  .dv2-reveal,
+  .dv2-band.dv2-reveal,
+  .dv2-band.dv2-band--roster.dv2-reveal { opacity: 1; transform: none; }
+  .dv2-reveal.is-in { transition: none; }
+  .dv2-tile:focus-visible,
+  .dv2-extreme:focus-visible { transform: none; }
+  .dv2-tile__num,
+  .dv2-tile__label,
+  .dv2-extreme__v,
+  .dv2-extreme__k,
+  .dv2-panel__tag,
+  .dv2-panel--roster,
+  .dv2-bar,
+  .dv2-bar__label,
+  .dv2-bar__val,
+  .dv2-year,
+  .dv2-year__label,
+  .dv2-year__val,
+  .dv2-td-name,
+  .dv2-shell-legend__row,
+  .dv2-shell-legend__val { transition: none; }
+}
+
+/* ==========================================================================
+   W4-C · D1 + D2 — CONJUNCTION WATCH + DEORBIT STRIP (APPENDED BLOCK)
+   Additive rules only — no existing selector above is modified. Owned by the
+   dashboard usefulness pass; safe to merge with parallel dash-v2 edits.
+   Language: hairlines, mono caps, tabular-nums, one ice accent; honest chips
+   (PLANNED amber outline · REAL green · DESIGN PREVIEW mute).
+   ========================================================================== */
+
+.dv2-band--ops .dv2-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+/* --- honest state chips --------------------------------------------------- */
+
+.dv2-hchip {
+  display: inline-block;
+  font-family: var(--dv2-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.dv2-hchip--planned {
+  color: #E0B568;
+  border-color: rgba(224, 181, 104, 0.5);
+}
+
+.dv2-hchip--real {
+  color: #3ECF74;
+  border-color: rgba(62, 207, 116, 0.45);
+}
+
+.dv2-hchip--preview {
+  color: #9BA3AD;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* --- D1 · conjunction watch ------------------------------------------------ */
+
+.dv2-cw-scroll { overflow-x: auto; }
+
+.dv2-cw-cols,
+.dv2-cw-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 0.8fr 0.8fr 1fr 0.9fr;
+  gap: 12px;
+  align-items: center;
+  min-width: 640px;
+  padding: 9px 4px;
+}
+
+.dv2-cw-cols {
+  margin-top: 12px;
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #5A6169;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* skeleton rows — layout preview, explicitly NOT data */
+.dv2-cw-skel {
+  position: relative;
+  min-width: 640px;
+  opacity: 0.75;
+}
+
+.dv2-cw-skel__banner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.dv2-cw-skel__banner span {
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: #9BA3AD;
+  background: rgba(5, 7, 8, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 4px 12px;
+}
+
+.dv2-cw-row { border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+
+.dv2-cw-ph {
+  display: block;
+  height: 9px;
+  border-radius: 1px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 75%);
+  background-size: 200% 100%;
+  animation: dv2CwShimmer 2.4s linear infinite;
+}
+
+.dv2-cw-ph--w40 { width: 40%; }
+.dv2-cw-ph--w48 { width: 48%; }
+.dv2-cw-ph--w56 { width: 56%; }
+.dv2-cw-ph--w64 { width: 64%; }
+.dv2-cw-ph--w80 { width: 80%; }
+
+@keyframes dv2CwShimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* severity rail — three muted segments, unlit until real data exists */
+.dv2-cw-rail {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dv2-cw-rail i {
+  width: 16px;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.dv2-cw-act {
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  padding: 6px 10px;
+  color: #5A6169;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 2px;
+  justify-self: start;
+}
+
+.dv2-cw-act:disabled { cursor: not-allowed; }
+
+/* empty state — hairline radar sweep + honest copy */
+.dv2-cw-empty {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 18px 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dv2-cw-radar {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  color: #F4F6F8;
+}
+
+.dv2-cw-radar__sweep {
+  transform-origin: 48px 48px;
+  animation: dv2CwSweep 6s linear infinite;
+}
+
+@keyframes dv2CwSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.dv2-cw-empty__title {
+  font-family: var(--dv2-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #F4F6F8;
+  margin-bottom: 6px;
+}
+
+.dv2-cw-empty__txt p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #9BA3AD;
+}
+
+.dv2-cw-empty__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.dv2-cw-empty__ready {
+  font-family: var(--dv2-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: #5A6169;
+}
+
+/* --- D2 · deorbit / FCC 5-yr strip ---------------------------------------- */
+
+.dv2-deo-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dv2-deo-stat {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dv2-deo-stat__k {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--dv2-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #9BA3AD;
+}
+
+.dv2-deo-stat__v {
+  margin-top: 8px;
+  font-family: var(--dv2-mono);
+  font-size: 30px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: #F4F6F8;
+}
+
+.dv2-deo-stat__sub {
+  margin-top: 6px;
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  color: #5A6169;
+}
+
+.dv2-deo-tracker {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dv2-deo-tracker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--dv2-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #9BA3AD;
+}
+
+.dv2-deo-tracker__cols,
+.dv2-deo-tracker__row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  min-width: 560px;
+  padding: 9px 4px;
+}
+
+.dv2-deo-tracker__cols {
+  margin-top: 10px;
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #5A6169;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dv2-deo-margin {
+  display: block;
+  height: 4px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dv2-deo-margin i {
+  display: block;
+  width: 34%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dv2-deo-tracker__note {
+  margin: 10px 0 0;
+  max-width: 74ch;
+  font-family: var(--dv2-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+  color: #5A6169;
+}
+
+/* --- responsive + reduced motion (appended block only) --------------------- */
+
+@media (max-width: 720px) {
+  .dv2-cw-empty { flex-direction: column; align-items: flex-start; }
+  .dv2-deo-stats { grid-template-columns: 1fr; }
+  .dv2-deo-stat__v { font-size: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dv2-cw-ph { animation: none; }
+  .dv2-cw-radar__sweep { animation: none; transform: rotate(55deg); }
+}
+
+/* ==========================================================================
+   W4-B · C5/C6 — page-unique ambient event: slow scan line.
+   A fixed 1px ice line sweeps down the viewport once every ~45 s at 4%
+   opacity. Lives on .dv2-head::before — the root's own pseudos are taken
+   (.dashboard-page::before = os.css instrument grid, .chrome-grain::after
+   = film grain). .dv2-head's entrance transform resolves to none once
+   .is-in lands, so the fixed pseudo anchors to the viewport as intended.
+   Pointer-events none; completely off under reduced motion.
+   ========================================================================== */
+
+.dv2 .dv2-head::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  z-index: 3; /* above content (1) and grain (2) — at 4% it reads as ambience */
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 4%,
+    rgba(143, 198, 255, 0.9) 50%,
+    transparent 96%
+  );
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dv2 .dv2-head::before {
+    animation: dv2-scan 45s linear 6s infinite;
+  }
+}
+
+@keyframes dv2-scan {
+  0% { opacity: 0; transform: translateY(-2px); }
+  1.5% { opacity: 0.04; }
+  11% { opacity: 0.04; }
+  12.5% { opacity: 0; transform: translateY(100vh); }
+  100% { opacity: 0; transform: translateY(100vh); }
+}

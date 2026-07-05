@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Anomaly detector — three classes of anomaly over telemetry:
  *
@@ -27,6 +28,7 @@ class OnlineStats {
     this.mean = 0;
     this.M2 = 0;
   }
+  /** @param {number} x */
   update(x) {
     this.n++;
     const delta = x - this.mean;
@@ -44,19 +46,45 @@ class OnlineStats {
 
 /**
  * Per-satellite running stats cache (would normally be in a database).
+ * @type {Map<string, Map<string, OnlineStats>>}
  */
 const stats = new Map();
 
+/** @param {string} satId @returns {Map<string, OnlineStats>} */
 function getStats(satId) {
-  if (!stats.has(satId)) stats.set(satId, new Map());
-  return stats.get(satId);
+  let m = stats.get(satId);
+  if (!m) {
+    m = new Map();
+    stats.set(satId, m);
+  }
+  return m;
 }
+
+/**
+ * An anomaly record surfaced by the detector.
+ * @typedef {object} Anomaly
+ * @property {string} subsystem
+ * @property {string} metric
+ * @property {string} severity  'info' | 'warn' | 'critical'
+ * @property {string} kind      'point' | 'contextual' | 'collective'
+ * @property {string} message
+ * @property {string} satId
+ * @property {number} t
+ * @property {string} [satName]
+ * @property {string} [customer]
+ * @property {number} [value]
+ * @property {number} [mean]
+ * @property {number} [stdev]
+ * @property {number} [z]
+ */
 
 /**
  * Train the detector on baseline telemetry (the first 30 minutes).
  * Updates running stats so subsequent calls can detect anomalies.
  *
- * @param {Object} satellite
+ * @param {Satellite} satellite
+ * @param {number} [durationSec=1800]
+ * @param {number} [sampleStepSec=30]
  */
 export function train(satellite, durationSec = 1800, sampleStepSec = 30) {
   const satStats = getStats(satellite.id);
@@ -65,8 +93,12 @@ export function train(satellite, durationSec = 1800, sampleStepSec = 30) {
     const flat = flatten(satellite, t);
     for (const { subsystem, metric, value } of flat) {
       const key = `${subsystem}.${metric}`;
-      if (!satStats.has(key)) satStats.set(key, new OnlineStats());
-      satStats.get(key).update(value);
+      let stat = satStats.get(key);
+      if (!stat) {
+        stat = new OnlineStats();
+        satStats.set(key, stat);
+      }
+      stat.update(value);
     }
   }
 }
@@ -84,12 +116,14 @@ export function trainAll() {
  *
  * Severity: 'info' | 'warn' | 'critical'
  *
- * @param {Object} satellite
+ * @param {Satellite} satellite
  * @param {number} t
- * @param {Object} telemetry - from generate() (or applyAnomaly)
+ * @param {any} [telemetry] - from generate() (or applyAnomaly)
+ * @returns {Anomaly[]}
  */
 export function detect(satellite, t, telemetry) {
   const satStats = getStats(satellite.id);
+  /** @type {Anomaly[]} */
   const anomalies = [];
   const flat = flatten(satellite, t);
   for (const { subsystem, metric, value, quality } of flat) {
@@ -98,9 +132,9 @@ export function detect(satellite, t, telemetry) {
     if (!stat || stat.n < 30) continue;
     const z = Math.abs((value - stat.mean) / (stat.stdev() || 1));
 
-    // Classify severity
-    let severity = null;
-    let kind = null;
+    // Classify severity ('' = no anomaly for this reading)
+    let severity = '';
+    let kind = '';
     if (z > 4) {
       severity = 'critical';
       kind = 'point';
@@ -162,12 +196,22 @@ export function detect(satellite, t, telemetry) {
   return anomalies;
 }
 
+/**
+ * @param {any[]} arr
+ * @param {string} key
+ * @returns {Map<any, any[]>}
+ */
 function groupBy(arr, key) {
+  /** @type {Map<any, any[]>} */
   const out = new Map();
   for (const item of arr) {
     const k = item[key];
-    if (!out.has(k)) out.set(k, []);
-    out.get(k).push(item);
+    let bucket = out.get(k);
+    if (!bucket) {
+      bucket = [];
+      out.set(k, bucket);
+    }
+    bucket.push(item);
   }
   return out;
 }
@@ -176,9 +220,10 @@ function groupBy(arr, key) {
  * Detect all anomalies across the constellation at time t.
  *
  * @param {number} t
- * @returns {Array} - sorted by severity, then z-score
+ * @returns {Anomaly[]} sorted by severity, then z-score
  */
 export function detectAll(t) {
+  /** @type {Anomaly[]} */
   const all = [];
   for (const sat of SATELLITES) {
     const tlm = generate(sat, t);
@@ -186,6 +231,7 @@ export function detectAll(t) {
     all.push(...anomalies);
   }
   return all.sort((a, b) => {
+    /** @type {Record<string, number>} */
     const sevOrder = { critical: 0, warn: 1, info: 2 };
     if (a.severity !== b.severity) return sevOrder[a.severity] - sevOrder[b.severity];
     return (b.z || 0) - (a.z || 0);

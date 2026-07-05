@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Telemetry — synthetic but realistic telemetry generator.
  *
@@ -19,6 +20,7 @@ import { SATELLITES } from '../data/satellites.js';
  * Seeded RNG so the same time + satellite always produces the same value.
  * Uses mulberry32.
  */
+/** @param {number} seed @returns {() => number} */
 function rng(seed) {
   let a = seed | 0;
   return () => {
@@ -30,7 +32,7 @@ function rng(seed) {
   };
 }
 
-/** Hash string to integer seed. */
+/** Hash string to integer seed. @param {string} s @returns {number} */
 function hash(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -46,9 +48,9 @@ function hash(s) {
  *
  * Each subsystem returns 1-3 metrics. Each metric has value, unit, quality.
  *
- * @param {Object} satellite - from SATELLITES
+ * @param {Satellite} satellite - from SATELLITES
  * @param {number} t - time in seconds since epoch
- * @returns {Object} telemetry keyed by subsystem
+ * @returns {Record<string, any>} telemetry keyed by subsystem
  */
 export function generate(satellite, t) {
   const r = rng(hash(`${satellite.id}-${Math.floor(t)}`));
@@ -56,6 +58,7 @@ export function generate(satellite, t) {
   const slowDrift = Math.sin(t / 3600) * 0.05; // ±5% over hour
 
   // Subsystem metrics
+  /** @type {Record<string, any>} */
   const telemetry = {};
 
   // POWER — battery voltage and temperature
@@ -188,9 +191,10 @@ export function generate(satellite, t) {
 
 /**
  * Apply a transient anomaly to telemetry (used by the AI agent scenarios).
- * @param {Object} telemetry - from generate()
+ * @param {any} telemetry - from generate() (subsystems accessed dynamically)
  * @param {string} kind - one of 'battery_drain', 'thermal_overheat', 'comms_degraded', 'attitude_drift', 'fuel_low'
- * @param {number} magnitude - severity (0..1)
+ * @param {number} [magnitude=0.5] - severity (0..1)
+ * @returns {any}
  */
 export function applyAnomaly(telemetry, kind, magnitude = 0.5) {
   const t = telemetry;
@@ -226,7 +230,7 @@ export function applyAnomaly(telemetry, kind, magnitude = 0.5) {
 
 /**
  * Heuristic: is the satellite currently in Earth's shadow?
- * @param {Object} satellite
+ * @param {Satellite} satellite
  * @param {number} t
  * @returns {boolean}
  */
@@ -241,9 +245,13 @@ function isInEclipse(satellite, t) {
 /**
  * Get a flat array of (metric, value, unit) for a satellite at time t.
  * Useful for table rendering and anomaly detection.
+ * @param {Satellite} satellite
+ * @param {number} t
+ * @returns {Array<{subsystem: string, metric: string, value: number, unit: string, quality: string}>}
  */
 export function flatten(satellite, t) {
   const tlm = generate(satellite, t);
+  /** @type {Array<{subsystem: string, metric: string, value: number, unit: string, quality: string}>} */
   const flat = [];
   for (const [subsystem, metrics] of Object.entries(tlm)) {
     for (const [metric, data] of Object.entries(metrics)) {
@@ -261,8 +269,11 @@ export function flatten(satellite, t) {
 
 /**
  * Generate telemetry for the entire constellation at time t.
+ * @param {number} t
+ * @returns {Record<string, any>}
  */
 export function constellationTelemetry(t) {
+  /** @type {Record<string, any>} */
   const out = {};
   for (const sat of SATELLITES) {
     out[sat.id] = generate(sat, t);

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AI Agent reasoning chain — the heart of OrbitOps.
  *
@@ -32,17 +33,20 @@ import { detect } from '../core/anomaly-detector.js';
 import { avoidanceBurn, planAvoidance, findBurnWindows } from '../core/maneuver-planner.js';
 import { audit } from '../core/audit-log.js';
 import { Emitter } from '../utils.js';
-import { hasLiveAI, runLiveAgentPipeline } from '../core/llm-agents.js';
+import { runLiveAgentPipeline } from '../core/llm-agents.js';
+import { hasLiveAI } from '../core/openrouter-client.js';
 
 /* ---------- Reasoning chain shape ---------- */
 
 /**
  * @typedef {Object} AgentStep
- * @property {string} phase - OBSERVE | THINK | SCORE | PROPOSE | WAIT
+ * @property {string} phase - OBSERVE | THINK | SCORE | PROPOSE | WAIT | SAFETY
  * @property {string} title - short label
  * @property {string} body - explanation
- * @property {Object} [data] - supporting data
+ * @property {any} [data] - supporting data
  * @property {number} ts - timestamp
+ * @property {string} [source] - 'simulated' | 'live-ai'
+ * @property {string} [model] - model id when authored by the live AI pipeline
  */
 
 /**
@@ -55,10 +59,22 @@ import { hasLiveAI, runLiveAgentPipeline } from '../core/llm-agents.js';
  * @property {number} confidence - 0..1
  * @property {string[]} considerations - bullet points
  * @property {string} action - action key
- * @property {Object} actionData
+ * @property {any} actionData
  * @property {string} status - pending | approved | rejected | modified
  * @property {AgentStep[]} chain
  * @property {number} createdAt
+ * @property {string} [aiMode] - 'simulated' | 'live'
+ * @property {string} [aiError]
+ * @property {string[]} [aiConsiderations]
+ * @property {{analyst: string, strategist: string, safety: string}} [aiModels]
+ * @property {string} [approvedBy]
+ * @property {number} [approvedAt]
+ * @property {string} [rejectedBy]
+ * @property {number} [rejectedAt]
+ * @property {string} [rejectReason]
+ * @property {string} [modifiedBy]
+ * @property {number} [modifiedAt]
+ * @property {any} [modifications]
  */
 
 /* ---------- The agent ---------- */
@@ -66,7 +82,9 @@ import { hasLiveAI, runLiveAgentPipeline } from '../core/llm-agents.js';
 class AIAgent extends Emitter {
   constructor() {
     super();
+    /** @type {Map<string, AgentProposal>} */
     this.proposals = new Map();
+    /** @type {string|null} */
     this.activeScenario = null;
     this.demoClock = 0; // seconds since demo epoch
     this.demoStartTime = Date.now();
@@ -184,7 +202,7 @@ class AIAgent extends Emitter {
    *
    * @param {string} proposalId
    * @param {string} operatorId
-   * @returns {AgentProposal}
+   * @returns {Promise<AgentProposal>}
    */
   async approve(proposalId, operatorId) {
     const p = this.proposals.get(proposalId);
@@ -204,6 +222,10 @@ class AIAgent extends Emitter {
 
   /**
    * Operator rejects a proposal.
+   * @param {string} proposalId
+   * @param {string} operatorId
+   * @param {string} [reason]
+   * @returns {Promise<AgentProposal>}
    */
   async reject(proposalId, operatorId, reason = '') {
     const p = this.proposals.get(proposalId);
@@ -223,6 +245,10 @@ class AIAgent extends Emitter {
 
   /**
    * Operator modifies the proposal (e.g. changes burn duration) and approves.
+   * @param {string} proposalId
+   * @param {string} operatorId
+   * @param {any} modifications
+   * @returns {Promise<AgentProposal>}
    */
   async modifyAndApprove(proposalId, operatorId, modifications) {
     const p = this.proposals.get(proposalId);
@@ -239,7 +265,7 @@ class AIAgent extends Emitter {
     return p;
   }
 
-  /** Get a proposal by id. */
+  /** Get a proposal by id. @param {string} id */
   getProposal(id) {
     return this.proposals.get(id);
   }
@@ -249,7 +275,7 @@ class AIAgent extends Emitter {
     return Array.from(this.proposals.values());
   }
 
-  /** Recent proposals, newest first. */
+  /** Recent proposals, newest first. @param {number} [n] */
   recentProposals(n = 20) {
     return this.allProposals()
       .sort((a, b) => b.createdAt - a.createdAt)
@@ -265,6 +291,12 @@ export const agent = new AIAgent();
    situation the operator might face at 03:00.
    ==================================================================== */
 
+/**
+ * @typedef {{satelliteId?: string, timeSec?: number, params?: any}} ScenarioContext
+ * @typedef {(agent: AIAgent, context: ScenarioContext) => Promise<AgentProposal>} ScenarioRunner
+ */
+
+/** @type {Record<string, ScenarioRunner>} */
 const SCENARIO_RUNNERS = {};
 
 /* ---------- Scenario 1: Conjunction ---------- */
@@ -276,6 +308,7 @@ SCENARIO_RUNNERS.conjunction = async (agent, { satelliteId, timeSec }) => {
     : SATELLITES[0];
   const satB = SATELLITES.find((s) => s.id !== satA.id) || SATELLITES[1];
 
+  /** @type {AgentStep[]} */
   const chain = [];
   const now = Date.now();
 
@@ -389,6 +422,7 @@ SCENARIO_RUNNERS.conjunction = async (agent, { satelliteId, timeSec }) => {
 
 SCENARIO_RUNNERS.battery = async (agent, { satelliteId, timeSec }) => {
   const sat = satelliteId ? SATELLITE_BY_ID[satelliteId] : SATELLITES[12]; // pick one with realistic baselines
+  /** @type {AgentStep[]} */
   const chain = [];
   const now = Date.now();
 
@@ -488,6 +522,7 @@ SCENARIO_RUNNERS.battery = async (agent, { satelliteId, timeSec }) => {
 
 SCENARIO_RUNNERS.thermal = async (agent, { satelliteId, timeSec }) => {
   const sat = satelliteId ? SATELLITE_BY_ID[satelliteId] : SATELLITES[20];
+  /** @type {AgentStep[]} */
   const chain = [];
   const now = Date.now();
 
@@ -575,6 +610,7 @@ SCENARIO_RUNNERS.commanded = async (agent, { satelliteId, params }) => {
   const targetAlt = (params && params.targetAltitudeKm) || 555;
   const currentAlt = sat.altitude;
   const deltaAlt = targetAlt - currentAlt;
+  /** @type {AgentStep[]} */
   const chain = [];
   const now = Date.now();
 
@@ -654,6 +690,7 @@ SCENARIO_RUNNERS.commanded = async (agent, { satelliteId, params }) => {
 
 SCENARIO_RUNNERS.handoff = async (agent, { satelliteId, timeSec }) => {
   const sat = satelliteId ? SATELLITE_BY_ID[satelliteId] : SATELLITES[35];
+  /** @type {AgentStep[]} */
   const chain = [];
   const now = Date.now();
 
@@ -723,6 +760,7 @@ SCENARIO_RUNNERS.handoff = async (agent, { satelliteId, timeSec }) => {
   return proposal;
 };
 
+/** @param {number} ms @returns {Promise<void>} */
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
