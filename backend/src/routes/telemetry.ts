@@ -32,7 +32,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance): Promise<voi
   app.post('/v1/telemetry', async (req, reply) => {
     const body = IngestBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const ingested = await app.telemetry.ingest(body.data.readings);
+    const ingested = await app.telemetry.ingest(req.customerId, body.data.readings);
     return reply.code(201).send({ ingested });
   });
 
@@ -41,14 +41,21 @@ export async function registerTelemetryRoutes(app: FastifyInstance): Promise<voi
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
     const { bucketSeconds, agg, ...rest } = q.data;
     if (bucketSeconds) {
-      return { series: await app.telemetry.queryBucketed({ ...rest, bucketSeconds, ...(agg ? { agg } : {}) }) };
+      return {
+        series: await app.telemetry.queryBucketed({
+          customerId: req.customerId,
+          ...rest,
+          bucketSeconds,
+          ...(agg ? { agg } : {}),
+        }),
+      };
     }
-    return { points: await app.telemetry.queryRaw(rest) };
+    return { points: await app.telemetry.queryRaw({ customerId: req.customerId, ...rest }) };
   });
 
   app.get('/v1/telemetry/latest', async (req, reply) => {
     const q = LatestQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    return { points: await app.telemetry.latestPerMetric(q.data.satelliteId) };
+    return { points: await app.telemetry.latestPerMetric(req.customerId, q.data.satelliteId) };
   });
 }

@@ -31,7 +31,7 @@ export interface BucketPoint {
 
 export type Agg = 'avg' | 'min' | 'max' | 'last';
 
-const COLS = 7;
+const COLS = 8; // customer_id + 7 reading columns
 /** Cap per request so a bulk insert stays well under Postgres' 65535 bind-param limit. */
 export const MAX_BATCH = 5000;
 
@@ -48,8 +48,8 @@ export class Telemetry {
     private readonly bus?: EventBus,
   ) {}
 
-  /** Bulk-insert a batch of readings. Returns the number stored. */
-  async ingest(readings: Reading[]): Promise<number> {
+  /** Bulk-insert a batch of readings for one tenant. Returns the number stored. */
+  async ingest(customerId: string, readings: Reading[]): Promise<number> {
     if (readings.length === 0) return 0;
     if (readings.length > MAX_BATCH) {
       throw new RangeError(`batch too large: ${readings.length} > ${MAX_BATCH}`);
@@ -59,6 +59,7 @@ export class Telemetry {
     const tuples = readings.map((r, i) => {
       const b = i * COLS;
       params.push(
+        customerId,
         r.satelliteId,
         r.ts ?? nowIso,
         r.subsystem,
@@ -67,19 +68,19 @@ export class Telemetry {
         r.unit ?? null,
         r.quality ?? 'good',
       );
-      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7})`;
+      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7}, $${b + 8})`;
     });
     await this.db.query(
-      `INSERT INTO telemetry (satellite_id, ts, subsystem, metric, value, unit, quality)
+      `INSERT INTO telemetry (customer_id, satellite_id, ts, subsystem, metric, value, unit, quality)
        VALUES ${tuples.join(', ')}`,
       params,
     );
-    this.#publish(readings);
+    this.#publish(customerId, readings);
     return readings.length;
   }
 
   /** Emit one telemetry event per distinct satellite in the batch. */
-  #publish(readings: Reading[]): void {
+  #publish(customerId: string, readings: Reading[]): void {
     if (!this.bus) return;
     const bySat = new Map<string, Set<string>>();
     for (const r of readings) {
@@ -89,12 +90,13 @@ export class Telemetry {
     }
     for (const [satelliteId, metrics] of bySat) {
       const count = readings.reduce((n, r) => n + (r.satelliteId === satelliteId ? 1 : 0), 0);
-      this.bus.emit('telemetry', { satelliteId, count, metrics: [...metrics] });
+      this.bus.emit('telemetry', { customerId, satelliteId, count, metrics: [...metrics] });
     }
   }
 
   /** Raw readings for one satellite, newest first, optionally filtered. */
   async queryRaw(spec: {
+    customerId: string;
     satelliteId: string;
     metric?: string;
     from?: string;
@@ -118,6 +120,7 @@ export class Telemetry {
    * boundary, so it runs on plain pglite as well as a Timescale hypertable.
    */
   async queryBucketed(spec: {
+    customerId: string;
     satelliteId: string;
     metric?: string;
     from?: string;
@@ -149,12 +152,12 @@ export class Telemetry {
   }
 
   /** The newest reading for each metric of one satellite (dashboard snapshot). */
-  async latestPerMetric(satelliteId: string): Promise<TelemetryPoint[]> {
+  async latestPerMetric(customerId: string, satelliteId: string): Promise<TelemetryPoint[]> {
     const rows = await this.db.query<Row>(
       `SELECT DISTINCT ON (metric) satellite_id, ts, subsystem, metric, value, unit, quality
-       FROM telemetry WHERE satellite_id = $1
+       FROM telemetry WHERE customer_id = $1 AND satellite_id = $2
        ORDER BY metric, ts DESC`,
-      [satelliteId],
+      [customerId, satelliteId],
     );
     return rows.map(toPoint);
   }
@@ -182,15 +185,16 @@ function toPoint(r: Row): TelemetryPoint {
   };
 }
 
-/** Shared WHERE builder — satellite_id is required, the rest optional. */
+/** Shared WHERE builder — tenant + satellite required, the rest optional. */
 function buildWhere(spec: {
+  customerId: string;
   satelliteId: string;
   metric?: string;
   from?: string;
   to?: string;
 }): { whereSql: string; params: unknown[] } {
-  const where = ['satellite_id = $1'];
-  const params: unknown[] = [spec.satelliteId];
+  const where = ['customer_id = $1', 'satellite_id = $2'];
+  const params: unknown[] = [spec.customerId, spec.satelliteId];
   if (spec.metric) {
     params.push(spec.metric);
     where.push(`metric = $${params.length}`);

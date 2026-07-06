@@ -28,9 +28,14 @@ export class AuditLog {
 
   constructor(private readonly db: Db) {}
 
-  /** Append one entry. Serialized; returns the persisted entry. */
-  append(actor: string, action: string, payload: Record<string, unknown> = {}): Promise<AuditEntry> {
-    const run = this.#tail.then(() => this.#appendOne(actor, action, payload));
+  /** Append one entry to a tenant's chain. Serialized; returns the persisted entry. */
+  append(
+    customerId: string,
+    actor: string,
+    action: string,
+    payload: Record<string, unknown> = {},
+  ): Promise<AuditEntry> {
+    const run = this.#tail.then(() => this.#appendOne(customerId, actor, action, payload));
     // Keep the queue alive even if one append rejects, without swallowing the
     // error the caller awaits.
     this.#tail = run.catch(() => undefined);
@@ -38,12 +43,14 @@ export class AuditLog {
   }
 
   async #appendOne(
+    customerId: string,
     actor: string,
     action: string,
     payload: Record<string, unknown>,
   ): Promise<AuditEntry> {
     const last = await this.db.query<{ seq: string | number; hash: string }>(
-      'SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1',
+      'SELECT seq, hash FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT 1',
+      [customerId],
     );
     const prev = last[0];
     const seq = prev ? Number(prev.seq) + 1 : 0;
@@ -54,38 +61,43 @@ export class AuditLog {
     const hash = signEntry(entryInput({ prevHash, seq, tsMs, actor, action, payload }));
 
     await this.db.query(
-      `INSERT INTO audit_log (seq, ts, actor, action, payload, prev_hash, hash)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-      [seq, ts, actor, action, JSON.stringify(payload), prevHash, hash],
+      `INSERT INTO audit_log (customer_id, seq, ts, actor, action, payload, prev_hash, hash)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+      [customerId, seq, ts, actor, action, JSON.stringify(payload), prevHash, hash],
     );
     return { seq, ts, actor, action, payload, prevHash, hash };
   }
 
-  /** Most recent entries, newest first. */
-  async recent(limit = 50): Promise<AuditEntry[]> {
+  /** Most recent entries for a tenant, newest first. */
+  async recent(customerId: string, limit = 50): Promise<AuditEntry[]> {
     const rows = await this.db.query<AuditRow>(
       `SELECT seq, ts, actor, action, payload, prev_hash, hash
-       FROM audit_log ORDER BY seq DESC LIMIT $1`,
-      [limit],
+       FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT $2`,
+      [customerId, limit],
     );
     return rows.map(toEntry);
   }
 
-  /** Total entry count. */
-  async count(): Promise<number> {
-    const rows = await this.db.query<{ n: string | number }>('SELECT COUNT(*) AS n FROM audit_log');
+  /** Entry count for a tenant. */
+  async count(customerId: string): Promise<number> {
+    const rows = await this.db.query<{ n: string | number }>(
+      'SELECT COUNT(*) AS n FROM audit_log WHERE customer_id = $1',
+      [customerId],
+    );
     return Number(rows[0]?.n ?? 0);
   }
 
   /**
-   * Re-derive every entry's HMAC and confirm each links to its predecessor.
-   * Detects any tampered field, reordering, or broken linkage.
+   * Re-derive every entry's HMAC and confirm each links to its predecessor,
+   * within one tenant's chain. Detects any tampered field, reordering, or
+   * broken linkage.
    */
-  async verify(): Promise<VerifyResult> {
+  async verify(customerId: string): Promise<VerifyResult> {
     const rows = await this.db.query<VerifyRow>(
       `SELECT seq, (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,
               actor, action, payload, prev_hash, hash
-       FROM audit_log ORDER BY seq ASC`,
+       FROM audit_log WHERE customer_id = $1 ORDER BY seq ASC`,
+      [customerId],
     );
     let prevHash = GENESIS_HASH;
     let expectedSeq = 0;
@@ -110,22 +122,24 @@ export class AuditLog {
     return { valid: true, entries: rows.length };
   }
 
-  /** Full chain oldest-first, for export. */
-  async all(): Promise<AuditEntry[]> {
+  /** A tenant's full chain oldest-first, for export. */
+  async all(customerId: string): Promise<AuditEntry[]> {
     const rows = await this.db.query<AuditRow>(
-      `SELECT seq, ts, actor, action, payload, prev_hash, hash FROM audit_log ORDER BY seq ASC`,
+      `SELECT seq, ts, actor, action, payload, prev_hash, hash
+       FROM audit_log WHERE customer_id = $1 ORDER BY seq ASC`,
+      [customerId],
     );
     return rows.map(toEntry);
   }
 
-  /** Export the whole chain as a pretty JSON decision pack. */
-  async exportJson(): Promise<string> {
-    return JSON.stringify(await this.all(), null, 2);
+  /** Export a tenant's whole chain as a pretty JSON decision pack. */
+  async exportJson(customerId: string): Promise<string> {
+    return JSON.stringify(await this.all(customerId), null, 2);
   }
 
-  /** Export the whole chain as CSV (payload JSON-encoded in one column). */
-  async exportCsv(): Promise<string> {
-    const rows = await this.all();
+  /** Export a tenant's whole chain as CSV (payload JSON-encoded in one column). */
+  async exportCsv(customerId: string): Promise<string> {
+    const rows = await this.all(customerId);
     const head = 'seq,ts,actor,action,payload,prev_hash,hash';
     const lines = rows.map((e) =>
       [e.seq, e.ts, e.actor, e.action, JSON.stringify(e.payload), e.prevHash, e.hash]

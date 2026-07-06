@@ -1,12 +1,14 @@
 import { EventEmitter } from 'node:events';
 
 export interface TelemetryEvent {
+  customerId: string;
   satelliteId: string;
   count: number;
   metrics: string[];
 }
 
 export interface ProposalEvent {
+  customerId: string;
   type: 'created' | 'approved' | 'rejected' | 'modified';
   proposal: { id: string; satelliteId: string | null; status: string };
 }

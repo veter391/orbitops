@@ -5,6 +5,7 @@ import { AuditLog } from './audit/index.js';
 import { Proposals } from './proposals/index.js';
 import { Telemetry } from './telemetry/index.js';
 import { EventBus } from './events/index.js';
+import { registerAuth } from './auth/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerProposalRoutes } from './routes/proposals.js';
@@ -38,6 +39,7 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   app.decorate('proposals', new Proposals(database, audit, bus));
   app.decorate('telemetry', new Telemetry(database, bus));
 
+  registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key
   await registerHealthRoutes(app);
   await registerAuditRoutes(app);
   await registerProposalRoutes(app);

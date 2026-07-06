@@ -5,10 +5,11 @@ import type { AddressInfo } from 'node:net';
 import WebSocket from 'ws';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
-import { freshDb } from './helpers.js';
+import { freshDb, DEMO_KEY } from './helpers.js';
 
 let app: FastifyInstance;
 let port: number;
+const AUTH = { 'x-api-key': DEMO_KEY };
 
 before(async () => {
   app = await buildServer(await freshDb());
@@ -80,7 +81,7 @@ function collect(ws: WebSocket): {
 }
 
 test('stream pushes telemetry and proposal events for the subscribed satellite', async () => {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&apiKey=${DEMO_KEY}`);
   const frames = collect(ws);
   await once(ws, 'open');
 
@@ -90,6 +91,7 @@ test('stream pushes telemetry and proposal events for the subscribed satellite',
   await app.inject({
     method: 'POST',
     url: '/v1/telemetry',
+    headers: AUTH,
     payload: { readings: [{ satelliteId: 'oo1-01', subsystem: 'pwr', metric: 'battery_v', value: 27 }] },
   });
   const tel = await frames.waitFor((f) => f.type === 'telemetry');
@@ -99,6 +101,7 @@ test('stream pushes telemetry and proposal events for the subscribed satellite',
   await app.inject({
     method: 'POST',
     url: '/v1/proposals',
+    headers: AUTH,
     payload: { satelliteId: 'oo1-01', proposedAction: { burnSeconds: 5 } },
   });
   const prop = await frames.waitFor((f) => f.type === 'proposal');
@@ -108,7 +111,7 @@ test('stream pushes telemetry and proposal events for the subscribed satellite',
 });
 
 test('stream filter excludes events for other satellites', async () => {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&apiKey=${DEMO_KEY}`);
   const frames = collect(ws);
   await once(ws, 'open');
   await frames.waitFor((f) => f.type === 'hello');
@@ -116,6 +119,7 @@ test('stream filter excludes events for other satellites', async () => {
   await app.inject({
     method: 'POST',
     url: '/v1/telemetry',
+    headers: AUTH,
     payload: { readings: [{ satelliteId: 'other-sat', subsystem: 'pwr', metric: 'battery_v', value: 27 }] },
   });
   assert.equal(

@@ -15,6 +15,7 @@ export async function registerStreamRoutes(app: FastifyInstance, bus: EventBus):
     '/v1/stream',
     { websocket: true },
     (socket, req) => {
+      const customerId = req.customerId; // pinned by the auth hook
       const filter = req.query.satelliteId;
       const OPEN = 1; // WebSocket.OPEN per the WHATWG spec — robust across ws builds
       const send = (type: string, data: unknown) => {
@@ -24,9 +25,11 @@ export async function registerStreamRoutes(app: FastifyInstance, bus: EventBus):
       send('hello', { ts: new Date().toISOString(), filter: filter ?? null });
 
       const offTelemetry = bus.on('telemetry', (e) => {
+        if (e.customerId !== customerId) return; // tenant isolation
         if (!filter || e.satelliteId === filter) send('telemetry', e);
       });
       const offProposal = bus.on('proposal', (e) => {
+        if (e.customerId !== customerId) return; // tenant isolation
         if (!filter || e.proposal.satelliteId === filter) send('proposal', e);
       });
 

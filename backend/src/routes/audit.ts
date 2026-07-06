@@ -19,18 +19,18 @@ export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/audit', async (req, reply) => {
     const q = RecentQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    return { entries: await app.audit.recent(q.data.limit) };
+    return { entries: await app.audit.recent(req.customerId, q.data.limit) };
   });
 
   app.post('/v1/audit', async (req, reply) => {
     const body = AppendBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const entry = await app.audit.append(body.data.actor, body.data.action, body.data.payload);
+    const entry = await app.audit.append(req.customerId, body.data.actor, body.data.action, body.data.payload);
     return reply.code(201).send({ entry });
   });
 
-  app.get('/v1/audit/verify', async () => {
-    return app.audit.verify();
+  app.get('/v1/audit/verify', async (req) => {
+    return app.audit.verify(req.customerId);
   });
 
   app.get('/v1/audit/export', async (req, reply) => {
@@ -39,10 +39,10 @@ export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
     if (q.data.format === 'csv') {
       reply.header('content-type', 'text/csv; charset=utf-8');
       reply.header('content-disposition', 'attachment; filename="orbitops-audit.csv"');
-      return reply.send(await app.audit.exportCsv());
+      return reply.send(await app.audit.exportCsv(req.customerId));
     }
     reply.header('content-type', 'application/json; charset=utf-8');
     reply.header('content-disposition', 'attachment; filename="orbitops-audit.json"');
-    return reply.send(await app.audit.exportJson());
+    return reply.send(await app.audit.exportJson(req.customerId));
   });
 }

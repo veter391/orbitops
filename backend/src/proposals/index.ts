@@ -38,83 +38,100 @@ export class Proposals {
     private readonly bus?: EventBus,
   ) {}
 
-  async create(input: {
-    satelliteId?: string | null;
-    reasoningChain?: unknown[];
-    proposedAction?: Record<string, unknown>;
-  }): Promise<Proposal> {
+  async create(
+    customerId: string,
+    input: {
+      satelliteId?: string | null;
+      reasoningChain?: unknown[];
+      proposedAction?: Record<string, unknown>;
+    },
+  ): Promise<Proposal> {
     const rows = await this.db.query<ProposalRow>(
-      `INSERT INTO proposals (satellite_id, reasoning_chain, proposed_action)
-       VALUES ($1, $2::jsonb, $3::jsonb)
+      `INSERT INTO proposals (customer_id, satellite_id, reasoning_chain, proposed_action)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
        RETURNING *`,
       [
+        customerId,
         input.satelliteId ?? null,
         JSON.stringify(input.reasoningChain ?? []),
         JSON.stringify(input.proposedAction ?? {}),
       ],
     );
     const p = toProposal(rows[0]!);
-    await this.audit.append('ai:agent', 'proposal.created', {
+    await this.audit.append(customerId, 'ai:agent', 'proposal.created', {
       proposalId: p.id,
       satelliteId: p.satelliteId,
     });
-    this.#publish('created', p);
+    this.#publish(customerId, 'created', p);
     return p;
   }
 
-  async get(id: string): Promise<Proposal | null> {
-    const rows = await this.db.query<ProposalRow>('SELECT * FROM proposals WHERE id = $1', [id]);
+  async get(customerId: string, id: string): Promise<Proposal | null> {
+    const rows = await this.db.query<ProposalRow>(
+      'SELECT * FROM proposals WHERE id = $1 AND customer_id = $2',
+      [id, customerId],
+    );
     return rows[0] ? toProposal(rows[0]) : null;
   }
 
-  async list(limit = 50): Promise<Proposal[]> {
+  async list(customerId: string, limit = 50): Promise<Proposal[]> {
     const rows = await this.db.query<ProposalRow>(
-      'SELECT * FROM proposals ORDER BY ts DESC LIMIT $1',
-      [limit],
+      'SELECT * FROM proposals WHERE customer_id = $1 ORDER BY ts DESC LIMIT $2',
+      [customerId, limit],
     );
     return rows.map(toProposal);
   }
 
-  approve(id: string, operator: string): Promise<Proposal> {
+  approve(customerId: string, id: string, operator: string): Promise<Proposal> {
     return this.#decide(
+      customerId,
       id,
-      `UPDATE proposals SET status = 'approved', approved_by = $2, approved_at = now()
-       WHERE id = $1 AND status = 'pending' RETURNING *`,
-      [id, operator],
+      `UPDATE proposals SET status = 'approved', approved_by = $3, approved_at = now()
+       WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
+      [id, customerId, operator],
       'proposal.approved',
       { proposalId: id, operator },
     );
   }
 
-  reject(id: string, operator: string, reason = ''): Promise<Proposal> {
+  reject(customerId: string, id: string, operator: string, reason = ''): Promise<Proposal> {
     return this.#decide(
+      customerId,
       id,
-      `UPDATE proposals SET status = 'rejected', approved_by = $2, approved_at = now()
-       WHERE id = $1 AND status = 'pending' RETURNING *`,
-      [id, operator],
+      `UPDATE proposals SET status = 'rejected', approved_by = $3, approved_at = now()
+       WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
+      [id, customerId, operator],
       'proposal.rejected',
       { proposalId: id, operator, reason },
     );
   }
 
-  modify(id: string, operator: string, modifications: Record<string, unknown>): Promise<Proposal> {
+  modify(
+    customerId: string,
+    id: string,
+    operator: string,
+    modifications: Record<string, unknown>,
+  ): Promise<Proposal> {
     return this.#decide(
+      customerId,
       id,
-      `UPDATE proposals SET status = 'modified', approved_by = $2, approved_at = now(),
-              proposed_action = proposed_action || $3::jsonb
-       WHERE id = $1 AND status = 'pending' RETURNING *`,
-      [id, operator, JSON.stringify(modifications)],
+      `UPDATE proposals SET status = 'modified', approved_by = $3, approved_at = now(),
+              proposed_action = proposed_action || $4::jsonb
+       WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
+      [id, customerId, operator, JSON.stringify(modifications)],
       'proposal.modified',
       { proposalId: id, operator, modifications },
     );
   }
 
   /**
-   * Apply a guarded transition. If the conditional UPDATE touches no row, the
-   * proposal is either missing (→ NotFoundError) or already terminal (→ current
-   * row, no audit entry).
+   * Apply a guarded, tenant-scoped transition. If the conditional UPDATE touches
+   * no row, the proposal is either missing for this tenant (→ NotFoundError) or
+   * already terminal (→ current row, no audit entry). A proposal belonging to a
+   * different tenant is indistinguishable from missing — that is the isolation.
    */
   async #decide(
+    customerId: string,
     id: string,
     sql: string,
     params: unknown[],
@@ -123,18 +140,19 @@ export class Proposals {
   ): Promise<Proposal> {
     const rows = await this.db.query<ProposalRow>(sql, params);
     if (rows[0]) {
-      await this.audit.append(`user:${payload['operator'] as string}`, action, payload);
+      await this.audit.append(customerId, `user:${payload['operator'] as string}`, action, payload);
       const p = toProposal(rows[0]);
-      this.#publish(action.replace('proposal.', '') as ProposalEvent['type'], p);
+      this.#publish(customerId, action.replace('proposal.', '') as ProposalEvent['type'], p);
       return p;
     }
-    const current = await this.get(id);
+    const current = await this.get(customerId, id);
     if (!current) throw new NotFoundError(id);
     return current; // already decided — no-op
   }
 
-  #publish(type: ProposalEvent['type'], p: Proposal): void {
+  #publish(customerId: string, type: ProposalEvent['type'], p: Proposal): void {
     this.bus?.emit('proposal', {
+      customerId,
       type,
       proposal: { id: p.id, satelliteId: p.satelliteId, status: p.status },
     });

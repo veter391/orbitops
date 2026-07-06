@@ -22,7 +22,7 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.post('/v1/proposals', async (req, reply) => {
     const body = CreateBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const p = await app.proposals.create({
+    const p = await app.proposals.create(req.customerId, {
       satelliteId: body.data.satelliteId ?? null,
       reasoningChain: body.data.reasoningChain,
       proposedAction: body.data.proposedAction,
@@ -33,20 +33,20 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.get('/v1/proposals', async (req, reply) => {
     const q = ListQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    return { proposals: await app.proposals.list(q.data.limit) };
+    return { proposals: await app.proposals.list(req.customerId, q.data.limit) };
   });
 
   app.get('/v1/proposals/:id', async (req, reply) => {
     const params = IdParams.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: 'invalid id' });
-    const p = await app.proposals.get(params.data.id);
+    const p = await app.proposals.get(req.customerId, params.data.id);
     if (!p) return reply.code(404).send({ error: 'not found' });
     return { proposal: p };
   });
 
   const decision = (
     verb: 'approve' | 'reject' | 'modify',
-    handler: (id: string, body: Record<string, unknown>) => Promise<unknown>,
+    handler: (customerId: string, id: string, body: Record<string, unknown>) => Promise<unknown>,
     schema: z.ZodType,
   ) => {
     app.post(`/v1/proposals/:id/${verb}`, async (req, reply) => {
@@ -55,7 +55,7 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
       const body = schema.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
       try {
-        const proposal = await handler(params.data.id, body.data as Record<string, unknown>);
+        const proposal = await handler(req.customerId, params.data.id, body.data as Record<string, unknown>);
         return { proposal };
       } catch (err) {
         if (err instanceof NotFoundError) return reply.code(404).send({ error: 'not found' });
@@ -64,11 +64,16 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
     });
   };
 
-  decision('approve', (id, b) => app.proposals.approve(id, b['operator'] as string), Operator);
-  decision('reject', (id, b) => app.proposals.reject(id, b['operator'] as string, b['reason'] as string), RejectBody);
+  decision('approve', (cid, id, b) => app.proposals.approve(cid, id, b['operator'] as string), Operator);
+  decision(
+    'reject',
+    (cid, id, b) => app.proposals.reject(cid, id, b['operator'] as string, b['reason'] as string),
+    RejectBody,
+  );
   decision(
     'modify',
-    (id, b) => app.proposals.modify(id, b['operator'] as string, b['modifications'] as Record<string, unknown>),
+    (cid, id, b) =>
+      app.proposals.modify(cid, id, b['operator'] as string, b['modifications'] as Record<string, unknown>),
     ModifyBody,
   );
 }
