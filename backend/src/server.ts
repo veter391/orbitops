@@ -5,12 +5,14 @@ import { AuditLog } from './audit/index.js';
 import { Proposals } from './proposals/index.js';
 import { Telemetry } from './telemetry/index.js';
 import { EventBus } from './events/index.js';
+import { Agent } from './agent/index.js';
 import { registerAuth } from './auth/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerProposalRoutes } from './routes/proposals.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import { registerStreamRoutes } from './routes/stream.js';
+import { registerAgentRoutes } from './routes/agent.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -19,6 +21,7 @@ declare module 'fastify' {
     proposals: Proposals;
     telemetry: Telemetry;
     bus: EventBus;
+    agent: Agent;
   }
 }
 
@@ -36,8 +39,10 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   app.decorate('db', database);
   app.decorate('audit', audit);
   app.decorate('bus', bus);
-  app.decorate('proposals', new Proposals(database, audit, bus));
+  const proposals = new Proposals(database, audit, bus);
+  app.decorate('proposals', proposals);
   app.decorate('telemetry', new Telemetry(database, bus));
+  app.decorate('agent', new Agent(proposals));
 
   registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key
   await registerHealthRoutes(app);
@@ -45,5 +50,6 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   await registerProposalRoutes(app);
   await registerTelemetryRoutes(app);
   await registerStreamRoutes(app, bus);
+  await registerAgentRoutes(app);
   return app;
 }

@@ -14,6 +14,15 @@ const EnvSchema = z.object({
     .default('info'),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
+
+  /**
+   * Optional LLM augmentation for the agent's "think" step. With no key the
+   * agent runs a fully deterministic loop (no network) — the reasoning chain is
+   * the source of truth either way (see ARCHITECTURE.md).
+   */
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default('anthropic/claude-3.5-sonnet'),
+  OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
