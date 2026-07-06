@@ -1,5 +1,6 @@
 import type { Proposals, Proposal } from '../proposals/index.js';
 import { llmAssess, llmEnabled } from './llm.js';
+import { withSpan } from '../observability.js';
 
 export interface Signal {
   kind: string;
@@ -76,7 +77,15 @@ const FALLBACK_RULE: Rule = {
 export class Agent {
   constructor(private readonly proposals: Proposals) {}
 
-  async run(customerId: string, input: AgentInput): Promise<AgentResult> {
+  run(customerId: string, input: AgentInput): Promise<AgentResult> {
+    return withSpan(
+      'agent.run',
+      { 'orbitops.satellite_id': input.satelliteId, 'orbitops.signals': input.signals.length },
+      () => this.#run(customerId, input),
+    );
+  }
+
+  async #run(customerId: string, input: AgentInput): Promise<AgentResult> {
     const chain: ChainStep[] = [];
 
     // 1. OBSERVE

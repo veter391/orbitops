@@ -60,6 +60,7 @@ export function registerAuth(app: FastifyInstance): void {
       const customerId = ticket ? verifyTicket(ticket) : null;
       if (!customerId) return reply.code(401).send({ error: 'invalid or missing ticket' });
       req.customerId = customerId;
+      req.log = req.log.child({ customerId });
       return;
     }
 
@@ -72,5 +73,7 @@ export function registerAuth(app: FastifyInstance): void {
     req.customerId = principal.customerId;
     req.operatorId = principal.operatorId;
     req.operatorName = principal.operatorName;
+    // Tenant/operator correlation in every subsequent log line for this request.
+    req.log = req.log.child({ customerId: principal.customerId, operatorId: principal.operatorId });
   });
 }

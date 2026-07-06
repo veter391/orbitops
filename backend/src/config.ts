@@ -23,6 +23,11 @@ const EnvSchema = z.object({
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),
   /** Max request body size in bytes (default 1 MiB). */
   BODY_LIMIT: z.coerce.number().int().positive().default(1_048_576),
+
+  /** When set (e.g. http://localhost:4318/v1/traces), export OTLP spans there. */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  /** Days of telemetry to keep; 0 = keep forever (purge loop disabled). */
+  TELEMETRY_RETENTION_DAYS: z.coerce.number().int().nonnegative().default(0),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
 

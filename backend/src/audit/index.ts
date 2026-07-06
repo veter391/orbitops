@@ -1,5 +1,6 @@
 import type { Db } from '../db/index.js';
 import { entryInput, signEntry, hashesEqual, GENESIS_HASH } from './hash.js';
+import { withSpan } from '../observability.js';
 
 /** Minimal logger surface (Fastify's `app.log` satisfies it). */
 interface Logger {
@@ -43,7 +44,11 @@ export class AuditLog {
     action: string,
     payload: Record<string, unknown> = {},
   ): Promise<AuditEntry> {
-    const run = this.#tail.then(() => this.#appendOne(customerId, actor, action, payload));
+    const run = this.#tail.then(() =>
+      withSpan('audit.append', { 'orbitops.action': action }, () =>
+        this.#appendOne(customerId, actor, action, payload),
+      ),
+    );
     // Keep the queue alive even if one append rejects — and surface the failure
     // in server logs (otherwise it's only visible to the awaiting caller).
     this.#tail = run.catch((err) => {

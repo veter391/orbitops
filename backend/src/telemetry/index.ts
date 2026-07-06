@@ -1,5 +1,6 @@
 import type { Db } from '../db/index.js';
 import type { EventBus } from '../events/index.js';
+import { withSpan } from '../observability.js';
 
 export type Quality = 'good' | 'suspect' | 'bad' | 'stale';
 
@@ -49,7 +50,13 @@ export class Telemetry {
   ) {}
 
   /** Bulk-insert a batch of readings for one tenant. Returns the number stored. */
-  async ingest(customerId: string, readings: Reading[]): Promise<number> {
+  ingest(customerId: string, readings: Reading[]): Promise<number> {
+    return withSpan('telemetry.ingest', { 'orbitops.readings': readings.length }, () =>
+      this.#ingest(customerId, readings),
+    );
+  }
+
+  async #ingest(customerId: string, readings: Reading[]): Promise<number> {
     if (readings.length === 0) return 0;
     if (readings.length > MAX_BATCH) {
       throw new RangeError(`batch too large: ${readings.length} > ${MAX_BATCH}`);
@@ -149,6 +156,22 @@ export class Telemetry {
       value: Number(r.value),
       n: Number(r.n),
     }));
+  }
+
+  /**
+   * Delete telemetry older than `days` across all tenants. Returns rows removed.
+   * Called by the retention loop when TELEMETRY_RETENTION_DAYS > 0; on a
+   * TimescaleDB deployment this is superseded by add_retention_policy().
+   */
+  async purgeOlderThan(days: number): Promise<number> {
+    if (!Number.isInteger(days) || days <= 0) return 0;
+    const rows = await this.db.query<{ n: string | number }>(
+      `WITH del AS (
+         DELETE FROM telemetry WHERE ts < now() - ($1 || ' days')::interval RETURNING 1
+       ) SELECT COUNT(*) AS n FROM del`,
+      [String(days)],
+    );
+    return Number(rows[0]?.n ?? 0);
   }
 
   /** The newest reading for each metric of one satellite (dashboard snapshot). */

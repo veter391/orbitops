@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
@@ -38,6 +39,13 @@ declare module 'fastify' {
 export async function buildServer(db?: Db): Promise<FastifyInstance> {
   const app = Fastify({
     bodyLimit: config.BODY_LIMIT,
+    // Correlation: honor an inbound X-Request-Id (proxy/client-provided), else
+    // mint a UUID. Echoed on every response so a client can quote the id when
+    // reporting an incident and logs can be joined end-to-end.
+    genReqId: (req) => {
+      const h = req.headers['x-request-id'];
+      return typeof h === 'string' && h.length > 0 && h.length <= 128 ? h : randomUUID();
+    },
     logger: {
       level: config.LOG_LEVEL,
       // Never log the query string — it can carry the WebSocket `?apiKey=`.
@@ -51,6 +59,11 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
         },
       },
     },
+  });
+
+  // Echo the correlation id on every response.
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('x-request-id', req.id);
   });
 
   // Security middleware, before auth and routes.
