@@ -1,4 +1,5 @@
 import type { Db } from '../db/index.js';
+import type { EventBus } from '../events/index.js';
 
 export type Quality = 'good' | 'suspect' | 'bad' | 'stale';
 
@@ -42,7 +43,10 @@ export const MAX_BATCH = 5000;
  * decisions, not sensor readings.
  */
 export class Telemetry {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly bus?: EventBus,
+  ) {}
 
   /** Bulk-insert a batch of readings. Returns the number stored. */
   async ingest(readings: Reading[]): Promise<number> {
@@ -70,7 +74,23 @@ export class Telemetry {
        VALUES ${tuples.join(', ')}`,
       params,
     );
+    this.#publish(readings);
     return readings.length;
+  }
+
+  /** Emit one telemetry event per distinct satellite in the batch. */
+  #publish(readings: Reading[]): void {
+    if (!this.bus) return;
+    const bySat = new Map<string, Set<string>>();
+    for (const r of readings) {
+      const set = bySat.get(r.satelliteId) ?? new Set<string>();
+      set.add(r.metric);
+      bySat.set(r.satelliteId, set);
+    }
+    for (const [satelliteId, metrics] of bySat) {
+      const count = readings.reduce((n, r) => n + (r.satelliteId === satelliteId ? 1 : 0), 0);
+      this.bus.emit('telemetry', { satelliteId, count, metrics: [...metrics] });
+    }
   }
 
   /** Raw readings for one satellite, newest first, optionally filtered. */

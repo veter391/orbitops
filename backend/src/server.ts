@@ -4,10 +4,12 @@ import { getDb, type Db } from './db/index.js';
 import { AuditLog } from './audit/index.js';
 import { Proposals } from './proposals/index.js';
 import { Telemetry } from './telemetry/index.js';
+import { EventBus } from './events/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerProposalRoutes } from './routes/proposals.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
+import { registerStreamRoutes } from './routes/stream.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -15,6 +17,7 @@ declare module 'fastify' {
     audit: AuditLog;
     proposals: Proposals;
     telemetry: Telemetry;
+    bus: EventBus;
   }
 }
 
@@ -27,15 +30,18 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: config.LOG_LEVEL } });
   const database = db ?? (await getDb());
   const audit = new AuditLog(database);
+  const bus = new EventBus();
 
   app.decorate('db', database);
   app.decorate('audit', audit);
-  app.decorate('proposals', new Proposals(database, audit));
-  app.decorate('telemetry', new Telemetry(database));
+  app.decorate('bus', bus);
+  app.decorate('proposals', new Proposals(database, audit, bus));
+  app.decorate('telemetry', new Telemetry(database, bus));
 
   await registerHealthRoutes(app);
   await registerAuditRoutes(app);
   await registerProposalRoutes(app);
   await registerTelemetryRoutes(app);
+  await registerStreamRoutes(app, bus);
   return app;
 }

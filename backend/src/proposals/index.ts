@@ -1,5 +1,6 @@
 import type { Db } from '../db/index.js';
 import type { AuditLog } from '../audit/index.js';
+import type { EventBus, ProposalEvent } from '../events/index.js';
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'modified';
 
@@ -34,6 +35,7 @@ export class Proposals {
   constructor(
     private readonly db: Db,
     private readonly audit: AuditLog,
+    private readonly bus?: EventBus,
   ) {}
 
   async create(input: {
@@ -56,6 +58,7 @@ export class Proposals {
       proposalId: p.id,
       satelliteId: p.satelliteId,
     });
+    this.#publish('created', p);
     return p;
   }
 
@@ -121,11 +124,20 @@ export class Proposals {
     const rows = await this.db.query<ProposalRow>(sql, params);
     if (rows[0]) {
       await this.audit.append(`user:${payload['operator'] as string}`, action, payload);
-      return toProposal(rows[0]);
+      const p = toProposal(rows[0]);
+      this.#publish(action.replace('proposal.', '') as ProposalEvent['type'], p);
+      return p;
     }
     const current = await this.get(id);
     if (!current) throw new NotFoundError(id);
     return current; // already decided — no-op
+  }
+
+  #publish(type: ProposalEvent['type'], p: Proposal): void {
+    this.bus?.emit('proposal', {
+      type,
+      proposal: { id: p.id, satelliteId: p.satelliteId, status: p.status },
+    });
   }
 }
 
