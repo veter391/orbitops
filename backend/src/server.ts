@@ -3,15 +3,18 @@ import { config } from './config.js';
 import { getDb, type Db } from './db/index.js';
 import { AuditLog } from './audit/index.js';
 import { Proposals } from './proposals/index.js';
+import { Telemetry } from './telemetry/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerProposalRoutes } from './routes/proposals.js';
+import { registerTelemetryRoutes } from './routes/telemetry.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: Db;
     audit: AuditLog;
     proposals: Proposals;
+    telemetry: Telemetry;
   }
 }
 
@@ -28,9 +31,11 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   app.decorate('db', database);
   app.decorate('audit', audit);
   app.decorate('proposals', new Proposals(database, audit));
+  app.decorate('telemetry', new Telemetry(database));
 
   await registerHealthRoutes(app);
   await registerAuditRoutes(app);
   await registerProposalRoutes(app);
+  await registerTelemetryRoutes(app);
   return app;
 }
