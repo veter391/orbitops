@@ -13,12 +13,17 @@
 
 'use strict';
 
-import { pct, formatNumber, formatDuration, uid } from '../utils.js';
+import { pct, formatNumber, formatDuration, uid, esc } from '../utils.js';
 
-/** @param {string} [s] */
+/**
+ * Render a small subset of markdown (**bold**, *italic*) as HTML. HTML-escapes
+ * the input FIRST so externally-sourced text (LLM output, etc.) can never inject
+ * markup — only the bold/italic tags we add are real HTML.
+ * @param {string} [s]
+ */
 function renderText(s) {
   if (!s) return '';
-  return s
+  return esc(s)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 }
@@ -59,10 +64,10 @@ export function mountAgentPanel(host, proposal, handlers = {}) {
     <div class="proposal">
       <header class="proposal__head">
         <div class="proposal__head-info">
-          <div class="proposal__eyebrow">AI proposal · ${proposal.scenarioId}</div>
-          <h3 class="proposal__title">${proposal.title}</h3>
+          <div class="proposal__eyebrow">AI proposal · ${esc(proposal.scenarioId)}</div>
+          <h3 class="proposal__title">${esc(proposal.title)}</h3>
           <div class="proposal__chips">
-            <span class="proposal__chip">${proposal.satelliteId}</span>
+            <span class="proposal__chip">${esc(proposal.satelliteId)}</span>
             <span class="proposal__chip proposal__chip--${proposal.confidence > 0.9 ? 'ok' : proposal.confidence > 0.7 ? 'accent' : 'warn'}">${(proposal.confidence * 100).toFixed(0)}% confidence</span>
             <span class="proposal__chip">${proposal.chain.length} reasoning steps</span>
             ${proposal.aiMode === 'live'
@@ -85,7 +90,7 @@ export function mountAgentPanel(host, proposal, handlers = {}) {
 
       <div class="proposal__summary">
         <div class="proposal__summary-label">Summary</div>
-        <div class="proposal__summary-text">${proposal.summary}</div>
+        <div class="proposal__summary-text">${esc(proposal.summary)}</div>
       </div>
 
       <div class="proposal__section-head">
@@ -173,11 +178,11 @@ function openRejectModal(proposal, onSubmit) {
       </div>
       <div class="modal__body">
         <div class="modal__proposal-info">
-          <span class="proposal__chip">${proposal.satelliteId}</span>
-          <span class="proposal__chip">${proposal.scenarioId}</span>
+          <span class="proposal__chip">${esc(proposal.satelliteId)}</span>
+          <span class="proposal__chip">${esc(proposal.scenarioId)}</span>
         </div>
-        <div class="modal__proposal-title">${proposal.title}</div>
-        <div class="modal__proposal-summary">${proposal.summary}</div>
+        <div class="modal__proposal-title">${esc(proposal.title)}</div>
+        <div class="modal__proposal-summary">${esc(proposal.summary)}</div>
         <label class="modal__field">
           <span>Reason for rejection (optional)</span>
           <textarea id="rejectReason" class="modal__textarea" rows="4" placeholder="e.g. Insufficient fuel, conflicts with current mission timeline…"></textarea>
@@ -442,15 +447,16 @@ function readModifications(host, proposal) {
 
 /** @param {string} k */
 function prettifyKey(k) {
-  return k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
+  return esc(k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim());
 }
 
-/** @param {any} v */
+/** @param {any} v — number values are numeric-safe; strings/arrays get HTML-escaped
+ *  (this is the generic fallback that can receive LLM-authored step data). */
 function formatVal(v) {
   if (typeof v === 'number') {
     if (Math.abs(v) < 1) return v.toFixed(3);
     if (Math.abs(v) < 100) return v.toFixed(2);
     return formatNumber(v, 2);
   }
-  return String(v);
+  return esc(String(v));
 }

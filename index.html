@@ -8,17 +8,26 @@
 
   <title>OrbitOps · AI co-pilot for satellite constellation operators</title>
 
-  <meta name="description" content="OrbitOps is the AI co-pilot for commercial satellite constellation operators. Real-time monitoring, predictive anomaly detection, and AI reasoning with humans always in command.">
-  <meta name="keywords" content="satellite operations, constellation management, flight dynamics, SpaceX, Starlink, Kuiper, anomaly detection, AI, HITL">
+  <meta name="description" content="OrbitOps is open-source mission control for satellite constellation operators — the live CelesTrak catalog propagated with SGP4 in your browser, an accountable AI co-pilot with a human in every loop, and a hash-chained audit log. MIT-licensed, zero install.">
+  <meta name="keywords" content="satellite operations, constellation management, flight dynamics, SGP4, CelesTrak, conjunction avoidance, space situational awareness, SpaceX, Starlink, Kuiper, OneWeb, anomaly detection, AI co-pilot, human-in-the-loop, audit log, open source">
   <meta name="author" content="OrbitOps">
-  <meta name="robots" content="index, follow">
+  <meta name="robots" content="index, follow, max-image-preview:large">
 
-  <meta property="og:title" content="OrbitOps · AI co-pilot for satellite constellation operators">
-  <meta property="og:description" content="Real-time mission control for commercial satellite constellations. MIT-licensed core.">
-  <meta property="og:image" content="/public/img/hero-cinematic-opt.jpg">
-  <meta property="og:url" content="https://orbitops.io">
+  <meta property="og:site_name" content="OrbitOps">
+  <meta property="og:title" content="OrbitOps — Mission control for the real sky">
+  <meta property="og:description" content="Open-source mission control for satellite operators: the real CelesTrak catalog propagated with SGP4 in your browser, an accountable AI co-pilot, and a human in every loop.">
+  <meta property="og:image" content="https://orbitops.io/public/img/hero-cinematic-opt.jpg">
+  <meta property="og:image:alt" content="OrbitOps cockpit — a live 3D Earth ringed by thousands of tracked satellites.">
+  <meta property="og:image:width" content="1920">
+  <meta property="og:image:height" content="815">
+  <meta property="og:url" content="https://orbitops.io/">
   <meta property="og:type" content="website">
+
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OrbitOps — Mission control for the real sky">
+  <meta name="twitter:description" content="Open-source, browser-native mission control for satellite constellations — real SGP4, an accountable AI co-pilot, a human in every loop.">
+  <meta name="twitter:image" content="https://orbitops.io/public/img/hero-cinematic-opt.jpg">
+  <meta name="twitter:image:alt" content="OrbitOps cockpit — a live 3D Earth ringed by thousands of tracked satellites.">
 
   <link rel="canonical" href="https://orbitops.io/">
 
@@ -249,6 +258,14 @@
 
   <script>
     (function() {
+      // Escape any interpolated text before it enters innerHTML (defense in
+      // depth — these are error strings, not attacker input today, but this
+      // guarantees a stray error message can never inject markup).
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, function(c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
       function showBootError(title, detail) {
         var boot = document.getElementById('boot');
         if (!boot) return;
@@ -257,8 +274,8 @@
           '<circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="2"/>' +
           '<path d="M22 22 L42 42 M42 22 L22 42" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>' +
           '</svg>' +
-          '<div class="boot__title" style="color: var(--alert);">' + title + '</div>' +
-          '<div class="boot__msg">' + detail + '</div>' +
+          '<div class="boot__title" style="color: var(--alert);">' + esc(title) + '</div>' +
+          '<div class="boot__msg">' + esc(detail) + '</div>' +
           '<button class="boot__btn" onclick="document.getElementById(\'boot\').classList.add(\'is-hidden\')">Continue →</button>' +
           '</div>';
       }

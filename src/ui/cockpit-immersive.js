@@ -21,6 +21,7 @@ import { error as toastError } from './toast.js';
 import { loadConstellation } from '../core/live-constellation.js';
 import { propagateEci, geodetic, speedKms } from '../core/sgp4.js';
 import { sunEciDirection } from '../core/sun.js';
+import { esc } from '../utils.js';
 
 const EARTH_RADIUS = 6371; // km
 const SCENE_SCALE = 1 / 1500;
@@ -42,9 +43,15 @@ const SOURCE_LABEL = {
 };
 
 // ECI (km) -> scene coords. ECI z (spin axis) maps to scene +Y (up).
-/** @param {{x: number, y: number, z: number}} p */
+// Returns a REUSED scratch triple to avoid ~44k array allocs/sec in the render
+// loop — callers must destructure immediately and never hold the reference.
+const _scenePt = [0, 0, 0];
+/** @param {{x: number, y: number, z: number}} p @returns {number[]} */
 function eciToScene(p) {
-  return [p.x * SCENE_SCALE, p.z * SCENE_SCALE, -p.y * SCENE_SCALE];
+  _scenePt[0] = p.x * SCENE_SCALE;
+  _scenePt[1] = p.z * SCENE_SCALE;
+  _scenePt[2] = -p.y * SCENE_SCALE;
+  return _scenePt;
 }
 
 /**
@@ -387,15 +394,19 @@ export async function mountCockpit(host, THREE) {
     camera.lookAt(0, 0, 0);
   }
   renderer.domElement.addEventListener('mousedown', (/** @type {MouseEvent} */ e) => { dragging = true; moved = 0; last = { x: e.clientX, y: e.clientY }; });
-  window.addEventListener('mouseup', () => { dragging = false; });
-  window.addEventListener('mousemove', (/** @type {MouseEvent} */ e) => {
+  // Named so unmount() can remove them — otherwise each /cockpit visit leaks a
+  // window listener whose closure pins the (disposed) scene, blocking GC.
+  const onDragEnd = () => { dragging = false; };
+  const onDragMove = (/** @type {MouseEvent} */ e) => {
     if (!dragging) return;
     const dx = e.clientX - last.x, dy = e.clientY - last.y;
     moved += Math.abs(dx) + Math.abs(dy);
     camTheta -= dx * 0.005;
     camPhi = Math.max(-1.35, Math.min(1.35, camPhi + dy * 0.005));
     last = { x: e.clientX, y: e.clientY };
-  });
+  };
+  window.addEventListener('mouseup', onDragEnd);
+  window.addEventListener('mousemove', onDragMove);
   renderer.domElement.addEventListener('wheel', (/** @type {WheelEvent} */ e) => {
     e.preventDefault();
     camDist = Math.max(4.6, Math.min(40, camDist + e.deltaY * 0.01));
@@ -513,7 +524,7 @@ export async function mountCockpit(host, THREE) {
       item.innerHTML = `
         <div class="cockpit-sat-item__dot" style="background:${color}; box-shadow:0 0 8px ${color};"></div>
         <div class="cockpit-sat-item__info">
-          <div class="cockpit-sat-item__name">${s.name}</div>
+          <div class="cockpit-sat-item__name">${esc(s.name)}</div>
           <div class="cockpit-sat-item__sub">${s.group} · ${s.noradId}</div>
         </div>`;
       item.addEventListener('click', () => selectSat(s));
@@ -661,7 +672,7 @@ export async function mountCockpit(host, THREE) {
   function telemetryHtml() {
     if (!selected) return '<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">No object selected</span></div>';
     const seed = selected.noradId;
-    let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${selected.name}</span><span class="cockpit-tlm__sub" title="No public per-satellite telemetry feed exists; these values are modelled.">SIMULATED TELEMETRY</span></div><div class="cockpit-tlm__grid">`;
+    let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span><span class="cockpit-tlm__sub" title="No public per-satellite telemetry feed exists; these values are modelled.">SIMULATED TELEMETRY</span></div><div class="cockpit-tlm__grid">`;
     for (const [label, metrics] of SUBSYS) {
       html += `<div class="cockpit-tlm__cell"><div class="cockpit-tlm__cell-head">${label}</div>`;
       metrics.forEach(([name, base, amp, unit], i) => {
@@ -821,6 +832,8 @@ export async function mountCockpit(host, THREE) {
       if (cursatLocked) window.dispatchEvent(new CustomEvent('orbitops:cursat-unlock'));
       ro.disconnect();
       window.removeEventListener('resize', resize);
+      window.removeEventListener('mouseup', onDragEnd);
+      window.removeEventListener('mousemove', onDragMove);
       renderer.dispose();
     },
   };

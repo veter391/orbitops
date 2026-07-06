@@ -10,7 +10,7 @@
 
 'use strict';
 
-import { uid } from '../utils.js';
+import { uid, esc } from '../utils.js';
 
 /**
  * @typedef {object} ToastOpts
@@ -46,11 +46,14 @@ export function toast(message, { kind = 'info', durationMs = 4000, title } = {})
     kind === 'success' ? '✓' :
     kind === 'warn' ? '!' :
     kind === 'error' ? '✗' : 'i';
+  // esc() message/title here so the shared helper is safe BY CONSTRUCTION — a
+  // future caller passing a dynamic string (e.g. an error .message) can never
+  // reintroduce XSS. icon is a fixed internal enum.
   el.innerHTML = `
     <div class="toast__icon">${icon}</div>
     <div class="toast__body">
-      ${title ? `<div class="toast__title">${title}</div>` : ''}
-      <div class="toast__msg">${message}</div>
+      ${title ? `<div class="toast__title">${esc(title)}</div>` : ''}
+      <div class="toast__msg">${esc(message)}</div>
     </div>
     <button class="toast__close" aria-label="Close">×</button>
   `;

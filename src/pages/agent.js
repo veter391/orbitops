@@ -16,9 +16,10 @@
 import { agent, SCENARIOS } from '../scenarios/index.js';
 import { mountAgentPanel } from '../ui/agent-panel.js';
 import { audit } from '../core/audit-log.js';
-import { info, success } from '../ui/toast.js';
+import { info, success, error } from '../ui/toast.js';
 import { getStoredKey, setStoredKey, hasLiveAI } from '../core/openrouter-client.js';
 import { mountAmbient } from '../ui/ambient.js';
+import { esc } from '../utils.js';
 
 /** Phase rail order shown in the console header. */
 const PHASE_ORDER = ['OBSERVE', 'THINK', 'SCORE', 'PROPOSE', 'WAIT'];
@@ -69,6 +70,14 @@ const AI_STAGE_LABELS = {
 
 /** @type {(() => void) | null} */
 let abortRun = null;
+/** Monotonic run token. Every scenario run captures the current value; any
+ *  later run (or unmount) increments it, so a superseded run bails at its next
+ *  checkpoint instead of racing DOM writes / double-counting stats. */
+let runGen = 0;
+/** Live-elapsed timer of the in-flight scenario run, so a rapid re-click can
+ *  clear it before starting the next run (prevents orphaned timers). */
+/** @type {ReturnType<typeof setInterval> | null} */
+let activeRunTimer = null;
 /** @type {ReturnType<typeof setInterval> | null} */
 let auditRefreshTimer = null;
 /** @type {{ unmount: () => void } | null} */
@@ -210,11 +219,22 @@ export async function mount(app) {
               <span class="eyebrow">Audit log · live</span>
               <h2 class="section__title">Every decision, hash-chained.</h2>
             </div>
-            <div class="agent-audit__chain-status">
-              <span class="agent-audit__chain-status-dot"></span>
-              <span>CHAIN VERIFIED · <span id="chainLen">0</span> ENTRIES · SHA-256</span>
+            <div class="agent-audit__status-group">
+              <div class="agent-audit__chain-status">
+                <span class="agent-audit__chain-status-dot"></span>
+                <span>CHAIN VERIFIED · <span id="chainLen">0</span> ENTRIES · SHA-256</span>
+              </div>
+              <div class="agent-audit__actions">
+                <button type="button" class="agent-audit__btn" id="auditVerify" title="Recompute every SHA-256 hash and confirm the chain is unbroken">VERIFY CHAIN</button>
+                <button type="button" class="agent-audit__btn agent-audit__btn--primary" id="auditExport" title="Download the full hash-chained log as a verifiable JSON pack — evidence for insurers, regulators, or your own records">EXPORT ↓</button>
+              </div>
             </div>
           </header>
+          <p class="agent-audit__note">
+            A verifiable decision pack: every proposal, approval, rejection and override,
+            hash-chained so any tampering shows. Export it as JSON for an insurer, a
+            regulator, or your own incident record — it verifies offline.
+          </p>
           <div class="agent-audit__table" id="auditTable"></div>
         </div>
       </section>
@@ -344,6 +364,35 @@ export async function mount(app) {
     updateChainStatus();
   }, 1500);
 
+  // D4 — verifiable audit export. One-click download of the REAL hash-chained
+  // log as JSON (an evidence pack for insurers/regulators/incident records),
+  // plus a live chain verify. Both run entirely client-side; nothing here is
+  // simulated — it's the same tamper-evident chain the cockpit and agent write.
+  const exportBtn = /** @type {HTMLElement|null} */ (app.querySelector('#auditExport'));
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    const json = audit.export();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orbitops-audit-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    info(`Exported ${audit.entries.length} entries · verifiable JSON`, { title: 'Audit export', durationMs: 3500 });
+  });
+  const verifyBtn = /** @type {HTMLElement|null} */ (app.querySelector('#auditVerify'));
+  if (verifyBtn) verifyBtn.addEventListener('click', async () => {
+    const res = await audit.verify();
+    if (res.valid) {
+      success(`Chain intact · ${audit.entries.length} entries verified`, { title: 'Audit verify', durationMs: 3500 });
+    } else {
+      error(`Chain broken at entry ${res.brokenAt} (${res.reason})`, { title: 'Audit verify', durationMs: 5000 });
+    }
+  });
+
   /** @param {{ stage: string }} arg */
   const onAIStage = ({ stage }) => {
     const phase = app.querySelector('#agentPhase');
@@ -357,6 +406,7 @@ export async function mount(app) {
   return {
     unmount() {
       if (abortRun) abortRun();
+      if (activeRunTimer) { clearInterval(activeRunTimer); activeRunTimer = null; }
       if (auditRefreshTimer) clearInterval(auditRefreshTimer);
       agent.off('ai-stage', onAIStage);
       if (deckIo) { deckIo.disconnect(); deckIo = null; }
@@ -511,6 +561,14 @@ function wireScenarioPicker(app) {
     if (!id) return;
     const scenario = SCENARIOS.find((s) => s.id === id);
 
+    // Supersede any in-flight run. Bumping runGen invalidates the previous run
+    // at every checkpoint (including while it awaits runScenario), so it can't
+    // interleave DOM writes into the shared stream or double-count stats. The
+    // stale timer is cleared here; abortRun lets unmount invalidate this run.
+    const myGen = ++runGen;
+    abortRun = () => { runGen++; };
+    if (activeRunTimer) { clearInterval(activeRunTimer); activeRunTimer = null; }
+
     // Reset UI
     stream.innerHTML = '';
     footer.hidden = true;
@@ -523,6 +581,7 @@ function wireScenarioPicker(app) {
     const timerInt = setInterval(() => {
       timer.textContent = `${Math.round(performance.now() - startTs)} ms`;
     }, 50);
+    activeRunTimer = timerInt;
 
     // Compute proposal
     let proposal;
@@ -530,18 +589,20 @@ function wireScenarioPicker(app) {
       proposal = await agent.runScenario(id);
     } catch (e) {
       clearInterval(timerInt);
+      if (myGen !== runGen) return; // superseded — don't clobber the newer run's UI
+      activeRunTimer = null;
       phase.textContent = 'ERROR';
       phase.className = 'agent-console__phase agent-console__phase--alert';
-      stream.innerHTML = `<div class="agent-console__error">${e instanceof Error ? e.message : String(e)}</div>`;
+      stream.innerHTML = `<div class="agent-console__error">${esc(e instanceof Error ? e.message : String(e))}</div>`;
       return;
     }
 
-    // Animate the reasoning chain
-    let cancelled = false;
-    abortRun = () => { cancelled = true; };
+    // A newer run may have started while runScenario() was in flight.
+    if (myGen !== runGen) { clearInterval(timerInt); return; }
 
+    // Animate the reasoning chain
     for (let i = 0; i < proposal.chain.length; i++) {
-      if (cancelled) break;
+      if (myGen !== runGen) break;
       const step = proposal.chain[i];
       phase.textContent = step.phase;
       phase.className = 'agent-console__phase agent-console__phase--running';
@@ -554,7 +615,7 @@ function wireScenarioPicker(app) {
       await sleep(380);
     }
 
-    if (cancelled) {
+    if (myGen !== runGen) {
       clearInterval(timerInt);
       return;
     }
@@ -564,6 +625,7 @@ function wireScenarioPicker(app) {
     phase.className = 'agent-console__phase agent-console__phase--wait';
     setPhaseRail(app, 'WAIT');
     clearInterval(timerInt);
+    activeRunTimer = null;
     timer.textContent = `${Math.round(performance.now() - startTs)} ms`;
 
     // Confidence + actions
@@ -643,11 +705,11 @@ function openRejectDialog(proposal, onSubmit) {
       </div>
       <div class="modal__body">
         <div class="modal__proposal-info">
-          <span class="proposal__chip">${proposal.satelliteId}</span>
-          <span class="proposal__chip">${proposal.scenarioId}</span>
+          <span class="proposal__chip">${esc(proposal.satelliteId)}</span>
+          <span class="proposal__chip">${esc(proposal.scenarioId)}</span>
         </div>
-        <div class="modal__proposal-title">${proposal.title}</div>
-        <div class="modal__proposal-summary">${proposal.summary}</div>
+        <div class="modal__proposal-title">${esc(proposal.title)}</div>
+        <div class="modal__proposal-summary">${esc(proposal.summary)}</div>
         <label class="modal__field">
           <span>Reason for rejection (optional)</span>
           <textarea id="rejectReason" class="modal__textarea" rows="3" placeholder="e.g. Conflicts with current mission timeline…"></textarea>
@@ -702,10 +764,15 @@ function setPhaseRail(app, phase) {
   });
 }
 
-/** @param {string} [s] */
+/**
+ * Render a small subset of markdown (**bold**, *italic*) as HTML. HTML-escapes
+ * the input FIRST so externally-sourced text (LLM output) can never inject
+ * markup — only the bold/italic tags we add are real HTML.
+ * @param {string} [s]
+ */
 function renderText(s) {
   if (!s) return '';
-  return s
+  return esc(s)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 }

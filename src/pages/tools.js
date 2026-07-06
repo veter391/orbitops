@@ -31,6 +31,7 @@ import { propagate, propagateECI, closestApproach, CONSTANTS } from '../core/orb
 import { avoidanceBurn } from '../core/maneuver-planner.js';
 import { SATELLITES } from '../data/satellites.js';
 import { mountAmbient } from '../ui/ambient.js';
+import { esc } from '../utils.js';
 
 const EARTH_R = CONSTANTS.EARTH_RADIUS_KM;
 const MU = CONSTANTS.MU;
@@ -1367,7 +1368,7 @@ function wirePassTool(app) {
       srcOut.textContent = srcLabels[srcName] || '';
 
       /** @param {SatObject} s */
-      const opt = (s) => `<option value="${s.noradId}">${s.name} · ${s.noradId}</option>`;
+      const opt = (s) => `<option value="${s.noradId}">${esc(s.name)} · ${s.noradId}</option>`;
       satSel.innerHTML =
         `<optgroup label="Stations (full group)">${st.sats.map(opt).join('')}</optgroup>` +
         `<optgroup label="Starlink / OneWeb (sampled)">${leo.sats.map(opt).join('')}</optgroup>`;

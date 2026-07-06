@@ -1,0 +1,9 @@
+# OrbitOps — security policy (RFC 9116)
+# Found a vulnerability? Please report it privately first; we'll respond and credit you.
+
+Contact: https://github.com/veter391/orbitops/security/advisories/new
+Contact: https://github.com/veter391/orbitops/issues
+Expires: 2027-07-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://orbitops.io/.well-known/security.txt
+Policy: https://github.com/veter391/orbitops/blob/main/SECURITY.md

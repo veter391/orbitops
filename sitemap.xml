@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- OrbitOps is a hash-routed single-page app, so its sub-views (#/cockpit,
+     #/docs, …) are fragments of one document, not separate crawlable URLs.
+     The single canonical entry point is listed below. When the app moves to
+     history-mode routing with a server SPA fallback, expand this sitemap with
+     the real per-page paths. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://orbitops.io/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

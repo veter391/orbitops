@@ -60,6 +60,14 @@ export class AuditLog {
     /** @type {Set<(e: AuditEntry) => void>} */
     this.subscribers = new Set();
     this.lastHash = '0'.repeat(64);
+    /**
+     * Serialisation tail for append(). Capturing seq/prevHash, awaiting the
+     * SHA-256 digest, and pushing the entry must be atomic relative to other
+     * appends — hash() spans multiple ticks, so two concurrent appends would
+     * otherwise capture the same seq/prevHash and corrupt the chain.
+     * @type {Promise<unknown>}
+     */
+    this._tail = Promise.resolve();
   }
 
   /**
@@ -68,7 +76,21 @@ export class AuditLog {
    * @param {Record<string, unknown>} [payload]
    * @returns {Promise<AuditEntry>}
    */
-  async append(actor, action, payload = {}) {
+  append(actor, action, payload = {}) {
+    const run = this._tail.then(() => this._appendOne(actor, action, payload));
+    // Keep the queue alive even if one append rejects, without swallowing the
+    // error from the caller's returned promise.
+    this._tail = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * @param {string} actor
+   * @param {string} action
+   * @param {Record<string, unknown>} payload
+   * @returns {Promise<AuditEntry>}
+   */
+  async _appendOne(actor, action, payload) {
     const seq = this.entries.length;
     const ts = Date.now();
     /** @type {AuditEntry} */

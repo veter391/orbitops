@@ -191,3 +191,14 @@ export const pct = (n, decimals = 0) => `${(n * 100).toFixed(decimals)}%`;
  * @param {number} n @param {number} [decimals=0] @returns {string}
  */
 export const signedPct = (n, decimals = 0) => `${n >= 0 ? '+' : ''}${(n * 100).toFixed(decimals)}%`;
+
+/** @type {Record<string, string>} */
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+/**
+ * Escape a value for safe interpolation into an HTML string (innerHTML sink).
+ * Use on ANY externally-sourced text — LLM output, CelesTrak names, error
+ * messages — before putting it inside a template literal assigned to innerHTML.
+ * @param {*} s @returns {string}
+ */
+export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);

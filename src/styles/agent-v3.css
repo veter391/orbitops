@@ -557,6 +557,63 @@
   animation: none;
 }
 
+/* D4 — audit export/verify controls. Status + actions cluster to the right of
+   the header; hairline glass buttons, one ice-accented primary. */
+.agent-page .agent-audit__status-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.agent-page .agent-audit__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-page .agent-audit__btn {
+  font-family: var(--v3-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+  background: transparent;
+  border: 1px solid var(--v3-hairline);
+  border-radius: 2px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.agent-page .agent-audit__btn:hover {
+  color: var(--v3-text);
+  border-color: var(--v3-text-2);
+}
+
+.agent-page .agent-audit__btn--primary {
+  color: var(--v3-ice);
+  border-color: color-mix(in srgb, var(--v3-ice) 40%, transparent);
+}
+
+.agent-page .agent-audit__btn--primary:hover {
+  color: #050708;
+  background: var(--v3-ice);
+  border-color: var(--v3-ice);
+}
+
+.agent-page .agent-audit__btn:focus-visible {
+  outline: 2px solid var(--v3-ice);
+  outline-offset: 2px;
+}
+
+.agent-page .agent-audit__note {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--v3-text-2);
+  max-width: 68ch;
+  margin: 14px 0 18px;
+}
+
 .agent-page .agent-audit__table {
   background: var(--v3-surface);
   -webkit-backdrop-filter: blur(14px);

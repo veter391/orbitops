@@ -10,7 +10,7 @@
 
 'use strict';
 
-import { Emitter } from './utils.js';
+import { Emitter, esc } from './utils.js';
 
 class Router extends Emitter {
   constructor() {
@@ -105,7 +105,7 @@ class Router extends Emitter {
     } catch (e) {
       console.error('page mount failed', path, e);
       const msg = e instanceof Error ? e.message : String(e);
-      app.innerHTML = `<div class="page-error"><div class="page-error__title">Page failed to load</div><div class="page-error__msg">${msg}</div><a href="/" class="btn btn--primary">Back to home</a></div>`;
+      app.innerHTML = `<div class="page-error"><div class="page-error__title">Page failed to load</div><div class="page-error__msg">${esc(msg)}</div><a href="/" class="btn btn--primary">Back to home</a></div>`;
     } finally {
       clearTimeout(loaderTimer);
       this._hideLoader();
@@ -130,6 +130,15 @@ class Router extends Emitter {
     this.current = path;
     this.transitioning = false;
     this.emit('change', path);
+
+    // A navigation that arrived while we were transitioning was dropped by the
+    // guard at the top of resolve(). Reconcile now so the rendered page always
+    // matches the current hash — otherwise a fast click-through leaves the URL
+    // and view desynced (and one-shot chrome like the cursor-sat gets stuck on
+    // the wrong route). resolve() is idempotent and terminates once the hash
+    // settles, so this can't loop.
+    const latest = window.location.hash.slice(1) || '/';
+    if (latest !== this.current) this.resolve();
   }
 
   /**

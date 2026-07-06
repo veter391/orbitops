@@ -17,7 +17,7 @@ export async function mount(app) {
   const page = await mountCockpit(/** @type {HTMLElement} */ (app.querySelector('#cockpitFull')), THREE);
   return {
     unmount() {
-      app.classList.remove('cockpit-page');
+      app.classList.remove('cockpit-page', 'page-bg', 'page-bg--cockpit');
       page?.unmount?.();
     },
   };

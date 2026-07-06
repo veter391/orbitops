@@ -253,6 +253,7 @@ class AIAgent extends Emitter {
   async modifyAndApprove(proposalId, operatorId, modifications) {
     const p = this.proposals.get(proposalId);
     if (!p) throw new Error(`Unknown proposal: ${proposalId}`);
+    if (p.status !== 'pending') return p;
     p.status = 'modified';
     p.modifications = modifications;
     p.modifiedBy = operatorId;

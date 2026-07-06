@@ -1,0 +1,23 @@
+# OrbitOps
+
+> Open-source, browser-native mission control for satellite constellation operators. It flies the real public CelesTrak catalog with in-browser SGP4 orbital mechanics, runs an accountable AI co-pilot that proposes maneuvers but never acts without human approval, and writes every decision to a tamper-evident, hash-chained audit log. MIT-licensed, zero install, zero build step.
+
+OrbitOps is built for a structural crisis in commercial space operations: the number of satellites doubles roughly every 18 months while the number of qualified flight-dynamics engineers does not. It is honest by design — every value is labelled REAL (computed from public data) or SIMULATED (modelled, only where no public feed exists), and it never fabricates telemetry or orbital numbers.
+
+## What it does
+- **Cockpit** — a live 3D Earth ringed by 2,200+ real catalogued objects (Starlink, OneWeb), propagated with SGP4 in the browser; select any object for its real position, velocity, and next pass over a location.
+- **AI Agent** — a human-in-the-loop reasoning pipeline (bring-your-own OpenRouter key) that drafts maneuver and anomaly-response proposals, shows its full reasoning chain, and waits for a named human operator to approve, reject, or modify. Nothing executes autonomously.
+- **Dashboard** — constellation analytics computed from the real catalog: altitude bands, orbital shells, inclination families, and launch history.
+- **Tools** — orbit calculator, conjunction checker, burn planner, and pass predictor; real client-side math with honestly labelled accuracy limits.
+- **Audit log** — every proposal, approval, rejection, and override is SHA-256 hash-chained and exportable as a verifiable JSON pack (evidence for insurers, regulators, or incident records); it verifies offline.
+
+## Key facts
+- **Stack**: vanilla JavaScript ES modules, no build step; three.js and satellite.js (SGP4) vendored; fully type-checked via JSDoc + `// @ts-check`.
+- **Data**: CelesTrak GP catalog (real TLEs) propagated with SGP4; NASA imagery used only for geography. No fake data anywhere.
+- **Model**: open-core — free to self-host, MIT-licensed core; a managed cloud is planned. Login is cloud-only; self-hosting is keyless and local.
+- **Principle**: the AI proposes, a human decides — human-in-the-loop is the architecture, not an optional setting.
+
+## Links
+- Repository: https://github.com/veter391/orbitops
+- Documentation: https://orbitops.io/#/docs
+- Pricing (open-core): https://orbitops.io/#/pricing

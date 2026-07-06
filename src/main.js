@@ -18,6 +18,7 @@ import { router } from './router.js';
 import { info } from './ui/toast.js';
 import { mountCursorSat } from './ui/cursor-sat.js';
 import { isAppMode, hiddenInApp, resolveInitialRoute } from './core/app-config.js';
+import { esc } from './utils.js';
 
 const boot = document.getElementById('boot');
 const bootMsg = document.getElementById('bootMsg');
@@ -51,9 +52,9 @@ function fatalBoot(title, detail, error) {
         <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="2"/>
         <path d="M22 22 L42 42 M42 22 L22 42" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
       </svg>
-      <div class="boot__title" style="color: var(--alert);">${title}</div>
-      <div class="boot__msg">${detail}</div>
-      ${error ? `<pre class="boot__error">${String(error.stack || error.message || error).replace(/</g, '&lt;')}</pre>` : ''}
+      <div class="boot__title" style="color: var(--alert);">${esc(title)}</div>
+      <div class="boot__msg">${esc(detail)}</div>
+      ${error ? `<pre class="boot__error">${esc(String(error.stack || error.message || error))}</pre>` : ''}
       <button class="boot__btn" id="bootContinue">Continue without demo →</button>
     </div>
   `;
@@ -178,12 +179,17 @@ function initDockMagnify(navLinks) {
 
   const apply = () => {
     rafId = 0;
-    for (const el of tabs()) {
-      const box = el.getBoundingClientRect();
-      const d = Math.abs(pointerX - (box.left + box.width / 2));
+    // Two passes: read ALL geometry first, then write ALL styles. A --dock-s
+    // write drives a scale transform, which changes getBoundingClientRect, so
+    // interleaving read/write per tab would force a synchronous reflow each
+    // iteration. Batching read-then-write avoids the layout thrash.
+    const els = tabs();
+    const centers = els.map((el) => { const b = el.getBoundingClientRect(); return b.left + b.width / 2; });
+    els.forEach((el, i) => {
+      const d = Math.abs(pointerX - centers[i]);
       const falloff = Math.max(0, 1 - (d / RADIUS) * (d / RADIUS));
       el.style.setProperty('--dock-s', (1 + MAX_GROW * falloff).toFixed(3));
-    }
+    });
   };
 
   navLinks.addEventListener(
