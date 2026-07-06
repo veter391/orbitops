@@ -17,6 +17,15 @@ export async function freshDb(): Promise<Db> {
     async exec(sql: string) {
       await client.exec(sql);
     },
+    async transaction(fn) {
+      return client.transaction(async (tx) => {
+        return fn({
+          async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
+            return (await tx.query<R>(sql, params)).rows;
+          },
+        });
+      });
+    },
     async close() {
       await client.close();
     },

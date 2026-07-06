@@ -1,6 +1,11 @@
 import type { Db } from '../db/index.js';
 import { entryInput, signEntry, hashesEqual, GENESIS_HASH } from './hash.js';
 
+/** Minimal logger surface (Fastify's `app.log` satisfies it). */
+interface Logger {
+  error(obj: unknown, msg?: string): void;
+}
+
 export interface AuditEntry {
   seq: number;
   ts: string; // ISO-8601
@@ -26,7 +31,10 @@ export type VerifyResult =
 export class AuditLog {
   #tail: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly log?: Logger,
+  ) {}
 
   /** Append one entry to a tenant's chain. Serialized; returns the persisted entry. */
   append(
@@ -36,9 +44,11 @@ export class AuditLog {
     payload: Record<string, unknown> = {},
   ): Promise<AuditEntry> {
     const run = this.#tail.then(() => this.#appendOne(customerId, actor, action, payload));
-    // Keep the queue alive even if one append rejects, without swallowing the
-    // error the caller awaits.
-    this.#tail = run.catch(() => undefined);
+    // Keep the queue alive even if one append rejects — and surface the failure
+    // in server logs (otherwise it's only visible to the awaiting caller).
+    this.#tail = run.catch((err) => {
+      this.log?.error({ err, customerId, action }, 'audit append failed');
+    });
     return run;
   }
 
@@ -48,24 +58,32 @@ export class AuditLog {
     action: string,
     payload: Record<string, unknown>,
   ): Promise<AuditEntry> {
-    const last = await this.db.query<{ seq: string | number; hash: string }>(
-      'SELECT seq, hash FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT 1',
-      [customerId],
-    );
-    const prev = last[0];
-    const seq = prev ? Number(prev.seq) + 1 : 0;
-    const prevHash = prev ? prev.hash : GENESIS_HASH;
-    const now = new Date();
-    const tsMs = now.getTime();
-    const ts = now.toISOString();
-    const hash = signEntry(entryInput({ prevHash, seq, tsMs, actor, action, payload }));
+    // Serialize per-tenant at the DATABASE level, not just in-process: a
+    // transaction-scoped advisory lock keyed by customer means two backend
+    // processes (or pooled connections) can't both read the same last seq and
+    // fork the chain. The in-process #tail still prevents concurrent transactions
+    // on a single (pglite) connection.
+    return this.db.transaction(async (tx) => {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [customerId]);
+      const last = await tx.query<{ seq: string | number; hash: string }>(
+        'SELECT seq, hash FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT 1',
+        [customerId],
+      );
+      const prev = last[0];
+      const seq = prev ? Number(prev.seq) + 1 : 0;
+      const prevHash = prev ? prev.hash : GENESIS_HASH;
+      const now = new Date();
+      const tsMs = now.getTime();
+      const ts = now.toISOString();
+      const hash = signEntry(entryInput({ prevHash, seq, tsMs, actor, action, payload }));
 
-    await this.db.query(
-      `INSERT INTO audit_log (customer_id, seq, ts, actor, action, payload, prev_hash, hash)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
-      [customerId, seq, ts, actor, action, JSON.stringify(payload), prevHash, hash],
-    );
-    return { seq, ts, actor, action, payload, prevHash, hash };
+      await tx.query(
+        `INSERT INTO audit_log (customer_id, seq, ts, actor, action, payload, prev_hash, hash)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+        [customerId, seq, ts, actor, action, JSON.stringify(payload), prevHash, hash],
+      );
+      return { seq, ts, actor, action, payload, prevHash, hash };
+    });
   }
 
   /** Most recent entries for a tenant, newest first. */

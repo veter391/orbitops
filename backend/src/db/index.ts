@@ -8,9 +8,16 @@ import { config } from '../config.js';
  * SQL, in-process, no Docker/cloud/accounts), a pooled managed Postgres in prod.
  * Nothing above this line knows which one it is.
  */
+/** A query surface inside a transaction (a subset of Db). */
+export interface DbTx {
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+}
+
 export interface Db {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   exec(sql: string): Promise<void>;
+  /** Run `fn` in a single transaction; commit on resolve, roll back on throw. */
+  transaction<T>(fn: (tx: DbTx) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -31,6 +38,16 @@ export async function getDb(): Promise<Db> {
     },
     async exec(sql: string) {
       await client.exec(sql);
+    },
+    async transaction<T>(fn: (tx: DbTx) => Promise<T>) {
+      return client.transaction(async (tx) => {
+        const wrapped: DbTx = {
+          async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
+            return (await tx.query<R>(sql, params)).rows;
+          },
+        };
+        return fn(wrapped);
+      });
     },
     async close() {
       await client.close();

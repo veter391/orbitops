@@ -69,7 +69,7 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   });
 
   const database = db ?? (await getDb());
-  const audit = new AuditLog(database);
+  const audit = new AuditLog(database, app.log);
   const bus = new EventBus();
 
   app.decorate('db', database);
