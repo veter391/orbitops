@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { config } from '../config.js';
+import { createPgDb } from './pg.js';
 
 /**
  * Minimal database surface the rest of the app depends on. Keeping this narrow
@@ -21,37 +22,47 @@ export interface Db {
   close(): Promise<void>;
 }
 
-let instance: PGlite | null = null;
+let pglite: PGlite | null = null;
+let singleton: Db | null = null;
 
-/** Lazily open (and reuse) the single local database instance. */
+/**
+ * Lazily open (and reuse) the single database. Uses a managed Postgres pool when
+ * DATABASE_URL is set (prod), otherwise local pglite (dev) — both behind the same
+ * `Db` interface, so the rest of the app never knows which is underneath.
+ */
 export async function getDb(): Promise<Db> {
-  if (!instance) {
-    // pglite's mkdir is not recursive, so ensure the parent path exists first.
-    mkdirSync(config.DATA_DIR, { recursive: true });
-    instance = new PGlite(config.DATA_DIR);
+  if (singleton) return singleton;
+
+  if (config.DATABASE_URL) {
+    singleton = createPgDb(config.DATABASE_URL);
+    return singleton;
   }
-  const client = instance;
-  return {
+
+  // pglite's mkdir is not recursive, so ensure the parent path exists first.
+  mkdirSync(config.DATA_DIR, { recursive: true });
+  pglite = new PGlite(config.DATA_DIR);
+  const client = pglite;
+  singleton = {
     async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []) {
-      const res = await client.query<T>(sql, params);
-      return res.rows;
+      return (await client.query<T>(sql, params)).rows;
     },
     async exec(sql: string) {
       await client.exec(sql);
     },
     async transaction<T>(fn: (tx: DbTx) => Promise<T>) {
       return client.transaction(async (tx) => {
-        const wrapped: DbTx = {
+        return fn({
           async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
             return (await tx.query<R>(sql, params)).rows;
           },
-        };
-        return fn(wrapped);
+        });
       });
     },
     async close() {
       await client.close();
-      instance = null;
+      pglite = null;
+      singleton = null;
     },
   };
+  return singleton;
 }

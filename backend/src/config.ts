@@ -9,6 +9,8 @@ const EnvSchema = z.object({
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().positive().max(65535).default(8790),
   DATA_DIR: z.string().default('./.data/pgdata'),
+  /** When set, use a managed Postgres (prod) instead of local pglite (dev). */
+  DATABASE_URL: z.string().optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
