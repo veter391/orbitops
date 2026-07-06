@@ -12,6 +12,15 @@ const EnvSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+
+  /** Comma-separated CORS allow-list; empty = same-origin only (no cross-origin). */
+  CORS_ORIGINS: z.string().default(''),
+  /** Max requests per IP per window before 429. */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_WINDOW: z.string().default('1 minute'),
+  /** Max request body size in bytes (default 1 MiB). */
+  BODY_LIMIT: z.coerce.number().int().positive().default(1_048_576),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
 
