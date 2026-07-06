@@ -76,7 +76,6 @@ test('an agent proposal flows into the normal approve lifecycle', async () => {
     method: 'POST',
     url: `/v1/proposals/${id}/approve`,
     headers: AUTH,
-    payload: { operator: 'op1' },
   });
   assert.equal(approve.statusCode, 200);
   assert.equal((approve.json() as { proposal: { status: string } }).proposal.status, 'approved');

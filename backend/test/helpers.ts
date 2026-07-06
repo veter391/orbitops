@@ -34,11 +34,24 @@ export async function freshDb(): Promise<Db> {
   return db;
 }
 
-/** Create an extra tenant and return its id (for isolation tests). */
+/** Create an extra tenant (with a default operator holding `apiKey`) and return its id. */
 export async function createCustomer(db: Db, name: string, apiKey: string): Promise<string> {
   const rows = await db.query<{ id: string }>(
     'INSERT INTO customers (name, api_key_hash) VALUES ($1, $2) RETURNING id',
-    [name, hashApiKey(apiKey)],
+    [name, hashApiKey(apiKey + ':customer')],
   );
+  const customerId = rows[0]!.id;
+  await db.query(
+    'INSERT INTO operators (customer_id, name, api_key_hash) VALUES ($1, $2, $3)',
+    [customerId, `${name} operator`, hashApiKey(apiKey)],
+  );
+  return customerId;
+}
+
+/** The demo tenant's default operator id (seeded by migration 004). */
+export async function demoOperatorId(db: Db): Promise<string> {
+  const rows = await db.query<{ id: string }>('SELECT id FROM operators WHERE customer_id = $1', [
+    DEMO_ID,
+  ]);
   return rows[0]!.id;
 }

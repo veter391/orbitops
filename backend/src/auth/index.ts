@@ -3,15 +3,20 @@ import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/index.js';
 import { verifyTicket } from './ticket.js';
 
-export interface Customer {
-  id: string;
-  name: string;
+export interface Principal {
+  operatorId: string;
+  operatorName: string;
+  customerId: string;
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
     /** Resolved tenant for the request; set by the auth hook on every /v1 route. */
     customerId: string;
+    /** Authenticated operator id (empty string on the ticket-authed WS path). */
+    operatorId: string;
+    /** Human-readable operator name, for display/audit context. */
+    operatorName: string;
   }
 }
 
@@ -20,12 +25,14 @@ export function hashApiKey(key: string): string {
   return createHash('sha256').update(key).digest('hex');
 }
 
-export async function customerByApiKey(db: Db, key: string): Promise<Customer | null> {
-  const rows = await db.query<Customer>(
-    'SELECT id, name FROM customers WHERE api_key_hash = $1',
+/** Resolve an API key to its operator (and the customer that operator belongs to). */
+export async function principalByApiKey(db: Db, key: string): Promise<Principal | null> {
+  const rows = await db.query<{ id: string; name: string; customer_id: string }>(
+    'SELECT id, name, customer_id FROM operators WHERE api_key_hash = $1',
     [hashApiKey(key)],
   );
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { operatorId: row.id, operatorName: row.name, customerId: row.customer_id } : null;
 }
 
 /**
@@ -42,6 +49,8 @@ export async function customerByApiKey(db: Db, key: string): Promise<Customer | 
  */
 export function registerAuth(app: FastifyInstance): void {
   app.decorateRequest('customerId', '');
+  app.decorateRequest('operatorId', '');
+  app.decorateRequest('operatorName', '');
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0] ?? req.url;
     if (!path.startsWith('/v1/')) return;
@@ -58,8 +67,10 @@ export function registerAuth(app: FastifyInstance): void {
     if (typeof key !== 'string' || key.length === 0) {
       return reply.code(401).send({ error: 'missing API key' });
     }
-    const customer = await customerByApiKey(app.db, key);
-    if (!customer) return reply.code(401).send({ error: 'invalid API key' });
-    req.customerId = customer.id;
+    const principal = await principalByApiKey(app.db, key);
+    if (!principal) return reply.code(401).send({ error: 'invalid API key' });
+    req.customerId = principal.customerId;
+    req.operatorId = principal.operatorId;
+    req.operatorName = principal.operatorName;
   });
 }

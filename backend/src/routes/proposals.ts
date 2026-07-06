@@ -14,9 +14,11 @@ const ListQuery = z.object({
 
 const IdParams = z.object({ id: z.string().uuid() });
 
-const Operator = z.object({ operator: z.string().min(1).max(200) });
-const RejectBody = Operator.extend({ reason: z.string().max(2000).default('') });
-const ModifyBody = Operator.extend({ modifications: z.record(z.string(), z.unknown()) });
+// The operator is taken from the authenticated principal (req.operatorId), never
+// from the request body — so the audit trail records who actually authenticated.
+const ApproveBody = z.object({});
+const RejectBody = z.object({ reason: z.string().max(2000).default('') });
+const ModifyBody = z.object({ modifications: z.record(z.string(), z.unknown()) });
 
 export async function registerProposalRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/proposals', async (req, reply) => {
@@ -46,16 +48,26 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
 
   const decision = (
     verb: 'approve' | 'reject' | 'modify',
-    handler: (customerId: string, id: string, body: Record<string, unknown>) => Promise<unknown>,
+    handler: (
+      customerId: string,
+      op: { id: string; name: string },
+      id: string,
+      body: Record<string, unknown>,
+    ) => Promise<unknown>,
     schema: z.ZodType,
   ) => {
     app.post(`/v1/proposals/:id/${verb}`, async (req, reply) => {
       const params = IdParams.safeParse(req.params);
       if (!params.success) return reply.code(400).send({ error: 'invalid id' });
-      const body = schema.safeParse(req.body);
+      const body = schema.safeParse(req.body ?? {});
       if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
       try {
-        const proposal = await handler(req.customerId, params.data.id, body.data as Record<string, unknown>);
+        const proposal = await handler(
+          req.customerId,
+          { id: req.operatorId, name: req.operatorName },
+          params.data.id,
+          body.data as Record<string, unknown>,
+        );
         return { proposal };
       } catch (err) {
         if (err instanceof NotFoundError) return reply.code(404).send({ error: 'not found' });
@@ -64,16 +76,16 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
     });
   };
 
-  decision('approve', (cid, id, b) => app.proposals.approve(cid, id, b['operator'] as string), Operator);
+  decision('approve', (cid, op, id) => app.proposals.approve(cid, id, op), ApproveBody);
   decision(
     'reject',
-    (cid, id, b) => app.proposals.reject(cid, id, b['operator'] as string, b['reason'] as string),
+    (cid, op, id, b) => app.proposals.reject(cid, id, op, b['reason'] as string),
     RejectBody,
   );
   decision(
     'modify',
-    (cid, id, b) =>
-      app.proposals.modify(cid, id, b['operator'] as string, b['modifications'] as Record<string, unknown>),
+    (cid, op, id, b) =>
+      app.proposals.modify(cid, id, op, b['modifications'] as Record<string, unknown>),
     ModifyBody,
   );
 }

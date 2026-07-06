@@ -4,6 +4,12 @@ import type { EventBus, ProposalEvent } from '../events/index.js';
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'modified';
 
+/** The authenticated operator making a decision. */
+export interface Operator {
+  id: string;
+  name: string;
+}
+
 export interface Proposal {
   id: string;
   satelliteId: string | null;
@@ -82,65 +88,76 @@ export class Proposals {
     return rows.map(toProposal);
   }
 
-  approve(customerId: string, id: string, operator: string): Promise<Proposal> {
+  approve(customerId: string, id: string, op: Operator): Promise<Proposal> {
     return this.#decide(
       customerId,
       id,
+      op,
       `UPDATE proposals SET status = 'approved', approved_by = $3, approved_at = now()
        WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
-      [id, customerId, operator],
+      [id, customerId, op.id],
       'proposal.approved',
-      { proposalId: id, operator },
+      {},
     );
   }
 
-  reject(customerId: string, id: string, operator: string, reason = ''): Promise<Proposal> {
+  reject(customerId: string, id: string, op: Operator, reason = ''): Promise<Proposal> {
     return this.#decide(
       customerId,
       id,
+      op,
       `UPDATE proposals SET status = 'rejected', approved_by = $3, approved_at = now()
        WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
-      [id, customerId, operator],
+      [id, customerId, op.id],
       'proposal.rejected',
-      { proposalId: id, operator, reason },
+      { reason },
     );
   }
 
   modify(
     customerId: string,
     id: string,
-    operator: string,
+    op: Operator,
     modifications: Record<string, unknown>,
   ): Promise<Proposal> {
     return this.#decide(
       customerId,
       id,
+      op,
       `UPDATE proposals SET status = 'modified', approved_by = $3, approved_at = now(),
               proposed_action = proposed_action || $4::jsonb
        WHERE id = $1 AND customer_id = $2 AND status = 'pending' RETURNING *`,
-      [id, customerId, operator, JSON.stringify(modifications)],
+      [id, customerId, op.id, JSON.stringify(modifications)],
       'proposal.modified',
-      { proposalId: id, operator, modifications },
+      { modifications },
     );
   }
 
   /**
-   * Apply a guarded, tenant-scoped transition. If the conditional UPDATE touches
-   * no row, the proposal is either missing for this tenant (→ NotFoundError) or
-   * already terminal (→ current row, no audit entry). A proposal belonging to a
-   * different tenant is indistinguishable from missing — that is the isolation.
+   * Apply a guarded, tenant-scoped transition. The deciding operator is passed
+   * explicitly (never smuggled through the payload). If the conditional UPDATE
+   * touches no row, the proposal is either missing for this tenant (→
+   * NotFoundError) or already terminal (→ current row, no audit entry). A
+   * proposal of a different tenant is indistinguishable from missing — that is
+   * the isolation.
    */
   async #decide(
     customerId: string,
     id: string,
+    op: Operator,
     sql: string,
     params: unknown[],
     action: string,
-    payload: Record<string, unknown>,
+    extra: Record<string, unknown>,
   ): Promise<Proposal> {
     const rows = await this.db.query<ProposalRow>(sql, params);
     if (rows[0]) {
-      await this.audit.append(customerId, `user:${payload['operator'] as string}`, action, payload);
+      await this.audit.append(customerId, `user:${op.id}`, action, {
+        proposalId: id,
+        operatorId: op.id,
+        operatorName: op.name,
+        ...extra,
+      });
       const p = toProposal(rows[0]);
       this.#publish(customerId, action.replace('proposal.', '') as ProposalEvent['type'], p);
       return p;
