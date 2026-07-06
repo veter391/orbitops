@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { NotFoundError } from '../proposals/index.js';
+import { idempotent, idempotencyKey } from '../idempotency.js';
 
 const CreateBody = z.object({
   satelliteId: z.string().max(200).nullish(),
@@ -24,12 +25,20 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.post('/v1/proposals', async (req, reply) => {
     const body = CreateBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const p = await app.proposals.create(req.customerId, {
-      satelliteId: body.data.satelliteId ?? null,
-      reasoningChain: body.data.reasoningChain,
-      proposedAction: body.data.proposedAction,
-    });
-    return reply.code(201).send({ proposal: p });
+    const { status, body: out } = await idempotent(
+      app.db,
+      req.customerId,
+      idempotencyKey(req.headers),
+      async () => {
+        const p = await app.proposals.create(req.customerId, {
+          satelliteId: body.data.satelliteId ?? null,
+          reasoningChain: body.data.reasoningChain,
+          proposedAction: body.data.proposedAction,
+        });
+        return { status: 201, body: { proposal: p } };
+      },
+    );
+    return reply.code(status).send(out);
   });
 
   app.get('/v1/proposals', async (req, reply) => {

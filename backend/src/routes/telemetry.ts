@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { MAX_BATCH } from '../telemetry/index.js';
+import { idempotent, idempotencyKey } from '../idempotency.js';
 
 const ReadingSchema = z.object({
   satelliteId: z.string().min(1).max(200),
@@ -32,8 +33,16 @@ export async function registerTelemetryRoutes(app: FastifyInstance): Promise<voi
   app.post('/v1/telemetry', async (req, reply) => {
     const body = IngestBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const ingested = await app.telemetry.ingest(req.customerId, body.data.readings);
-    return reply.code(201).send({ ingested });
+    const { status, body: out } = await idempotent(
+      app.db,
+      req.customerId,
+      idempotencyKey(req.headers),
+      async () => {
+        const ingested = await app.telemetry.ingest(req.customerId, body.data.readings);
+        return { status: 201, body: { ingested } };
+      },
+    );
+    return reply.code(status).send(out);
   });
 
   app.get('/v1/telemetry', async (req, reply) => {
