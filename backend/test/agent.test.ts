@@ -16,11 +16,12 @@ after(async () => {
 
 interface RunResult {
   proposal: { id: string; status: string; proposedAction: { type: string } };
-  chain: { phase: string; text: string }[];
+  chain: { phase: string; agent: string; text: string }[];
   llmAugmented: boolean;
+  path: string[];
 }
 
-test('agent runs the deterministic loop and creates a pending, audited proposal', async () => {
+test('multi-agent graph: supervisor routes a conjunction through screener → planner → critic → drafter', async () => {
   const auditBefore = await app.audit.count(DEMO_ID);
   const res = await app.inject({
     method: 'POST',
@@ -39,17 +40,40 @@ test('agent runs the deterministic loop and creates a pending, audited proposal'
 
   // Conjunction (0.9 × 0.9) outranks comms (0.55 × 0.5) → maneuver.
   assert.equal(body.proposal.proposedAction.type, 'maneuver');
-  assert.equal(body.proposal.status, 'pending');
+  assert.equal(body.proposal.status, 'pending'); // HITL: nothing executes without approval
 
-  // Full ReAct chain, no AI step without an LLM key.
+  // The supervisor routed to the conjunction specialist; full path recorded.
+  assert.deepEqual(body.path, [
+    'supervisor',
+    'conjunctionScreener',
+    'maneuverPlanner',
+    'complianceChecker',
+    'proposalDrafter',
+    'persist',
+  ]);
+
+  // Full reasoning chain across the agents; no AI step without an LLM key.
   assert.deepEqual(
     body.chain.map((s) => s.phase),
-    ['OBSERVE', 'THINK', 'SCORE', 'PROPOSE'],
+    ['OBSERVE', 'THINK', 'SCORE', 'PLAN', 'CHECK', 'PROPOSE'],
   );
   assert.equal(body.llmAugmented, false);
 
   // The proposal was recorded in the tenant's audit chain.
   assert.equal(await app.audit.count(DEMO_ID), auditBefore + 1);
+});
+
+test('an anomaly signal routes through the anomaly triager', async () => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: { satelliteId: 'oo1-05', signals: [{ kind: 'battery_degradation', severity: 0.7 }] },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json() as RunResult;
+  assert.ok(body.path.includes('anomalyTriager'), `path was ${body.path.join('→')}`);
+  assert.equal(body.proposal.proposedAction.type, 'load_shed');
 });
 
 test('unknown signals fall back to an investigate proposal', async () => {
