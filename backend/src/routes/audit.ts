@@ -9,6 +9,7 @@ const AppendBody = z.object({
 
 const RecentQuery = z.object({
   limit: z.coerce.number().int().positive().max(500).default(50),
+  cursor: z.coerce.number().int().nonnegative().optional(), // seq to page before
 });
 
 const ExportQuery = z.object({
@@ -19,7 +20,9 @@ export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/audit', async (req, reply) => {
     const q = RecentQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    return { entries: await app.audit.recent(req.customerId, q.data.limit) };
+    const entries = await app.audit.recent(req.customerId, q.data.limit, q.data.cursor);
+    const nextCursor = entries.length === q.data.limit ? entries[entries.length - 1]!.seq : null;
+    return { entries, nextCursor };
   });
 
   app.post('/v1/audit', async (req, reply) => {

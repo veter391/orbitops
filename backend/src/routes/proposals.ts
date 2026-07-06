@@ -11,6 +11,7 @@ const CreateBody = z.object({
 
 const ListQuery = z.object({
   limit: z.coerce.number().int().positive().max(500).default(50),
+  cursor: z.string().datetime().optional(), // ts to page before
 });
 
 const IdParams = z.object({ id: z.string().uuid() });
@@ -44,7 +45,9 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.get('/v1/proposals', async (req, reply) => {
     const q = ListQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    return { proposals: await app.proposals.list(req.customerId, q.data.limit) };
+    const proposals = await app.proposals.list(req.customerId, q.data.limit, q.data.cursor);
+    const nextCursor = proposals.length === q.data.limit ? proposals[proposals.length - 1]!.ts : null;
+    return { proposals, nextCursor };
   });
 
   app.get('/v1/proposals/:id', async (req, reply) => {

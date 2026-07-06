@@ -86,13 +86,23 @@ export class AuditLog {
     });
   }
 
-  /** Most recent entries for a tenant, newest first. */
-  async recent(customerId: string, limit = 50): Promise<AuditEntry[]> {
-    const rows = await this.db.query<AuditRow>(
-      `SELECT seq, ts, actor, action, payload, prev_hash, hash
-       FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT $2`,
-      [customerId, limit],
-    );
+  /**
+   * A tenant's entries, newest first. Seek-paginated by `beforeSeq`: pass the
+   * previous page's `nextCursor` (the last seq) to get the next page.
+   */
+  async recent(customerId: string, limit = 50, beforeSeq?: number): Promise<AuditEntry[]> {
+    const rows =
+      beforeSeq === undefined
+        ? await this.db.query<AuditRow>(
+            `SELECT seq, ts, actor, action, payload, prev_hash, hash
+             FROM audit_log WHERE customer_id = $1 ORDER BY seq DESC LIMIT $2`,
+            [customerId, limit],
+          )
+        : await this.db.query<AuditRow>(
+            `SELECT seq, ts, actor, action, payload, prev_hash, hash
+             FROM audit_log WHERE customer_id = $1 AND seq < $2 ORDER BY seq DESC LIMIT $3`,
+            [customerId, beforeSeq, limit],
+          );
     return rows.map(toEntry);
   }
 

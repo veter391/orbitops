@@ -80,11 +80,18 @@ export class Proposals {
     return rows[0] ? toProposal(rows[0]) : null;
   }
 
-  async list(customerId: string, limit = 50): Promise<Proposal[]> {
-    const rows = await this.db.query<ProposalRow>(
-      'SELECT * FROM proposals WHERE customer_id = $1 ORDER BY ts DESC LIMIT $2',
-      [customerId, limit],
-    );
+  /** A tenant's proposals, newest first. Seek-paginated by `beforeTs` (ISO). */
+  async list(customerId: string, limit = 50, beforeTs?: string): Promise<Proposal[]> {
+    const rows =
+      beforeTs === undefined
+        ? await this.db.query<ProposalRow>(
+            'SELECT * FROM proposals WHERE customer_id = $1 ORDER BY ts DESC LIMIT $2',
+            [customerId, limit],
+          )
+        : await this.db.query<ProposalRow>(
+            'SELECT * FROM proposals WHERE customer_id = $1 AND ts < $2 ORDER BY ts DESC LIMIT $3',
+            [customerId, beforeTs, limit],
+          );
     return rows.map(toProposal);
   }
 
