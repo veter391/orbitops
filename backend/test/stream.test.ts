@@ -25,6 +25,12 @@ interface Frame {
   data: Record<string, unknown>;
 }
 
+/** Mint a WS ticket for the demo tenant via the authenticated HTTP endpoint. */
+async function getTicket(): Promise<string> {
+  const res = await app.inject({ method: 'POST', url: '/v1/stream/ticket', headers: AUTH });
+  return (res.json() as { ticket: string }).ticket;
+}
+
 /**
  * Buffer every frame from the moment the socket is created, so a frame the
  * server sends immediately on connect (the `hello`) is never lost to a
@@ -81,7 +87,8 @@ function collect(ws: WebSocket): {
 }
 
 test('stream pushes telemetry and proposal events for the subscribed satellite', async () => {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&apiKey=${DEMO_KEY}`);
+  const ticket = await getTicket();
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&ticket=${ticket}`);
   const frames = collect(ws);
   await once(ws, 'open');
 
@@ -111,7 +118,8 @@ test('stream pushes telemetry and proposal events for the subscribed satellite',
 });
 
 test('stream filter excludes events for other satellites', async () => {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&apiKey=${DEMO_KEY}`);
+  const ticket = await getTicket();
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?satelliteId=oo1-01&ticket=${ticket}`);
   const frames = collect(ws);
   await once(ws, 'open');
   await frames.waitFor((f) => f.type === 'hello');
@@ -128,5 +136,21 @@ test('stream filter excludes events for other satellites', async () => {
     'no telemetry frame should arrive for a different satellite',
   );
 
+  ws.close();
+});
+
+test('the ticket endpoint itself requires an API key', async () => {
+  const res = await app.inject({ method: 'POST', url: '/v1/stream/ticket' });
+  assert.equal(res.statusCode, 401);
+});
+
+test('a bad ticket is rejected before the WebSocket upgrades', async () => {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream?ticket=not-a-real-ticket`);
+  const outcome = await new Promise<string>((resolve) => {
+    ws.on('open', () => resolve('open'));
+    ws.on('unexpected-response', (_req, res) => resolve('status:' + res.statusCode));
+    ws.on('error', () => resolve('error'));
+  });
+  assert.notEqual(outcome, 'open', 'connection must not open with an invalid ticket');
   ws.close();
 });

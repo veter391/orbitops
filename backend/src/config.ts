@@ -37,3 +37,17 @@ const EnvSchema = z.object({
 export type Config = z.infer<typeof EnvSchema>;
 
 export const config: Config = EnvSchema.parse(process.env);
+
+const DEV_HMAC_KEY = 'dev-insecure-key-change-me';
+
+// The audit chain is only as trustworthy as its HMAC key. Refuse to boot in
+// production with the publicly-known dev default or a weak key — otherwise anyone
+// who read the source could forge a "valid" audit entry.
+if (config.NODE_ENV === 'production') {
+  if (config.AUDIT_HMAC_KEY === DEV_HMAC_KEY || config.AUDIT_HMAC_KEY.length < 32) {
+    throw new Error(
+      'AUDIT_HMAC_KEY must be a strong secret (>= 32 chars, not the dev default) in production. ' +
+        'Generate one with: openssl rand -hex 32',
+    );
+  }
+}
