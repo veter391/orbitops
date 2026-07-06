@@ -2,6 +2,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { config } from './config.js';
 import { getDb, type Db } from './db/index.js';
 import { AuditLog } from './audit/index.js';
@@ -58,6 +60,27 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
     max: config.RATE_LIMIT_MAX,
     timeWindow: config.RATE_LIMIT_WINDOW,
   });
+
+  // OpenAPI spec (/openapi.json) + Swagger UI (/docs). Public docs; /v1 routes
+  // still require the x-api-key documented as the security scheme.
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'OrbitOps API',
+        version: '0.1.0',
+        description:
+          'Open-source satellite-operations backend: HITL AI proposals, tamper-evident audit, telemetry, live stream. Authenticate with the x-api-key header (WebSocket uses a short-lived ticket).',
+      },
+      components: {
+        securitySchemes: {
+          apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+        },
+      },
+      security: [{ apiKey: [] }],
+    },
+  });
+  await app.register(swaggerUi, { routePrefix: '/docs' });
+  app.get('/openapi.json', async () => app.swagger());
 
   // Fixed error shape; never leak internals (stack / SQL) to clients.
   app.setErrorHandler((err, req, reply) => {

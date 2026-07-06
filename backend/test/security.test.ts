@@ -34,6 +34,19 @@ test('oversized request body is rejected with 413, not a crash', async () => {
   assert.ok(!/stack|at .*\.ts:/.test(res.body));
 });
 
+test('serves an OpenAPI spec documenting the API and its auth scheme', async () => {
+  const res = await app.inject({ method: 'GET', url: '/openapi.json' });
+  assert.equal(res.statusCode, 200);
+  const spec = res.json() as {
+    openapi: string;
+    paths: Record<string, unknown>;
+    components?: { securitySchemes?: Record<string, unknown> };
+  };
+  assert.match(spec.openapi, /^3\./);
+  assert.ok(spec.paths['/v1/proposals'], 'documents the proposals endpoint');
+  assert.ok(spec.components?.securitySchemes?.['apiKey'], 'documents the x-api-key scheme');
+});
+
 test('auth and validation still behave under the middleware stack', async () => {
   assert.equal((await app.inject({ method: 'GET', url: '/v1/proposals' })).statusCode, 401);
   assert.equal(
