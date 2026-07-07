@@ -4,12 +4,15 @@ import { llmAssess, llmEnabled } from '../agent/llm.js';
 import { withSpan } from '../observability.js';
 import {
   scoreCandidates,
+  RULES,
+  clamp01,
   CONJUNCTION_KINDS,
   ANOMALY_KINDS,
   KNOWN_ACTIONS,
   type Signal,
   type Candidate,
 } from './rules.js';
+import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
 
 /**
  * The multi-agent core (LangGraph): a supervisor routes each event to a
@@ -45,6 +48,9 @@ const AgentState = Annotation.Root({
   candidates: Annotation<Candidate[]>,
   top: Annotation<Candidate | null>,
   plan: Annotation<Record<string, unknown>>,
+  /** Quantitative evidence a specialist computed (e.g. Pc, miss distance) that
+   *  the planner folds into the proposal so the operator sees the "why". */
+  evidence: Annotation<Record<string, unknown>>,
   criticOk: Annotation<boolean>,
   llmAugmented: Annotation<boolean>,
   proposal: Annotation<Proposal | null>,
@@ -74,6 +80,67 @@ export function buildAgentGraph(proposals: Proposals) {
     };
   };
 
+  /**
+   * ConjunctionScreener: when close-approach geometry is present, compute a real
+   * probability of collision (Pc) per event, rank by it, and band the risk —
+   * deterministic, no LLM. Falls back to the severity hint if geometry is absent.
+   */
+  const conjunctionScreener = (state: S) => {
+    const events = state.signals.filter((s) => CONJUNCTION_KINDS.has(s.kind));
+    const assessed = events.map((signal) => {
+      const hasGeom =
+        typeof signal.missDistanceKm === 'number' &&
+        typeof signal.sigmaKm === 'number' &&
+        typeof signal.combinedRadiusKm === 'number';
+      const pc = hasGeom
+        ? probabilityOfCollision({
+            missDistanceKm: signal.missDistanceKm!,
+            sigmaKm: signal.sigmaKm!,
+            combinedRadiusKm: signal.combinedRadiusKm!,
+          })
+        : null;
+      return { signal, pc, band: pc === null ? null : riskBand(pc) };
+    });
+    // Worst first: highest Pc; events without geometry sort last.
+    assessed.sort((a, b) => (b.pc ?? -1) - (a.pc ?? -1));
+    const worst = assessed[0] ?? { signal: events[0] ?? state.signals[0]!, pc: null, band: null };
+
+    const rule = RULES['conjunction']!;
+    const likelihood = worst.band ? bandLikelihood(worst.band) : clamp01(worst.signal.severity ?? 0.6);
+    const top: Candidate = { rule, signal: worst.signal, likelihood, score: rule.baseSeverity * likelihood };
+
+    const evidence: Record<string, unknown> =
+      worst.pc !== null
+        ? {
+            pc: worst.pc,
+            riskBand: worst.band,
+            missDistanceKm: worst.signal.missDistanceKm,
+            sigmaKm: worst.signal.sigmaKm,
+            combinedRadiusKm: worst.signal.combinedRadiusKm,
+          }
+        : {};
+
+    const scoreText =
+      worst.pc !== null
+        ? `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss (σ=${worst.signal.sigmaKm} km, R=${worst.signal.combinedRadiusKm} km) → ${worst.band}.`
+        : `No encounter geometry supplied; scored from severity hint ${likelihood.toFixed(2)}.`;
+
+    return {
+      candidates: [top],
+      top,
+      evidence,
+      path: ['conjunctionScreener'],
+      chain: [
+        {
+          phase: 'THINK' as const,
+          agent: 'conjunctionScreener',
+          text: `Screening ${events.length} close-approach event(s) for ${state.satelliteId}.`,
+        },
+        { phase: 'SCORE' as const, agent: 'conjunctionScreener', text: scoreText },
+      ],
+    };
+  };
+
   /** Shared specialist body: score candidates, emit THINK + SCORE steps. */
   const specialist = (agent: string, framing: string) => (state: S) => {
     const candidates = scoreCandidates(state.signals);
@@ -99,7 +166,14 @@ export function buildAgentGraph(proposals: Proposals) {
 
   const maneuverPlanner = (state: S) => {
     const top = state.top!;
-    const plan = { ...top.rule.action, satelliteId: state.satelliteId };
+    // Fold any quantitative evidence (Pc, miss distance, …) into the action so
+    // the operator sees the numbers behind the recommendation.
+    const evidence = state.evidence ?? {};
+    const plan = { ...top.rule.action, satelliteId: state.satelliteId, ...evidence };
+    const pcNote =
+      typeof evidence['pc'] === 'number'
+        ? ` (Pc ${(evidence['pc'] as number).toExponential(2)}, ${String(evidence['riskBand'])})`
+        : '';
     return {
       plan,
       path: ['maneuverPlanner'],
@@ -107,7 +181,7 @@ export function buildAgentGraph(proposals: Proposals) {
         {
           phase: 'PLAN' as const,
           agent: 'maneuverPlanner',
-          text: `Planned action "${top.rule.action.type}" for ${state.satelliteId} from hypothesis "${top.rule.hypothesis}".`,
+          text: `Planned action "${top.rule.action.type}" for ${state.satelliteId} from hypothesis "${top.rule.hypothesis}"${pcNote}.`,
         },
       ],
     };
@@ -170,7 +244,7 @@ export function buildAgentGraph(proposals: Proposals) {
 
   return new StateGraph(AgentState)
     .addNode('supervisor', supervisor)
-    .addNode('conjunctionScreener', specialist('conjunctionScreener', 'Screening close-approach geometry.'))
+    .addNode('conjunctionScreener', conjunctionScreener)
     .addNode('anomalyTriager', specialist('anomalyTriager', 'Triaging telemetry anomaly pattern.'))
     .addNode('investigate', specialist('investigate', 'No specialist matched; general review.'))
     .addNode('maneuverPlanner', maneuverPlanner)
@@ -216,6 +290,7 @@ export async function runAgentGraph(
         signals: input.signals,
         top: null,
         plan: {},
+        evidence: {},
         criticOk: false,
         llmAugmented: false,
         proposal: null,

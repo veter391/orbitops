@@ -9,8 +9,13 @@ export interface Signal {
   detail?: string;
   metric?: string;
   value?: number;
-  /** Caller's likelihood/confidence hint, 0..1. */
+  /** Caller's likelihood/confidence hint, 0..1 (fallback when no domain data). */
   severity?: number;
+  // Conjunction geometry (optional) — lets the ConjunctionScreener compute a
+  // real probability of collision instead of using the severity hint.
+  missDistanceKm?: number;
+  sigmaKm?: number;
+  combinedRadiusKm?: number;
 }
 
 export interface Rule {

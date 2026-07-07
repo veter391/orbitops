@@ -8,6 +8,10 @@ const SignalSchema = z.object({
   metric: z.string().max(100).optional(),
   value: z.number().finite().optional(),
   severity: z.number().min(0).max(1).optional(),
+  // Conjunction geometry — enables real probability-of-collision screening.
+  missDistanceKm: z.number().nonnegative().finite().optional(),
+  sigmaKm: z.number().positive().finite().optional(),
+  combinedRadiusKm: z.number().positive().finite().optional(),
 });
 
 const RunBody = z.object({

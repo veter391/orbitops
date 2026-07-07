@@ -15,7 +15,7 @@ after(async () => {
 });
 
 interface RunResult {
-  proposal: { id: string; status: string; proposedAction: { type: string } };
+  proposal: { id: string; status: string; proposedAction: Record<string, unknown> };
   chain: { phase: string; agent: string; text: string }[];
   llmAugmented: boolean;
   path: string[];
@@ -61,6 +61,31 @@ test('multi-agent graph: supervisor routes a conjunction through screener → pl
 
   // The proposal was recorded in the tenant's audit chain.
   assert.equal(await app.audit.count(DEMO_ID), auditBefore + 1);
+});
+
+test('conjunction with real geometry: screener computes Pc, evidence rides in the proposal', async () => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: {
+      satelliteId: 'oo1-09',
+      signals: [{ kind: 'conjunction', missDistanceKm: 0.05, sigmaKm: 0.1, combinedRadiusKm: 0.02 }],
+    },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json() as RunResult;
+
+  assert.equal(body.proposal.proposedAction['type'], 'maneuver');
+  // Real Pc computed and surfaced in the reasoning chain (operator explainability).
+  const scoreStep = body.chain.find((s) => s.phase === 'SCORE' && s.agent === 'conjunctionScreener');
+  assert.ok(scoreStep && /Pc = /.test(scoreStep.text), `expected a Pc score step, got ${scoreStep?.text}`);
+  // Evidence (Pc, miss distance, band) folded into the proposed action.
+  const action = body.proposal.proposedAction;
+  assert.equal(typeof action['pc'], 'number');
+  assert.ok((action['pc'] as number) > 0);
+  assert.equal(action['missDistanceKm'], 0.05);
+  assert.ok(['warning', 'critical'].includes(String(action['riskBand'])), `band was ${action['riskBand']}`);
 });
 
 test('an anomaly signal routes through the anomaly triager', async () => {
