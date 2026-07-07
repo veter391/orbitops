@@ -13,7 +13,7 @@
  *     honest empty/disabled state and a PLANNED (amber) or CLOUD (mute) chip.
  *     No fake "connected" states, no invented numbers.
  *
- * Sections (mono index §01…§07):
+ * Sections (mono index §01…§08):
  *   §01 AI & AGENTS      — OpenRouter key (REAL), routing profile + task→model
  *                          table (free REAL / balanced+frontier PLANNED),
  *                          per-task overrides (PLANNED), temperature (REAL),
@@ -21,15 +21,17 @@
  *   §02 DATA SOURCES     — CelesTrak (REAL default feed), Space-Track / N2YO /
  *                          SatNOGS (PLANNED proxy), custom TLE URL (REAL),
  *                          TLE upload (REAL parse+count), ephemeris (PLANNED).
- *   §03 COMPUTE & PERF   — render cap, particle density, effect toggles,
+ *   §03 CONNECTED BACKEND— URL + API key + mode toggle (REAL), test connection
+ *                          against a live /v1 backend (REAL). Off by default.
+ *   §04 COMPUTE & PERF   — render cap, particle density, effect toggles,
  *                          reduced-motion override — all REAL, stored; cockpit
  *                          /dashboard will read these (TODO in those files).
- *   §04 OPERATIONS       — Pc threshold, screening window, escalation,
+ *   §05 OPERATIONS       — Pc threshold, screening window, escalation,
  *                          notifications — all PLANNED (CDM-triage roadmap).
- *   §05 AUDIT & DATA     — export chain (REAL), verify chain (REAL), clear
+ *   §06 AUDIT & DATA     — export chain (REAL), verify chain (REAL), clear
  *                          local caches (REAL), retention note.
- *   §06 ACCOUNT & TEAM   — login / org / RBAC / SSO — CLOUD · PLANNED.
- *   §07 ABOUT            — version, MIT, docs/github links, mode indicator.
+ *   §07 ACCOUNT & TEAM   — login / org / RBAC / SSO — CLOUD · PLANNED.
+ *   §08 ABOUT            — version, MIT, docs/github links, mode indicator.
  *
  * localStorage keys this page owns (all namespaced `orbitops:`):
  *   orbitops:openrouter_key           — via setStoredKey (openrouter-client.js)
@@ -38,6 +40,9 @@
  *   orbitops:settings:agentRunLocation— 'browser' (cloud is inert/PLANNED)
  *   orbitops:settings:sources         — JSON { celestrak:bool, customTleUrl:str }
  *   orbitops:tle:custom               — JSON { t, text } uploaded TLE (REAL)
+ *   orbitops:backend:url              — connected-mode backend origin (REAL)
+ *   orbitops:backend:key              — connected-mode API key (REAL, local only)
+ *   orbitops:backend:mode             — 'simulated' | 'connected' (REAL)
  *   orbitops:settings:renderCap       — 800 | 2200 | 5000
  *   orbitops:settings:particleDensity — number 0..1 (string)
  *   orbitops:settings:fxAmbient       — '1' | '0'
@@ -59,6 +64,12 @@ import {
 import { MODEL_ROUTING, modelsFor } from '../core/model-routing.js';
 import { audit } from '../core/audit-log.js';
 import { isAppMode } from '../core/app-config.js';
+import {
+  getBackendConfig,
+  setBackendConfig,
+  BackendClient,
+  DEFAULT_BACKEND_URL,
+} from '../core/backend-client.js';
 
 /* ============================================================
    Persistence helpers — namespaced, storage-safe (never throw)
@@ -178,11 +189,12 @@ function statusDot(kind, text) {
 const SECTIONS = [
   { id: 'ai', idx: '01', label: 'AI & Agents' },
   { id: 'sources', idx: '02', label: 'Data Sources' },
-  { id: 'compute', idx: '03', label: 'Compute & Performance' },
-  { id: 'ops', idx: '04', label: 'Operations' },
-  { id: 'audit', idx: '05', label: 'Audit & Data' },
-  { id: 'account', idx: '06', label: 'Account & Team' },
-  { id: 'about', idx: '07', label: 'About' },
+  { id: 'backend', idx: '03', label: 'Connected Backend' },
+  { id: 'compute', idx: '04', label: 'Compute & Performance' },
+  { id: 'ops', idx: '05', label: 'Operations' },
+  { id: 'audit', idx: '06', label: 'Audit & Data' },
+  { id: 'account', idx: '07', label: 'Account & Team' },
+  { id: 'about', idx: '08', label: 'About' },
 ];
 
 /* ============================================================
@@ -207,6 +219,7 @@ export async function mount(app) {
   cleanups.push(wireSectionRail(root));
   cleanups.push(wireAiSection(root));
   cleanups.push(wireSourcesSection(root));
+  cleanups.push(wireBackendSection(root));
   cleanups.push(wireComputeSection(root));
   cleanups.push(wireAuditSection(root));
   cleanups.push(wireAboutSection(root));
@@ -280,6 +293,7 @@ function shellHTML() {
         <div class="set-content">
           ${sectionAI()}
           ${sectionSources()}
+          ${sectionBackend()}
           ${sectionCompute()}
           ${sectionOps()}
           ${sectionAudit()}
@@ -789,7 +803,196 @@ function wireSourcesSection(root) {
 }
 
 /* ============================================================
-   §03 · COMPUTE & PERFORMANCE
+   §03 · CONNECTED BACKEND  (REAL — optional live /v1 API)
+   ============================================================ */
+
+function sectionBackend() {
+  const cfg = getBackendConfig();
+  const connected = cfg.mode === 'connected';
+
+  const urlField = `
+    <div class="set-inline">
+      <input type="text" id="beUrl" class="set-input set-input--mono"
+        placeholder="${esc(DEFAULT_BACKEND_URL)}" autocomplete="off" spellcheck="false"
+        value="${esc(cfg.url)}" aria-label="Backend base URL" />
+    </div>`;
+
+  const keyField = `
+    <div class="set-key">
+      <div class="set-key__inputwrap">
+        <input type="password" id="beKey" class="set-input set-input--mono"
+          placeholder="operator API key" autocomplete="off" spellcheck="false"
+          value="${esc(cfg.key)}" aria-label="Backend API key" />
+        <button type="button" class="set-ghost-btn" id="beKeyToggle"
+          aria-pressed="false" aria-label="Show API key">SHOW</button>
+      </div>
+    </div>`;
+
+  const modeToggle = `
+    <div class="set-inline">
+      <select id="beMode" class="set-select" aria-label="Data source mode">
+        <option value="simulated" ${connected ? '' : 'selected'}>Simulation — in-browser, deterministic (default)</option>
+        <option value="connected" ${connected ? 'selected' : ''}>Connected — read the live backend</option>
+      </select>
+      <span id="beModeHint" class="set-hint">${
+        connected
+          ? 'Screens read live proposals, audit, and telemetry.'
+          : 'Everything runs offline in this browser.'
+      }</span>
+    </div>`;
+
+  return panel(
+    'backend',
+    '03',
+    'Connected Backend',
+    chip('real'),
+    `
+    <p class="set-note set-note--lead">
+      By default OrbitOps runs entirely in your browser on a deterministic
+      simulation &mdash; no server required. Point it at a running OrbitOps
+      backend to switch the operator screens over to live data: the real triage
+      queue, the tamper-evident audit chain, and streamed telemetry, all over the
+      documented <code>/v1</code> API. This is additive; simulation stays the
+      default until you explicitly connect.
+    </p>
+
+    ${row(
+      'Backend URL',
+      `Origin of your OrbitOps backend, e.g. <code>${esc(DEFAULT_BACKEND_URL)}</code> for a local dev server. A cross-origin backend must allow this page's origin via its <code>CORS_ORIGINS</code> env.`,
+      urlField,
+      { chip: chip('real') },
+    )}
+
+    ${row(
+      'API key',
+      'Sent as the <code>x-api-key</code> header on every call. Stored only in this browser and never placed in a URL.',
+      keyField,
+      { chip: chip('real') },
+    )}
+
+    ${row(
+      'Data source',
+      'Switch the operator screens between the offline simulation and the live backend.',
+      modeToggle,
+      { chip: chip('real') },
+    )}
+
+    ${row(
+      'Connection',
+      'Save your settings, then test reachability and authentication against the live backend before switching screens over.',
+      `<div class="set-key__actions">
+        <button type="button" class="set-btn set-btn--primary" id="beSave">Save</button>
+        <button type="button" class="set-btn" id="beTest">Test connection</button>
+        <span id="beStatus">${
+          connected
+            ? statusDot('ok', 'CONNECTED mode · not yet tested')
+            : statusDot('mute', 'SIMULATION mode')
+        }</span>
+      </div>`,
+      { chip: chip('real') },
+    )}
+
+    <p class="set-note">
+      The key lives only in this browser's localStorage and is sent only to the
+      backend URL you set here. No third party sees it. Switching to Connected
+      takes effect on the operator screens after they next load.
+    </p>
+  `,
+  );
+}
+
+/** @param {HTMLElement} root */
+function wireBackendSection(root) {
+  const urlInput = /** @type {HTMLInputElement|null} */ (root.querySelector('#beUrl'));
+  const keyInput = /** @type {HTMLInputElement|null} */ (root.querySelector('#beKey'));
+  const keyToggle = root.querySelector('#beKeyToggle');
+  const modeSelect = /** @type {HTMLSelectElement|null} */ (root.querySelector('#beMode'));
+  const modeHint = /** @type {HTMLElement|null} */ (root.querySelector('#beModeHint'));
+  const saveBtn = root.querySelector('#beSave');
+  const testBtn = /** @type {HTMLButtonElement|null} */ (root.querySelector('#beTest'));
+  const status = /** @type {HTMLElement} */ (root.querySelector('#beStatus'));
+
+  /** @type {Array<() => void>} */
+  const listeners = [];
+  /**
+   * @param {EventTarget|null} el @param {string} ev @param {EventListener} fn
+   */
+  const on = (el, ev, fn) => {
+    if (!el) return;
+    el.addEventListener(ev, fn);
+    listeners.push(() => el.removeEventListener(ev, fn));
+  };
+
+  on(keyToggle, 'click', () => {
+    if (!keyInput || !keyToggle) return;
+    const show = keyInput.type === 'password';
+    keyInput.type = show ? 'text' : 'password';
+    keyToggle.setAttribute('aria-pressed', String(show));
+    keyToggle.textContent = show ? 'HIDE' : 'SHOW';
+  });
+
+  on(modeSelect, 'change', () => {
+    if (!modeHint || !modeSelect) return;
+    modeHint.textContent =
+      modeSelect.value === 'connected'
+        ? 'Screens read live proposals, audit, and telemetry.'
+        : 'Everything runs offline in this browser.';
+  });
+
+  const persist = () => {
+    const url = urlInput ? urlInput.value.trim() : '';
+    const key = keyInput ? keyInput.value.trim() : '';
+    const mode = /** @type {'simulated'|'connected'} */ (modeSelect ? modeSelect.value : 'simulated');
+    setBackendConfig({ url, key, mode });
+    return { url, key, mode };
+  };
+
+  on(saveBtn, 'click', () => {
+    const { mode } = persist();
+    status.innerHTML =
+      mode === 'connected'
+        ? statusDot('ok', 'saved · CONNECTED — test the connection')
+        : statusDot('mute', 'saved · SIMULATION mode');
+  });
+
+  on(testBtn, 'click', async () => {
+    const { url, key } = persist();
+    if (!url || !key) {
+      status.innerHTML = statusDot('warn', 'set a URL and an API key first');
+      return;
+    }
+    status.innerHTML = statusDot('mute', 'testing…');
+    if (testBtn) testBtn.disabled = true;
+    try {
+      const client = new BackendClient({ url, key, mode: 'connected' });
+      // 1) Reachability (no auth). 2) Auth + a real read.
+      const health = await client.health();
+      if (!health || health.status !== 'ok') {
+        status.innerHTML = statusDot('warn', 'reachable but not healthy');
+        return;
+      }
+      const list = await client.listProposals({ limit: 1 });
+      const n = Array.isArray(list.proposals) ? list.proposals.length : 0;
+      status.innerHTML = statusDot('ok', `connected · authenticated · queue reachable (${n} shown)`);
+    } catch (e) {
+      const err = /** @type {{status?: number, message?: string}} */ (e);
+      const msg =
+        err.status === 401 || err.status === 403
+          ? 'reached backend but API key was rejected'
+          : err.status === 0
+            ? 'unreachable (check URL, CORS, and that the backend is running)'
+            : err.message || 'connection failed';
+      status.innerHTML = statusDot('alert', msg);
+    } finally {
+      if (testBtn) testBtn.disabled = false;
+    }
+  });
+
+  return () => listeners.forEach((fn) => fn());
+}
+
+/* ============================================================
+   §04 · COMPUTE & PERFORMANCE
    ============================================================ */
 
 function sectionCompute() {
@@ -823,7 +1026,7 @@ function sectionCompute() {
 
   return panel(
     'compute',
-    '03',
+    '04',
     'Compute &amp; Performance',
     chip('real'),
     `
@@ -959,7 +1162,7 @@ function wireComputeSection(root) {
 }
 
 /* ============================================================
-   §04 · OPERATIONS  (all PLANNED — CDM-triage roadmap)
+   §05 · OPERATIONS  (all PLANNED — CDM-triage roadmap)
    ============================================================ */
 
 function sectionOps() {
@@ -973,7 +1176,7 @@ function sectionOps() {
 
   return panel(
     'ops',
-    '04',
+    '05',
     'Operations',
     chip('planned'),
     `
@@ -1033,13 +1236,13 @@ function sectionOps() {
 }
 
 /* ============================================================
-   §05 · AUDIT & DATA  (REAL)
+   §06 · AUDIT & DATA  (REAL)
    ============================================================ */
 
 function sectionAudit() {
   return panel(
     'audit',
-    '05',
+    '06',
     'Audit &amp; Data',
     chip('real'),
     `
@@ -1194,7 +1397,7 @@ function wireAuditSection(root) {
 }
 
 /* ============================================================
-   §06 · ACCOUNT & TEAM  (CLOUD · PLANNED)
+   §07 · ACCOUNT & TEAM  (CLOUD · PLANNED)
    ============================================================ */
 
 function sectionAccount() {
@@ -1218,7 +1421,7 @@ function sectionAccount() {
 
   return panel(
     'account',
-    '06',
+    '07',
     'Account &amp; Team',
     chip('cloud'),
     `
@@ -1249,7 +1452,7 @@ function sectionAccount() {
 }
 
 /* ============================================================
-   §07 · ABOUT
+   §08 · ABOUT
    ============================================================ */
 
 function sectionAbout() {
@@ -1270,7 +1473,7 @@ function sectionAbout() {
 
   return panel(
     'about',
-    '07',
+    '08',
     'About',
     chip('real'),
     `
