@@ -948,11 +948,16 @@ function wireBackendSection(root) {
   };
 
   on(saveBtn, 'click', () => {
-    const { mode } = persist();
-    status.innerHTML =
-      mode === 'connected'
-        ? statusDot('ok', 'saved · CONNECTED — test the connection')
-        : statusDot('mute', 'saved · SIMULATION mode');
+    const { url, key, mode } = persist();
+    if (mode === 'connected' && (!url || !key)) {
+      // Connected requested but incomplete — isConnected() needs both, so the
+      // app stays in simulation. Don't show a falsely-confident green dot.
+      status.innerHTML = statusDot('warn', 'saved · CONNECTED needs a URL and key — simulation still active');
+    } else if (mode === 'connected') {
+      status.innerHTML = statusDot('ok', 'saved · CONNECTED — test the connection');
+    } else {
+      status.innerHTML = statusDot('mute', 'saved · SIMULATION mode');
+    }
   });
 
   on(testBtn, 'click', async () => {

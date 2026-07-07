@@ -490,8 +490,13 @@ function mountLiveTriage(app) {
   const refreshBtn = host.querySelector('#ltRefresh');
 
   let disposed = false;
+  let streaming = false;
   /** @type {string|null} */
   let selectedId = null;
+  /** @type {WebSocket|null} */
+  let socket = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let refreshTimer = null;
   /** @type {Array<() => void>} */
   const listeners = [];
   /** @param {EventTarget|null} el @param {string} ev @param {EventListener} fn */
@@ -514,7 +519,7 @@ function mountLiveTriage(app) {
       const list = Array.isArray(proposals) ? proposals : [];
       renderQueue(list);
       const pending = list.filter((p) => p.status === 'pending').length;
-      setConn('ok', `${list.length} in queue · ${pending} pending`);
+      setConn('ok', `${list.length} in queue · ${pending} pending${streaming ? ' · live' : ''}`);
     } catch (e) {
       if (disposed) return;
       queueEl.innerHTML = `<div class="lt-empty lt-empty--err">${esc(triageErr(e))}</div>`;
@@ -641,6 +646,9 @@ function mountLiveTriage(app) {
     const reasonEl = /** @type {HTMLTextAreaElement|null} */ (detailEl.querySelector('#ltReason'));
     if (!approve || !reject || !result) return;
 
+    /** True while this exact proposal is still the one on screen. */
+    const stillCurrent = () => !disposed && selectedId === id;
+
     /** @param {() => Promise<unknown>} fn @param {string} label */
     const decide = async (fn, label) => {
       approve.disabled = true;
@@ -656,13 +664,15 @@ function mountLiveTriage(app) {
         } catch {
           chainMsg = ' · chain re-verify unavailable';
         }
-        if (disposed) return;
+        // Bail if the operator navigated to another proposal (or unmounted)
+        // mid-request — don't write into orphaned DOM or clobber a newer view.
+        if (!stillCurrent()) return;
         result.innerHTML = `<span class="lt-result__ok">${esc(label)} recorded${esc(chainMsg)}</span>`;
         success(`Proposal ${label.toLowerCase()} · live backend`, { title: 'Triage', durationMs: 3000 });
         await loadQueue();
-        await selectProposal(id);
+        if (stillCurrent()) await selectProposal(id);
       } catch (e) {
-        if (disposed) return;
+        if (!stillCurrent()) return;
         approve.disabled = false;
         reject.disabled = false;
         result.innerHTML = `<span class="lt-result__err">${esc(triageErr(e))}</span>`;
@@ -670,17 +680,71 @@ function mountLiveTriage(app) {
       }
     };
 
-    on(approve, 'click', () => decide(() => client.approveProposal(id), 'Approved'));
-    on(reject, 'click', () =>
-      decide(() => client.rejectProposal(id, reasonEl ? reasonEl.value.trim() : ''), 'Rejected'),
-    );
+    // Direct assignment (not addEventListener): the buttons are freshly created
+    // on every renderDetail, so self-replacing handlers avoid accumulating stale
+    // closures over detached nodes across a long triage session.
+    approve.onclick = () => decide(() => client.approveProposal(id), 'Approved');
+    reject.onclick = () =>
+      decide(() => client.rejectProposal(id, reasonEl ? reasonEl.value.trim() : ''), 'Rejected');
   }
+
+  // Coalesce bursty stream events into at most one queue reload per 400ms.
+  const scheduleRefresh = () => {
+    if (disposed || refreshTimer) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      if (!disposed) loadQueue();
+    }, 400);
+  };
 
   setConn('mute', 'connecting…');
   loadQueue();
 
+  // Live updates: subscribe to the backend event stream (ticket handshake) and
+  // refresh the queue when a new proposal lands. Best-effort — if the socket
+  // can't open, the panel stays fully usable via the manual Refresh button.
+  client
+    .openStream(
+      (evt) => {
+        if (evt && evt.type === 'proposal') scheduleRefresh();
+      },
+      {
+        onClose: () => {
+          streaming = false;
+        },
+      },
+    )
+    .then((ws) => {
+      if (disposed) {
+        try {
+          ws.close();
+        } catch {
+          /* already closing */
+        }
+        return;
+      }
+      socket = ws;
+      streaming = true;
+      loadQueue(); // reflect the '· live' indicator once the stream is open
+    })
+    .catch(() => {
+      /* streaming unavailable — non-fatal, manual Refresh still works */
+    });
+
   return () => {
     disposed = true;
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    if (socket) {
+      try {
+        socket.close();
+      } catch {
+        /* already closing */
+      }
+      socket = null;
+    }
     listeners.forEach((fn) => fn());
   };
 }
