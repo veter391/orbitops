@@ -98,7 +98,37 @@ test('an anomaly signal routes through the anomaly triager', async () => {
   assert.equal(res.statusCode, 201);
   const body = res.json() as RunResult;
   assert.ok(body.path.includes('anomalyTriager'), `path was ${body.path.join('→')}`);
-  assert.equal(body.proposal.proposedAction.type, 'load_shed');
+  assert.equal(body.proposal.proposedAction['type'], 'load_shed');
+});
+
+test('anomaly triager scores a reading against real telemetry history (robust z-score)', async () => {
+  // Seed an in-family baseline for cpu_c on this satellite.
+  const baseline = [39.4, 40.1, 39.8, 40.0, 39.6, 40.2, 39.9, 40.05];
+  await app.telemetry.ingest(
+    DEMO_ID,
+    baseline.map((v) => ({ satelliteId: 'oo1-therm', subsystem: 'thm', metric: 'cpu_c', value: v })),
+  );
+
+  // Now assess a clearly out-of-family reading.
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: {
+      satelliteId: 'oo1-therm',
+      signals: [{ kind: 'thermal_anomaly', metric: 'cpu_c', value: 85 }],
+    },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json() as RunResult;
+
+  assert.ok(body.path.includes('anomalyTriager'));
+  const action = body.proposal.proposedAction;
+  assert.equal(action['isAnomaly'], true);
+  assert.ok(Math.abs(action['zscore'] as number) >= 3.5, `z=${action['zscore']}`);
+  assert.equal(action['baselineN'], baseline.length);
+  const score = body.chain.find((s) => s.agent === 'anomalyTriager' && s.phase === 'SCORE');
+  assert.ok(score && /z=.*ANOMALY/.test(score.text), `score step: ${score?.text}`);
 });
 
 test('unknown signals fall back to an investigate proposal', async () => {

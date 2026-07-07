@@ -113,8 +113,9 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   app.decorate('bus', bus);
   const proposals = new Proposals(database, audit, bus);
   app.decorate('proposals', proposals);
-  app.decorate('telemetry', new Telemetry(database, bus));
-  app.decorate('agent', new Agent(proposals));
+  const telemetry = new Telemetry(database, bus);
+  app.decorate('telemetry', telemetry);
+  app.decorate('agent', new Agent(proposals, telemetry));
 
   registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key
   await registerHealthRoutes(app);

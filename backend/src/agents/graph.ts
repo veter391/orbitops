@@ -2,9 +2,11 @@ import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { Proposals, Proposal } from '../proposals/index.js';
 import { llmAssess, llmEnabled } from '../agent/llm.js';
 import { withSpan } from '../observability.js';
+import type { Telemetry } from '../telemetry/index.js';
 import {
   scoreCandidates,
   RULES,
+  FALLBACK_RULE,
   clamp01,
   CONJUNCTION_KINDS,
   ANOMALY_KINDS,
@@ -13,6 +15,7 @@ import {
   type Candidate,
 } from './rules.js';
 import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
+import { detectAnomaly } from './anomaly.js';
 
 /**
  * The multi-agent core (LangGraph): a supervisor routes each event to a
@@ -58,8 +61,8 @@ const AgentState = Annotation.Root({
 
 type S = typeof AgentState.State;
 
-/** Build the compiled agent graph bound to the Proposals service. */
-export function buildAgentGraph(proposals: Proposals) {
+/** Build the compiled agent graph bound to the Proposals (and optional Telemetry) service. */
+export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
   const supervisor = (state: S) => {
     const kinds = state.signals.map((s) => s.kind);
     const route = kinds.some((k) => CONJUNCTION_KINDS.has(k))
@@ -164,6 +167,65 @@ export function buildAgentGraph(proposals: Proposals) {
     };
   };
 
+  /**
+   * AnomalyTriager: when a signal names a metric and carries a candidate value,
+   * score it against that metric's recent telemetry history with a robust
+   * modified z-score (real data, no LLM). Falls back to the severity hint when
+   * there's no telemetry service or too little history.
+   */
+  const anomalyTriager = async (state: S) => {
+    const sig = state.signals.find((s) => ANOMALY_KINDS.has(s.kind)) ?? state.signals[0]!;
+    const rule = RULES[sig.kind] ?? FALLBACK_RULE;
+
+    let likelihood = clamp01(sig.severity ?? 0.6);
+    let evidence: Record<string, unknown> = {};
+    let detail = `Scored "${rule.hypothesis}" from severity hint ${likelihood.toFixed(2)}.`;
+
+    if (telemetry && sig.metric && typeof sig.value === 'number') {
+      const recent = await telemetry.queryRaw({
+        customerId: state.customerId,
+        satelliteId: state.satelliteId,
+        metric: sig.metric,
+        limit: 200,
+      });
+      const a = detectAnomaly(
+        sig.value,
+        recent.map((r) => r.value),
+      );
+      if (a.n >= 3) {
+        likelihood = clamp01(0.4 + a.severity * 0.6);
+        evidence = {
+          metric: sig.metric,
+          value: sig.value,
+          zscore: a.zscore,
+          baselineMedian: a.median,
+          mad: a.mad,
+          baselineN: a.n,
+          isAnomaly: a.isAnomaly,
+        };
+        detail = `${sig.metric}=${sig.value} vs baseline median ${a.median.toFixed(2)} (MAD ${a.mad.toFixed(3)}, n=${a.n}) → z=${a.zscore.toFixed(1)}${a.isAnomaly ? ' — ANOMALY' : ' — nominal'}.`;
+      } else {
+        detail = `Only ${a.n} baseline sample(s) for ${sig.metric}; scored from severity hint ${likelihood.toFixed(2)}.`;
+      }
+    }
+
+    const top: Candidate = { rule, signal: sig, likelihood, score: rule.baseSeverity * likelihood };
+    return {
+      candidates: [top],
+      top,
+      evidence,
+      path: ['anomalyTriager'],
+      chain: [
+        {
+          phase: 'THINK' as const,
+          agent: 'anomalyTriager',
+          text: `Triaging telemetry anomaly for ${state.satelliteId}.`,
+        },
+        { phase: 'SCORE' as const, agent: 'anomalyTriager', text: detail },
+      ],
+    };
+  };
+
   const maneuverPlanner = (state: S) => {
     const top = state.top!;
     // Fold any quantitative evidence (Pc, miss distance, …) into the action so
@@ -245,7 +307,7 @@ export function buildAgentGraph(proposals: Proposals) {
   return new StateGraph(AgentState)
     .addNode('supervisor', supervisor)
     .addNode('conjunctionScreener', conjunctionScreener)
-    .addNode('anomalyTriager', specialist('anomalyTriager', 'Triaging telemetry anomaly pattern.'))
+    .addNode('anomalyTriager', anomalyTriager)
     .addNode('investigate', specialist('investigate', 'No specialist matched; general review.'))
     .addNode('maneuverPlanner', maneuverPlanner)
     .addNode('complianceChecker', complianceChecker)

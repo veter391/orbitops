@@ -1,4 +1,5 @@
 import type { Proposals } from '../proposals/index.js';
+import type { Telemetry } from '../telemetry/index.js';
 import { buildAgentGraph, runAgentGraph, type CompiledAgentGraph } from '../agents/graph.js';
 import type { Signal } from '../agents/rules.js';
 
@@ -19,8 +20,8 @@ export interface AgentInput {
 export class Agent {
   readonly #graph: CompiledAgentGraph;
 
-  constructor(proposals: Proposals) {
-    this.#graph = buildAgentGraph(proposals);
+  constructor(proposals: Proposals, telemetry?: Telemetry) {
+    this.#graph = buildAgentGraph(proposals, telemetry);
   }
 
   run(customerId: string, input: AgentInput) {
