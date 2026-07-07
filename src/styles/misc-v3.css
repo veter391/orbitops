@@ -1900,3 +1900,185 @@
 }
 .docs-page .doc-chip--real { border-color: rgba(62,207,116,0.5); color: #3ECF74; }
 .docs-page .doc-chip--planned { border-color: rgba(224,181,104,0.5); color: #E0B568; }
+
+/* --------------------------------------------------------------------------
+   PRICING — demand-validation state: "?" instead of a price + build-vote CTA
+   -------------------------------------------------------------------------- */
+.pricing-page .tier__price--ask {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pricing-page .tier__q {
+  font-family: var(--font-mono);
+  font-size: clamp(44px, 4.4vw, 58px);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--v3-ice);
+  text-shadow: 0 0 24px rgba(143, 198, 255, 0.28);
+}
+.pricing-page .tier__q-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  color: var(--v3-text-2);
+  max-width: 24ch;
+}
+.pricing-page .tier__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: auto;
+}
+/* The build-vote button is the primary CTA — ice accent to lead the eye. */
+.pricing-page .tier .btn--ask {
+  border-color: rgba(143, 198, 255, 0.45) !important;
+  color: var(--v3-ice) !important;
+}
+.pricing-page .tier .btn--ask:hover {
+  background: var(--v3-ice) !important;
+  color: #060809 !important;
+  border-color: var(--v3-ice) !important;
+}
+.pricing-page .tier__watch {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--v3-mute);
+  text-decoration: none;
+  transition: color 200ms var(--v3-ease);
+}
+.pricing-page .tier__watch:hover { color: var(--v3-text-2); }
+
+/* --------------------------------------------------------------------------
+   PRICING — "Should we build this?" brief modal
+   -------------------------------------------------------------------------- */
+.ask-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 5, 7, 0.72);
+  backdrop-filter: blur(6px);
+  animation: askFade 200ms var(--v3-ease);
+}
+@keyframes askFade { from { opacity: 0; } to { opacity: 1; } }
+.ask-modal__panel {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 30px 30px 26px;
+  background: var(--v3-surface);
+  border: 1px solid var(--v3-hairline-2);
+  border-radius: 6px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+}
+.ask-modal__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--v3-hairline);
+  border-radius: 3px;
+  color: var(--v3-text-2);
+  cursor: pointer;
+  transition: border-color 200ms var(--v3-ease), color 200ms var(--v3-ease);
+}
+.ask-modal__close:hover { border-color: var(--v3-hairline-2); color: var(--v3-text); }
+.ask-modal__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--v3-ice);
+}
+.ask-modal__title {
+  font-family: var(--font-display, var(--font-mono));
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--v3-text);
+  margin: 10px 0 8px;
+  text-wrap: balance;
+}
+.ask-modal__lead {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--v3-text-2);
+  margin-bottom: 20px;
+}
+.ask-field { margin-bottom: 16px; }
+.ask-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+  margin-bottom: 8px;
+}
+.ask-opt { color: var(--v3-mute); text-transform: none; letter-spacing: 0; }
+.ask-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 3px;
+  color: var(--v3-text);
+  font-family: var(--font-body, inherit);
+  font-size: 13px;
+}
+.ask-input:focus { outline: none; border-color: rgba(143, 198, 255, 0.45); }
+.ask-textarea { resize: vertical; min-height: 64px; }
+.ask-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ask-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 3px;
+  color: var(--v3-text-2);
+  cursor: pointer;
+  transition: border-color 200ms var(--v3-ease), color 200ms var(--v3-ease);
+}
+.ask-chip:hover { border-color: var(--v3-hairline-2); color: var(--v3-text); }
+.ask-chip.is-active {
+  border-color: rgba(143, 198, 255, 0.5);
+  color: var(--v3-ice);
+}
+.ask-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--v3-hairline);
+}
+.ask-actions .btn {
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ask-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--v3-mute);
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-modal { animation: none; }
+}

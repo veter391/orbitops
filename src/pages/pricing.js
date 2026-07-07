@@ -29,9 +29,9 @@ export async function mount(app) {
           <span class="eyebrow">PRICING</span>
           <h1 class="page-header__title">Per satellite. Not per seat.</h1>
           <p class="page-header__sub">
-            Indicative pricing for the planned managed service — designed to scale
-            with your fleet, not your headcount. The core engine is open source
-            and free to self-host today.
+            The core engine is open source and free to self-host today. We
+            haven't set managed-service pricing yet — because we haven't decided
+            whether to build it. That's your call: tell us what's worth shipping.
           </p>
         </div>
       </header>
@@ -61,8 +61,8 @@ export async function mount(app) {
           </div>
 
           <div class="tiers-planned-head" data-float>
-            <span class="eyebrow">MANAGED SERVICE · PLANNED</span>
-            <p class="tiers-planned-sub">Indicative tiers for the hosted service on the roadmap — not yet available.</p>
+            <span class="eyebrow">MANAGED SERVICE · UNDECIDED</span>
+            <p class="tiers-planned-sub">Tiers we're considering for a hosted service. No pricing set, nothing shipped — help us decide what (if anything) to build.</p>
           </div>
 
           <div class="tiers-grid">
@@ -70,9 +70,10 @@ export async function mount(app) {
             <div class="tier" data-float>
               <div class="tier__name">Pilot</div>
               <div class="tier__desc">For evaluating OrbitOps on a single constellation or slice</div>
-              <div class="tier__price">
-                <div class="tier__price-num">$2,500</div>
-                <div class="tier__price-unit">per satellite / month</div>
+              <div class="tier__price tier__price--ask">
+                <!-- price parked pending demand validation: $2,500 per satellite / month -->
+                <div class="tier__q" aria-hidden="true">?</div>
+                <div class="tier__q-sub">Pricing isn't set yet. Should this tier exist?</div>
               </div>
               <ul class="tier__features">
                 <li>Up to 5 satellites</li>
@@ -81,15 +82,19 @@ export async function mount(app) {
                 <li>Single-tenant data plane</li>
                 <li>Self-host or managed</li>
               </ul>
-              <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="btn btn--secondary">PLANNED · WATCH ON GITHUB ↗</a>
+              <div class="tier__cta">
+                <button class="btn btn--ask" type="button" data-ask>Should we build this? →</button>
+                <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="tier__watch">Watch on GitHub ↗</a>
+              </div>
             </div>
 
             <div class="tier" data-float>
               <div class="tier__name">Growth</div>
               <div class="tier__desc">For commercial constellations ready to put the agent on shift</div>
-              <div class="tier__price">
-                <div class="tier__price-num">$2,000</div>
-                <div class="tier__price-unit">per satellite / month</div>
+              <div class="tier__price tier__price--ask">
+                <!-- price parked pending demand validation: $2,000 per satellite / month -->
+                <div class="tier__q" aria-hidden="true">?</div>
+                <div class="tier__q-sub">Pricing isn't set yet. Should this tier exist?</div>
               </div>
               <ul class="tier__features">
                 <li>Up to 50 satellites</li>
@@ -105,15 +110,19 @@ export async function mount(app) {
                   <li>SOC 2 Type I <span class="planned-chip">PLANNED</span></li>
                 </ul>
               </div>
-              <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="btn btn--secondary">PLANNED · WATCH ON GITHUB ↗</a>
+              <div class="tier__cta">
+                <button class="btn btn--ask" type="button" data-ask>Should we build this? →</button>
+                <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="tier__watch">Watch on GitHub ↗</a>
+              </div>
             </div>
 
             <div class="tier" data-float>
               <div class="tier__name">Mega</div>
               <div class="tier__desc">For megaconstellations at scale — Starlink-class operators</div>
-              <div class="tier__price">
-                <div class="tier__price-num">$1,500</div>
-                <div class="tier__price-unit">per satellite / month</div>
+              <div class="tier__price tier__price--ask">
+                <!-- price parked pending demand validation: $1,500 per satellite / month -->
+                <div class="tier__q" aria-hidden="true">?</div>
+                <div class="tier__q-sub">Pricing isn't set yet. Should this tier exist?</div>
               </div>
               <ul class="tier__features">
                 <li>500+ satellites</li>
@@ -130,14 +139,18 @@ export async function mount(app) {
                   <li>Custom LLM fine-tuning <span class="planned-chip">PLANNED</span></li>
                 </ul>
               </div>
-              <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="btn btn--secondary">PLANNED · WATCH ON GITHUB ↗</a>
+              <div class="tier__cta">
+                <button class="btn btn--ask" type="button" data-ask>Should we build this? →</button>
+                <a href="${GITHUB_URL}" target="_blank" rel="noreferrer" class="tier__watch">Watch on GitHub ↗</a>
+              </div>
             </div>
 
           </div>
 
           <p class="pricing-note">
-            Indicative pricing for the planned managed service.
-            The core is MIT-licensed and free to self-host.
+            No managed-service pricing is set — these tiers are proposals, not offers.
+            The core is MIT-licensed and free to self-host. Tap <em>Should we build this?</em>
+            to weigh in.
           </p>
         </div>
       </section>
@@ -297,12 +310,134 @@ export async function mount(app) {
     });
   }
 
+  // "Should we build this?" — a lightweight per-tier demand-validation brief.
+  // Delegated so it survives the float-reveal DOM and needs one listener.
+  /** @type {Array<() => void>} */
+  const askCleanups = [];
+  const tiersGrid = app.querySelector('.tiers-grid');
+  if (tiersGrid) {
+    /** @param {Event} e */
+    const onAsk = (e) => {
+      const btn = /** @type {Element} */ (e.target).closest('[data-ask]');
+      if (!btn) return;
+      const tier = btn.closest('.tier')?.querySelector('.tier__name')?.textContent?.trim() || 'Any';
+      askCleanups.push(openBuildFeedback(tier));
+    };
+    tiersGrid.addEventListener('click', onAsk);
+    askCleanups.push(() => tiersGrid.removeEventListener('click', onAsk));
+  }
+
   return {
     unmount() {
       if (floatIo) floatIo.disconnect();
+      askCleanups.forEach((fn) => fn());
       ambient.unmount();
     },
   };
+}
+
+/**
+ * Demand-validation brief for a managed tier. Pricing isn't set; instead of a
+ * number the operator tells us whether the tier is worth building. On submit it
+ * composes a pre-filled GitHub issue (the repo's single, honest contact route) —
+ * nothing is collected in the browser.
+ * @param {string} tierName
+ * @returns {() => void} cleanup that closes/removes the modal
+ */
+function openBuildFeedback(tierName) {
+  const tiers = ['Pilot', 'Growth', 'Mega', 'Any'];
+  const modal = document.createElement('div');
+  modal.className = 'ask-modal';
+  modal.innerHTML = `
+    <div class="ask-modal__panel" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+      <button class="ask-modal__close" id="askClose" type="button" aria-label="Close">✕</button>
+      <span class="ask-modal__eyebrow">SHAPE THE ROADMAP</span>
+      <h3 class="ask-modal__title" id="askTitle">Is the ${tierName} tier worth building?</h3>
+      <p class="ask-modal__lead">
+        There's no managed service yet — and no pricing. ~20 seconds of signal
+        decides what we build next. This opens a pre-filled GitHub issue; nothing
+        is stored in this browser.
+      </p>
+      <div class="ask-field">
+        <label class="ask-label" for="askTier">Tier</label>
+        <select id="askTier" class="ask-input">
+          ${tiers.map((t) => `<option value="${t}" ${t === tierName ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="ask-field">
+        <span class="ask-label">Do you want a hosted (cloud) version?</span>
+        <div class="ask-chips" id="askCloud">
+          <button type="button" class="ask-chip is-active" data-v="Yes, hosted">Yes, hosted</button>
+          <button type="button" class="ask-chip" data-v="Self-host only">Self-host only</button>
+          <button type="button" class="ask-chip" data-v="Not sure">Not sure</button>
+        </div>
+      </div>
+      <div class="ask-field">
+        <label class="ask-label" for="askFleet">Fleet size <span class="ask-opt">(optional)</span></label>
+        <input id="askFleet" class="ask-input" type="text" inputmode="numeric" placeholder="e.g. 40 satellites" autocomplete="off" />
+      </div>
+      <div class="ask-field">
+        <label class="ask-label" for="askNote">Anything else? <span class="ask-opt">(optional)</span></label>
+        <textarea id="askNote" class="ask-input ask-textarea" rows="3" placeholder="What would make this a yes for you?"></textarea>
+      </div>
+      <div class="ask-actions">
+        <button class="btn btn--primary" id="askSubmit" type="button">Open a GitHub issue →</button>
+        <span class="ask-note">A pre-filled issue opens in a new tab — edit before you post.</span>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  let cloud = 'Yes, hosted';
+  const chipWrap = /** @type {HTMLElement} */ (modal.querySelector('#askCloud'));
+  chipWrap.addEventListener('click', (e) => {
+    const chip = /** @type {Element} */ (e.target).closest('.ask-chip');
+    if (!chip) return;
+    chipWrap.querySelectorAll('.ask-chip').forEach((c) => c.classList.remove('is-active'));
+    chip.classList.add('is-active');
+    cloud = chip.getAttribute('data-v') || cloud;
+  });
+
+  let closed = false;
+  /** @param {KeyboardEvent} e */
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKey);
+    modal.remove();
+  };
+  document.addEventListener('keydown', onKey);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+  modal.querySelector('#askClose')?.addEventListener('click', close);
+
+  modal.querySelector('#askSubmit')?.addEventListener('click', () => {
+    const tier = /** @type {HTMLSelectElement} */ (modal.querySelector('#askTier')).value;
+    const fleet = /** @type {HTMLInputElement} */ (modal.querySelector('#askFleet')).value.trim();
+    const note = /** @type {HTMLTextAreaElement} */ (modal.querySelector('#askNote')).value.trim();
+    const title = `Pricing feedback: ${tier} tier`;
+    const body = [
+      `**Tier:** ${tier}`,
+      `**Hosted (cloud) version wanted:** ${cloud}`,
+      `**Fleet size:** ${fleet || '—'}`,
+      '',
+      '**What would make this worth building:**',
+      note || '—',
+      '',
+      '---',
+      '_Sent from the OrbitOps pricing page · demand validation_',
+    ].join('\n');
+    const url = `${GITHUB_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=${encodeURIComponent('pricing-feedback')}`;
+    window.open(url, '_blank', 'noopener');
+    close();
+  });
+
+  setTimeout(() => /** @type {HTMLElement|null} */ (modal.querySelector('#askTier'))?.focus(), 60);
+  return close;
 }
 
 /**
