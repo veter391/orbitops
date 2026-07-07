@@ -24,9 +24,11 @@ We publish this table because a demo that blurs the line is a demo you can't tru
 | Satellite catalog | **Real** | Live TLEs from CelesTrak (Starlink, OneWeb, stations) with a bundled offline snapshot — **11,000+ real catalogued objects**. 2-hour cache, per CelesTrak's own refresh cadence. |
 | Orbit propagation | **Real** | SGP4 in the browser (vendored satellite.js) for the catalog; classical Kepler propagation (Newton–Raphson) for the demo constellation and tools. |
 | Orbital math in tools | **Real** | Closest-approach search, ground tracks, Hohmann/Tsiolkovsky burn sizing — computed live, with every simplification (no drag, no J2, fixed exhaust velocity) stated in the UI. |
-| Audit log | **Real** | SHA-256 hash-chained, append-only (SubtleCrypto). Tamper with one entry and the chain breaks visibly. |
-| Telemetry | **Simulated** | No free source provides per-satellite health telemetry. Battery/thermal/comms streams are seeded simulations, labelled as such in the UI. |
-| AI scenarios | **Demo** | The 5 scenario reasoning chains are scripted demonstrations over deterministically computed numbers. With your own OpenRouter key, three live LLM agents reason over that same verified data — but the scenarios themselves remain demos, not live operations. |
+| Backend API | **Real** | Node + TypeScript (Fastify) service: authenticated REST + WebSocket, per-tenant isolation, real Postgres in prod (in-process pglite for zero-setup dev). Runs standalone; the browser app is an additive layer on top. See [docs/SYSTEM-GUIDE.md](docs/SYSTEM-GUIDE.md). |
+| Audit log | **Real** | Append-only, tamper-evident hash chain. The browser signs with SHA-256; the backend upgrades it to keyed **HMAC** with multi-process-safe serialization, plus `verify` and JSON/CSV export. |
+| Telemetry | **Real (your fleet) · simulated only in the keyless demo** | The backend **ingests and serves your constellation's real telemetry** (`POST /v1/telemetry`, time-bucket downsampling, retention). No public API exposes a spacecraft's internal battery/thermal/comms health, so the keyless browser demo clearly labels those streams as simulated **until you connect your own feed**. |
+| Multi-agent AI copilot | **Real · your OpenRouter key only for the optional LLM step** | A LangGraph multi-agent pipeline (supervisor → conjunction screener / anomaly triager → maneuver planner → compliance critic → drafter) files a *pending* proposal that a human approves. All scoring and planning is deterministic and runs with **no key**; the LLM adds an advisory note only when you supply an OpenRouter key — and never changes the decision. |
+| AI scenarios (browser demo) | **Demo** | The 5 in-browser scenario chains are scripted demonstrations over deterministically computed numbers. The real, non-scripted reasoning pipeline is the backend copilot above. |
 | Anomaly accuracy figures | **Not published** | There is no pilot fleet, so there are no precision/lead-time numbers. We won't invent them. |
 
 ---
@@ -65,7 +67,7 @@ Open `http://localhost:8080`. No build step, no signup, no environment variables
  │  ├─ agent  ─────── ├─ orbit-propagator.js (Kepler)               │
  │  ├─ dashboard      ├─ maneuver-planner.js (Tsiolkovsky)          │
  │  ├─ tools  ─────── ├─ anomaly-detector.js (Welford)              │
- │  ├─ pricing        ├─ telemetry.js (simulated, labelled)         │
+ │  ├─ pricing        ├─ telemetry.js (demo feed; real via backend) │
  │  └─ docs           ├─ audit-log.js (SHA-256 hash chain)          │
  │                    ├─ model-routing.js ──┐                       │
  │                    ├─ llm-agents.js ─────┼── OpenRouter (BYOK,   │
@@ -73,10 +75,11 @@ Open `http://localhost:8080`. No build step, no signup, no environment variables
  │                                                                  │
  │  ui/ (cockpit 3D, agent panel, ambient, toast)  styles/ (CSS)    │
  └──────────────────────────────────────────────────────────────────┘
-        static hosting is the whole deployment — no backend exists
+   the browser app runs standalone (demo mode) via static hosting;
+   the open-source backend (backend/) is an optional, additive layer
 ```
 
-Vanilla JS ES modules, Three.js vendored locally, no framework, no bundler. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the deep dive.
+Vanilla JS ES modules, Three.js vendored locally, no framework, no bundler. The browser app works with zero backend; when you run the **open-source Node + TypeScript backend** (`backend/`) it adds a real authenticated API, real telemetry ingest, a tamper-evident audit chain, and the multi-agent AI copilot. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/SYSTEM-GUIDE.md](docs/SYSTEM-GUIDE.md) for the deep dive.
 
 ---
 
@@ -90,10 +93,15 @@ The reasoning console runs a three-agent pipeline — **Analyst → Strategist �
 
 ---
 
-## Roadmap — all of this is PLANNED, none of it exists yet
+## Roadmap
 
-- **Go backend** for real telemetry ingest (WebSocket in, commanding path out)
+**Shipped (open source, tested):**
+- **Node + TypeScript backend** — authenticated REST + WebSocket API, multi-tenant isolation, HMAC-signed tamper-evident audit, real telemetry ingest, and a LangGraph multi-agent human-in-the-loop copilot. Verified live on real Postgres; see [docs/SYSTEM-GUIDE.md](docs/SYSTEM-GUIDE.md).
+
+**Planned (labelled PLANNED in the UI until shipped):**
+- Browser **connected mode** — the cockpit wired to the backend for live telemetry and real (non-scripted) agent runs
 - **Streaming LLM output** in the agent console
+- Deeper conjunction screening: CCSDS **CDM** ingest + probability-of-collision decision support
 - **Managed service** (the tiers on the pricing page are indicative and clearly labelled PLANNED)
 - LeoLabs / 18 SDS integration, SOC 2
 
