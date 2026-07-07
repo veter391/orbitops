@@ -1,8 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+// The actor is NEVER taken from the body — it is derived from the authenticated
+// operator, exactly like proposal decisions. A client-supplied `actor` (or
+// operatorId/operatorName in the payload) is ignored/overridden, so no
+// authenticated user can attribute an audit entry to someone else or to the AI.
 const AppendBody = z.object({
-  actor: z.string().min(1).max(200),
   action: z.string().min(1).max(200),
   payload: z.record(z.string(), z.unknown()).default({}),
 });
@@ -28,7 +31,11 @@ export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/audit', async (req, reply) => {
     const body = AppendBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
-    const entry = await app.audit.append(req.customerId, body.data.actor, body.data.action, body.data.payload);
+    const entry = await app.audit.append(req.customerId, `user:${req.operatorId}`, body.data.action, {
+      ...body.data.payload,
+      operatorId: req.operatorId,
+      operatorName: req.operatorName,
+    });
     return reply.code(201).send({ entry });
   });
 

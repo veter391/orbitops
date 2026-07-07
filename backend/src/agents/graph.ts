@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { StateGraph, Annotation, START, END, MemorySaver } from '@langchain/langgraph';
+import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { Proposals, Proposal } from '../proposals/index.js';
 import { llmAssess, llmEnabled } from '../agent/llm.js';
 import { withSpan } from '../observability.js';
@@ -191,12 +190,17 @@ export function buildAgentGraph(proposals: Proposals) {
     .addEdge('complianceChecker', 'proposalDrafter')
     .addEdge('proposalDrafter', 'persist')
     .addEdge('persist', END)
-    .compile({ checkpointer: new MemorySaver() });
+    // Compiled WITHOUT a checkpointer on purpose: every run is single-shot
+    // (START → … → END) and nothing ever resumes a thread, so an in-memory
+    // checkpointer would only accumulate per-run state forever (a leak under
+    // load). A durable Postgres checkpointer arrives with B3's HITL interrupt,
+    // where pausing/resuming mid-graph actually needs saved state.
+    .compile();
 }
 
 export type CompiledAgentGraph = ReturnType<typeof buildAgentGraph>;
 
-/** Execute one run through the graph (its own checkpointed thread). */
+/** Execute one single-shot run through the graph. */
 export async function runAgentGraph(
   graph: CompiledAgentGraph,
   customerId: string,
@@ -206,19 +210,16 @@ export async function runAgentGraph(
     'agent.graph.run',
     { 'orbitops.satellite_id': input.satelliteId, 'orbitops.signals': input.signals.length },
     async () => {
-      const final = await graph.invoke(
-        {
-          customerId,
-          satelliteId: input.satelliteId,
-          signals: input.signals,
-          top: null,
-          plan: {},
-          criticOk: false,
-          llmAugmented: false,
-          proposal: null,
-        },
-        { configurable: { thread_id: randomUUID() } },
-      );
+      const final = await graph.invoke({
+        customerId,
+        satelliteId: input.satelliteId,
+        signals: input.signals,
+        top: null,
+        plan: {},
+        criticOk: false,
+        llmAugmented: false,
+        proposal: null,
+      });
       if (!final.proposal) throw new Error('agent graph finished without a proposal');
       return {
         proposal: final.proposal,

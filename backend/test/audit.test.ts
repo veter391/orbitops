@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog } from '../src/audit/index.js';
-import { freshDb, createCustomer, DEMO_ID } from './helpers.js';
+import { buildServer } from '../src/server.js';
+import { freshDb, createCustomer, demoOperatorId, DEMO_ID, DEMO_KEY } from './helpers.js';
 
 test('append + verify: chain is valid across varied payloads', async () => {
   const db = await freshDb();
@@ -65,6 +66,31 @@ test('each tenant keeps an independent chain (seq restarts, verify is per-tenant
   assert.equal((await audit.verify(DEMO_ID)).valid, true);
   assert.equal((await audit.verify(other)).valid, true);
   await db.close();
+});
+
+test('POST /v1/audit forces the actor from auth — a client-supplied actor is ignored', async () => {
+  const db = await freshDb();
+  const demoOp = await demoOperatorId(db);
+  const app = await buildServer(db);
+  try {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit',
+      headers: { 'x-api-key': DEMO_KEY },
+      payload: {
+        actor: 'ai:agent', // spoof attempt — must be ignored
+        action: 'note.added',
+        payload: { note: 'x', operatorId: 'fake', operatorName: 'Mallory' },
+      },
+    });
+    assert.equal(res.statusCode, 201);
+    const entry = (res.json() as { entry: { actor: string; payload: Record<string, unknown> } }).entry;
+    assert.equal(entry.actor, `user:${demoOp}`); // identity from auth, not body
+    assert.equal(entry.payload['operatorId'], demoOp); // payload spoof overridden too
+    assert.notEqual(entry.payload['operatorName'], 'Mallory');
+  } finally {
+    await app.close();
+  }
 });
 
 test('export produces JSON and CSV', async () => {
