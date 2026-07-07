@@ -70,7 +70,9 @@ test('conjunction with real geometry: screener computes Pc, evidence rides in th
     headers: AUTH,
     payload: {
       satelliteId: 'oo1-09',
-      signals: [{ kind: 'conjunction', missDistanceKm: 0.05, sigmaKm: 0.1, combinedRadiusKm: 0.02 }],
+      signals: [
+        { kind: 'conjunction', missDistanceKm: 0.05, sigmaKm: 0.1, combinedRadiusKm: 0.02, timeToTcaSec: 21600 },
+      ],
     },
   });
   assert.equal(res.statusCode, 201);
@@ -86,6 +88,12 @@ test('conjunction with real geometry: screener computes Pc, evidence rides in th
   assert.ok((action['pc'] as number) > 0);
   assert.equal(action['missDistanceKm'], 0.05);
   assert.ok(['warning', 'critical'].includes(String(action['riskBand'])), `band was ${action['riskBand']}`);
+  // A real avoidance burn was sized (delta-v + propellant) and rides in the proposal.
+  assert.ok((action['deltaVMs'] as number) > 0, `deltaVMs=${action['deltaVMs']}`);
+  assert.ok((action['propellantKg'] as number) > 0);
+  assert.ok((action['targetMissKm'] as number) >= 1.0);
+  const planStep = body.chain.find((s) => s.phase === 'PLAN');
+  assert.ok(planStep && /Δv .* m\/s/.test(planStep.text), `plan step: ${planStep?.text}`);
 });
 
 test('an anomaly signal routes through the anomaly triager', async () => {

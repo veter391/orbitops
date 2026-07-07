@@ -12,6 +12,10 @@ const SignalSchema = z.object({
   missDistanceKm: z.number().nonnegative().finite().optional(),
   sigmaKm: z.number().positive().finite().optional(),
   combinedRadiusKm: z.number().positive().finite().optional(),
+  // Maneuver-sizing inputs — enable a real avoidance-burn estimate.
+  timeToTcaSec: z.number().positive().finite().optional(),
+  satMassKg: z.number().positive().finite().optional(),
+  ispSec: z.number().positive().finite().optional(),
 });
 
 const RunBody = z.object({

@@ -16,6 +16,10 @@ export interface Signal {
   missDistanceKm?: number;
   sigmaKm?: number;
   combinedRadiusKm?: number;
+  // Maneuver-sizing inputs (optional) — let the ManeuverPlanner size a real burn.
+  timeToTcaSec?: number;
+  satMassKg?: number;
+  ispSec?: number;
 }
 
 export interface Rule {

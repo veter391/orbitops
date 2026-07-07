@@ -16,6 +16,7 @@ import {
 } from './rules.js';
 import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
 import { detectAnomaly } from './anomaly.js';
+import { sizeAvoidanceBurn } from './maneuver.js';
 
 /**
  * The multi-agent core (LangGraph): a supervisor routes each event to a
@@ -231,7 +232,24 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
     // Fold any quantitative evidence (Pc, miss distance, …) into the action so
     // the operator sees the numbers behind the recommendation.
     const evidence = state.evidence ?? {};
-    const plan = { ...top.rule.action, satelliteId: state.satelliteId, ...evidence };
+    const plan: Record<string, unknown> = { ...top.rule.action, satelliteId: state.satelliteId, ...evidence };
+
+    let burnNote = '';
+    // Size a real avoidance burn when this is a maneuver with encounter geometry.
+    if (plan['type'] === 'maneuver' && typeof plan['missDistanceKm'] === 'number' && typeof top.signal.timeToTcaSec === 'number') {
+      const burn = sizeAvoidanceBurn({
+        currentMissKm: plan['missDistanceKm'] as number,
+        timeToTcaSec: top.signal.timeToTcaSec,
+        ...(top.signal.satMassKg != null ? { satMassKg: top.signal.satMassKg } : {}),
+        ...(top.signal.ispSec != null ? { ispSec: top.signal.ispSec } : {}),
+      });
+      plan['deltaVMs'] = burn.deltaVMs;
+      plan['propellantKg'] = burn.propellantKg;
+      plan['targetMissKm'] = burn.targetMissKm;
+      plan['burnMethod'] = burn.method;
+      burnNote = ` Sized avoidance burn: Δv ${burn.deltaVMs.toFixed(3)} m/s, ${burn.propellantKg.toFixed(3)} kg propellant to reach ${burn.targetMissKm.toFixed(2)} km miss.`;
+    }
+
     const pcNote =
       typeof evidence['pc'] === 'number'
         ? ` (Pc ${(evidence['pc'] as number).toExponential(2)}, ${String(evidence['riskBand'])})`
@@ -243,7 +261,7 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
         {
           phase: 'PLAN' as const,
           agent: 'maneuverPlanner',
-          text: `Planned action "${top.rule.action.type}" for ${state.satelliteId} from hypothesis "${top.rule.hypothesis}"${pcNote}.`,
+          text: `Planned action "${top.rule.action.type}" for ${state.satelliteId} from hypothesis "${top.rule.hypothesis}"${pcNote}.${burnNote}`,
         },
       ],
     };
