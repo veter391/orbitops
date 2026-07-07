@@ -28,6 +28,9 @@ const EnvSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   /** Days of telemetry to keep; 0 = keep forever (purge loop disabled). */
   TELEMETRY_RETENTION_DAYS: z.coerce.number().int().nonnegative().default(0),
+
+  /** Nominal delta-v envelope (m/s); the compliance critic flags burns above it. */
+  AGENT_MAX_DELTA_V_MS: z.coerce.number().positive().default(5),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
 

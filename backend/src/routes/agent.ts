@@ -16,6 +16,7 @@ const SignalSchema = z.object({
   timeToTcaSec: z.number().positive().finite().optional(),
   satMassKg: z.number().positive().finite().optional(),
   ispSec: z.number().positive().finite().optional(),
+  propellantBudgetKg: z.number().positive().finite().optional(),
 });
 
 const RunBody = z.object({

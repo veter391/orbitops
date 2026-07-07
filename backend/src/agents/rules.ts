@@ -20,6 +20,8 @@ export interface Signal {
   timeToTcaSec?: number;
   satMassKg?: number;
   ispSec?: number;
+  /** Remaining propellant budget (kg); the compliance critic flags overruns. */
+  propellantBudgetKg?: number;
 }
 
 export interface Rule {

@@ -96,6 +96,37 @@ test('conjunction with real geometry: screener computes Pc, evidence rides in th
   assert.ok(planStep && /Δv .* m\/s/.test(planStep.text), `plan step: ${planStep?.text}`);
 });
 
+test('compliance critic flags a maneuver that overruns the propellant budget (still proposed for a human)', async () => {
+  // Short time-to-TCA → large delta-v/propellant; tiny budget → flagged.
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: {
+      satelliteId: 'oo1-flag',
+      signals: [
+        {
+          kind: 'conjunction',
+          missDistanceKm: 0.02,
+          sigmaKm: 0.1,
+          combinedRadiusKm: 0.02,
+          timeToTcaSec: 120,
+          propellantBudgetKg: 0.0001,
+        },
+      ],
+    },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json() as RunResult;
+  const action = body.proposal.proposedAction;
+
+  assert.equal(action['type'], 'maneuver'); // still a maneuver — a needed avoidance is not suppressed
+  const flags = action['complianceFlags'] as string[] | undefined;
+  assert.ok(Array.isArray(flags) && flags.length >= 1, `expected compliance flags, got ${JSON.stringify(flags)}`);
+  const check = body.chain.find((s) => s.phase === 'CHECK');
+  assert.ok(check && /compliance flag/.test(check.text), `check step: ${check?.text}`);
+});
+
 test('an anomaly signal routes through the anomaly triager', async () => {
   const res = await app.inject({
     method: 'POST',

@@ -3,6 +3,7 @@ import type { Proposals, Proposal } from '../proposals/index.js';
 import { llmAssess, llmEnabled } from '../agent/llm.js';
 import { withSpan } from '../observability.js';
 import type { Telemetry } from '../telemetry/index.js';
+import { config } from '../config.js';
 import {
   scoreCandidates,
   RULES,
@@ -269,16 +270,31 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
 
   const complianceChecker = async (state: S) => {
     const type = String(state.plan['type'] ?? '');
-    const ok = KNOWN_ACTIONS.has(type);
-    const chain: ChainStep[] = [
-      {
-        phase: 'CHECK',
-        agent: 'complianceChecker',
-        text: ok
-          ? `Action "${type}" is a known playbook; no compliance objections. Requires operator approval before execution.`
-          : `Action "${type}" is not a recognized playbook — downgrading to investigate.`,
-      },
-    ];
+    const known = KNOWN_ACTIONS.has(type);
+
+    // Real critic checks on a sized maneuver: flag (don't block — a needed
+    // avoidance is still proposed for a human) when it exceeds the delta-v
+    // envelope or a supplied propellant budget.
+    const flags: string[] = [];
+    const dv = state.plan['deltaVMs'];
+    if (type === 'maneuver' && typeof dv === 'number' && dv > config.AGENT_MAX_DELTA_V_MS) {
+      flags.push(
+        `delta-v ${dv.toFixed(3)} m/s exceeds the ${config.AGENT_MAX_DELTA_V_MS} m/s nominal envelope — senior review`,
+      );
+    }
+    const prop = state.plan['propellantKg'];
+    const budget = state.signals.find((s) => typeof s.propellantBudgetKg === 'number')?.propellantBudgetKg;
+    if (typeof prop === 'number' && typeof budget === 'number' && prop > budget) {
+      flags.push(`propellant ${prop.toFixed(3)} kg exceeds the remaining budget ${budget.toFixed(3)} kg`);
+    }
+
+    const ok = known; // unknown playbooks are downgraded; flagged maneuvers still proceed to a human
+    const verdict = !known
+      ? `Action "${type}" is not a recognized playbook — downgrading to investigate.`
+      : flags.length
+        ? `Action "${type}" is a known playbook but raises ${flags.length} compliance flag(s): ${flags.join('; ')}. Escalated for operator approval.`
+        : `Action "${type}" is a known playbook; no compliance objections. Requires operator approval before execution.`;
+    const chain: ChainStep[] = [{ phase: 'CHECK', agent: 'complianceChecker', text: verdict }];
 
     let llmAugmented = false;
     if (llmEnabled()) {
@@ -294,9 +310,13 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
     }
 
     return {
-      criticOk: ok,
+      criticOk: ok && flags.length === 0,
       llmAugmented,
-      plan: ok ? state.plan : { type: 'investigate', satelliteId: state.satelliteId },
+      plan: ok
+        ? flags.length
+          ? { ...state.plan, complianceFlags: flags }
+          : state.plan
+        : { type: 'investigate', satelliteId: state.satelliteId },
       path: ['complianceChecker'],
       chain,
     };
