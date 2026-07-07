@@ -267,7 +267,7 @@ an operator teammate I can supervise".
 
 ## Security model
 
-See [SECURITY.md](SECURITY.md) for the full threat model.
+See [SECURITY.md](../.github/SECURITY.md) for the full threat model.
 
 In short:
 - Single-tenant data plane per customer

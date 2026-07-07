@@ -10,7 +10,7 @@ Thanks for your interest in making OrbitOps better. 🛰️
 2. **No runtime dependencies** — `package.json` is for dev tooling only.
 3. **Match the style** — `npm run lint` runs ESLint. `npm run format` runs
    Prettier. Both must pass before review.
-4. **Read the philosophy** — [PHILOSOPHY.md](PHILOSOPHY.md) is binding.
+4. **Read the philosophy** — [docs/PHILOSOPHY.md](../docs/PHILOSOPHY.md) is binding.
 
 ## How to contribute code
 
@@ -56,8 +56,8 @@ chore: bump dependency versions
 
 ## What we are currently working on
 
-See [ROADMAP.md](ROADMAP.md). Pick something from the current quarter and
-mention it in your PR description.
+Check the open issues and milestones for current priorities, and mention what
+you're picking up in your PR description.
 
 ## Domain expertise
 

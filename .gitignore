@@ -36,3 +36,9 @@ public/audio/generated/
 # Backups
 *.bak
 *.tmp
+# Internal / private working docs (plans, research, task lists, owner notes).
+# Kept locally, never published to the public repo.
+internal/
+
+# Local database (pglite) and scratch
+**/.data/

@@ -76,7 +76,7 @@ Open `http://localhost:8080`. No build step, no signup, no environment variables
         static hosting is the whole deployment — no backend exists
 ```
 
-Vanilla JS ES modules, Three.js vendored locally, no framework, no bundler. See [ARCHITECTURE.md](ARCHITECTURE.md) for the deep dive.
+Vanilla JS ES modules, Three.js vendored locally, no framework, no bundler. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the deep dive.
 
 ---
 
@@ -95,7 +95,7 @@ The reasoning console runs a three-agent pipeline — **Analyst → Strategist �
 - **Go backend** for real telemetry ingest (WebSocket in, commanding path out)
 - **Streaming LLM output** in the agent console
 - **Managed service** (the tiers on the pricing page are indicative and clearly labelled PLANNED)
-- LeoLabs / 18 SDS integration, SOC 2 — see [ROADMAP.md](ROADMAP.md)
+- LeoLabs / 18 SDS integration, SOC 2
 
 ---
 
