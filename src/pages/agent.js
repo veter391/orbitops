@@ -20,6 +20,7 @@ import { info, success, error } from '../ui/toast.js';
 import { getStoredKey, setStoredKey, hasLiveAI } from '../core/openrouter-client.js';
 import { mountAmbient } from '../ui/ambient.js';
 import { esc } from '../utils.js';
+import { isConnected, BackendClient } from '../core/backend-client.js';
 
 /** Phase rail order shown in the console header. */
 const PHASE_ORDER = ['OBSERVE', 'THINK', 'SCORE', 'PROPOSE', 'WAIT'];
@@ -142,6 +143,10 @@ export async function mount(app) {
           </p>
         </div>
       </header>
+
+      <!-- CONNECTED-MODE LIVE TRIAGE — additive, rendered only when a backend is
+           configured (§03 Settings). Hidden and inert in the default simulation. -->
+      <section class="agent-live-triage" id="agentLiveTriage" hidden></section>
 
       <!-- LIVE DEMO CONSOLE — the centerpiece -->
       <section class="agent-console" data-deck="left">
@@ -403,16 +408,280 @@ export async function mount(app) {
   };
   agent.on('ai-stage', onAIStage);
 
+  // Connected mode (§03 Settings): surface the LIVE backend triage queue above
+  // the simulation console. Additive — untouched when no backend is configured.
+  const liveTriage = isConnected() ? mountLiveTriage(app) : null;
+
   return {
     unmount() {
       if (abortRun) abortRun();
       if (activeRunTimer) { clearInterval(activeRunTimer); activeRunTimer = null; }
       if (auditRefreshTimer) clearInterval(auditRefreshTimer);
       agent.off('ai-stage', onAIStage);
+      if (liveTriage) liveTriage();
       if (deckIo) { deckIo.disconnect(); deckIo = null; }
       if (unmountDepthGrid) { unmountDepthGrid(); unmountDepthGrid = null; }
       if (ambient) { ambient.unmount(); ambient = null; }
     },
+  };
+}
+
+/* ============================================================
+   CONNECTED-MODE LIVE TRIAGE (real backend, not simulation)
+   ============================================================ */
+
+/** Scientific-notation Pc, e.g. 5.4e-3. @param {number} pc */
+function fmtPc(pc) {
+  return pc > 0 ? pc.toExponential(1) : '0';
+}
+
+/** UTC HH:MM:SS from an ISO timestamp. @param {string} ts */
+function fmtTs(ts) {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? '—' : `${d.toISOString().slice(11, 19)}Z`;
+}
+
+/** Human message from a thrown BackendError (or anything). @param {unknown} e */
+function triageErr(e) {
+  const err = /** @type {{status?: number, message?: string}} */ (e);
+  if (err && err.status === 0) return 'backend unreachable — check URL, CORS, and that it is running';
+  if (err && (err.status === 401 || err.status === 403)) return 'API key rejected by the backend';
+  return (err && err.message) || 'request failed';
+}
+
+/**
+ * Read the REAL backend's proposal queue, open a proposal's full reasoning chain
+ * (the explainable panel), and approve/reject it through the live HITL endpoints
+ * — then re-verify the tamper-evident audit chain server-side. Every value here
+ * is live backend data, never the in-browser simulation. Purely additive.
+ * @param {HTMLElement} app
+ * @returns {() => void} cleanup
+ */
+function mountLiveTriage(app) {
+  const host = /** @type {HTMLElement|null} */ (app.querySelector('#agentLiveTriage'));
+  if (!host) return () => {};
+  const client = new BackendClient();
+
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="container">
+      <header class="lt-head">
+        <div>
+          <span class="eyebrow">Connected · live backend</span>
+          <h2 class="section__title">Triage queue</h2>
+        </div>
+        <div class="lt-head__actions">
+          <span class="lt-conn" id="ltConn"><span class="lt-conn__dot"></span>connecting…</span>
+          <button class="agent-status-pill" id="ltRefresh" type="button">Refresh</button>
+        </div>
+      </header>
+      <div class="lt-grid">
+        <aside class="lt-queue" id="ltQueue" aria-label="Proposal queue"></aside>
+        <div class="lt-detail" id="ltDetail">
+          <div class="lt-empty">Select a proposal to see its reasoning chain.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const queueEl = /** @type {HTMLElement} */ (host.querySelector('#ltQueue'));
+  const detailEl = /** @type {HTMLElement} */ (host.querySelector('#ltDetail'));
+  const connEl = /** @type {HTMLElement} */ (host.querySelector('#ltConn'));
+  const refreshBtn = host.querySelector('#ltRefresh');
+
+  let disposed = false;
+  /** @type {string|null} */
+  let selectedId = null;
+  /** @type {Array<() => void>} */
+  const listeners = [];
+  /** @param {EventTarget|null} el @param {string} ev @param {EventListener} fn */
+  const on = (el, ev, fn) => {
+    if (!el) return;
+    el.addEventListener(ev, fn);
+    listeners.push(() => el.removeEventListener(ev, fn));
+  };
+
+  /** @param {string} kind @param {string} text */
+  const setConn = (kind, text) => {
+    connEl.className = `lt-conn lt-conn--${kind}`;
+    connEl.innerHTML = `<span class="lt-conn__dot"></span>${esc(text)}`;
+  };
+
+  async function loadQueue() {
+    try {
+      const { proposals } = await client.listProposals({ limit: 50 });
+      if (disposed) return;
+      const list = Array.isArray(proposals) ? proposals : [];
+      renderQueue(list);
+      const pending = list.filter((p) => p.status === 'pending').length;
+      setConn('ok', `${list.length} in queue · ${pending} pending`);
+    } catch (e) {
+      if (disposed) return;
+      queueEl.innerHTML = `<div class="lt-empty lt-empty--err">${esc(triageErr(e))}</div>`;
+      setConn('err', 'disconnected');
+    }
+  }
+
+  /** @param {any[]} list */
+  function renderQueue(list) {
+    if (!list.length) {
+      queueEl.innerHTML = `<div class="lt-empty">Queue empty — no proposals yet.</div>`;
+      return;
+    }
+    queueEl.innerHTML = list
+      .map((p) => {
+        const a = p.proposedAction || {};
+        const band = a.riskBand || a.type || '—';
+        return `<button class="lt-row ${p.id === selectedId ? 'is-active' : ''}" data-id="${esc(p.id)}" type="button">
+          <div class="lt-row__top">
+            <span class="lt-sat">${esc(p.satelliteId || '—')}</span>
+            <span class="lt-status lt-status--${esc(p.status)}">${esc(p.status)}</span>
+          </div>
+          <div class="lt-row__meta">
+            <span class="lt-band lt-band--${esc(a.riskBand || 'none')}">${esc(band)}</span>
+            ${typeof a.pc === 'number' ? `<span class="lt-pc">Pc ${fmtPc(a.pc)}</span>` : ''}
+            <span class="lt-ts">${fmtTs(p.ts)}</span>
+          </div>
+        </button>`;
+      })
+      .join('');
+  }
+
+  on(queueEl, 'click', (e) => {
+    const target = /** @type {Element} */ (e.target);
+    const btn = target.closest('.lt-row');
+    if (btn) selectProposal(btn.getAttribute('data-id') || '');
+  });
+  on(refreshBtn, 'click', () => loadQueue());
+
+  /** @param {string} id */
+  async function selectProposal(id) {
+    if (!id) return;
+    selectedId = id;
+    queueEl.querySelectorAll('.lt-row').forEach((el) =>
+      el.classList.toggle('is-active', el.getAttribute('data-id') === id),
+    );
+    detailEl.innerHTML = `<div class="lt-empty">Loading…</div>`;
+    try {
+      const { proposal } = await client.getProposal(id);
+      if (disposed) return;
+      renderDetail(proposal);
+    } catch (e) {
+      if (disposed) return;
+      detailEl.innerHTML = `<div class="lt-empty lt-empty--err">${esc(triageErr(e))}</div>`;
+    }
+  }
+
+  /** @param {any} p */
+  function renderDetail(p) {
+    const a = p.proposedAction || {};
+    const chain = Array.isArray(p.reasoningChain) ? p.reasoningChain : [];
+    const pending = p.status === 'pending';
+    /** @type {Array<[string, string]>} */
+    const facts = [];
+    if (a.type) facts.push(['action', String(a.type)]);
+    if (a.riskBand) facts.push(['risk band', String(a.riskBand)]);
+    if (typeof a.pc === 'number') facts.push(['Pc', fmtPc(a.pc)]);
+    if (typeof a.deltaVMs === 'number') facts.push(['Δv', `${a.deltaVMs.toFixed(4)} m/s`]);
+    if (typeof a.propellantKg === 'number') facts.push(['propellant', `${a.propellantKg.toFixed(4)} kg`]);
+    if (typeof a.missDistanceKm === 'number') facts.push(['miss', `${a.missDistanceKm} km`]);
+
+    detailEl.innerHTML = `
+      <header class="lt-detail__head">
+        <div>
+          <span class="lt-sat">${esc(p.satelliteId || '—')}</span>
+          <span class="lt-status lt-status--${esc(p.status)}">${esc(p.status)}</span>
+        </div>
+        <span class="lt-id" title="proposal id">${esc(String(p.id).slice(0, 8))}</span>
+      </header>
+      <div class="lt-facts">
+        ${facts
+          .map(
+            ([k, v]) =>
+              `<div class="lt-fact"><span class="lt-fact__k">${esc(k)}</span><span class="lt-fact__v">${esc(v)}</span></div>`,
+          )
+          .join('')}
+      </div>
+      <div class="lt-chain">
+        <div class="lt-chain__label">Reasoning chain · ${chain.length} steps</div>
+        ${chain
+          .map(
+            /** @param {any} s */ (s) => `
+          <div class="lt-step">
+            <span class="lt-step__phase">${esc(s.phase || '')}</span>
+            <div class="lt-step__body">
+              <span class="lt-step__agent">${esc(s.agent || '')}</span>
+              <span class="lt-step__text">${esc(s.text || '')}</span>
+            </div>
+          </div>`,
+          )
+          .join('')}
+      </div>
+      ${
+        pending
+          ? `<div class="lt-actions">
+        <textarea class="lt-reason" id="ltReason" rows="2" placeholder="Rejection reason (optional)"></textarea>
+        <div class="lt-actions__btns">
+          <button class="btn btn--primary" id="ltApprove" type="button">Approve</button>
+          <button class="btn" id="ltReject" type="button">Reject</button>
+        </div>
+        <div class="lt-result" id="ltResult"></div>
+      </div>`
+          : `<div class="lt-decided">Decided${p.approvedBy ? ` · ${esc(p.approvedBy)}` : ''} — no further action.</div>`
+      }
+    `;
+    if (pending) wireDecision(p.id);
+  }
+
+  /** @param {string} id */
+  function wireDecision(id) {
+    const approve = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltApprove'));
+    const reject = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltReject'));
+    const result = /** @type {HTMLElement|null} */ (detailEl.querySelector('#ltResult'));
+    const reasonEl = /** @type {HTMLTextAreaElement|null} */ (detailEl.querySelector('#ltReason'));
+    if (!approve || !reject || !result) return;
+
+    /** @param {() => Promise<unknown>} fn @param {string} label */
+    const decide = async (fn, label) => {
+      approve.disabled = true;
+      reject.disabled = true;
+      result.innerHTML = `<span class="lt-result__pending">${esc(label)}…</span>`;
+      try {
+        await fn();
+        // Re-verify the tamper-evident chain server-side after the write.
+        let chainMsg = '';
+        try {
+          const v = await client.verifyAudit();
+          chainMsg = v && v.valid ? ' · audit chain intact' : ' · audit chain BROKEN';
+        } catch {
+          chainMsg = ' · chain re-verify unavailable';
+        }
+        if (disposed) return;
+        result.innerHTML = `<span class="lt-result__ok">${esc(label)} recorded${esc(chainMsg)}</span>`;
+        success(`Proposal ${label.toLowerCase()} · live backend`, { title: 'Triage', durationMs: 3000 });
+        await loadQueue();
+        await selectProposal(id);
+      } catch (e) {
+        if (disposed) return;
+        approve.disabled = false;
+        reject.disabled = false;
+        result.innerHTML = `<span class="lt-result__err">${esc(triageErr(e))}</span>`;
+        error(triageErr(e), { title: 'Triage failed', durationMs: 4000 });
+      }
+    };
+
+    on(approve, 'click', () => decide(() => client.approveProposal(id), 'Approved'));
+    on(reject, 'click', () =>
+      decide(() => client.rejectProposal(id, reasonEl ? reasonEl.value.trim() : ''), 'Rejected'),
+    );
+  }
+
+  setConn('mute', 'connecting…');
+  loadQueue();
+
+  return () => {
+    disposed = true;
+    listeners.forEach((fn) => fn());
   };
 }
 
