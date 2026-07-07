@@ -20,6 +20,7 @@ import { registerProposalRoutes } from './routes/proposals.js';
 import { registerTelemetryRoutes } from './routes/telemetry.js';
 import { registerStreamRoutes } from './routes/stream.js';
 import { registerAgentRoutes } from './routes/agent.js';
+import { registerConjunctionRoutes } from './routes/conjunctions.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -125,6 +126,7 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   await registerTelemetryRoutes(app);
   await registerStreamRoutes(app, bus);
   await registerAgentRoutes(app);
+  await registerConjunctionRoutes(app);
   return app;
 }
 
