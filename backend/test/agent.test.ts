@@ -45,6 +45,7 @@ test('multi-agent graph: supervisor routes a conjunction through screener → pl
   // The supervisor routed to the conjunction specialist; full path recorded.
   assert.deepEqual(body.path, [
     'supervisor',
+    'memory',
     'conjunctionScreener',
     'maneuverPlanner',
     'complianceChecker',
@@ -55,7 +56,7 @@ test('multi-agent graph: supervisor routes a conjunction through screener → pl
   // Full reasoning chain across the agents; no AI step without an LLM key.
   assert.deepEqual(
     body.chain.map((s) => s.phase),
-    ['OBSERVE', 'THINK', 'SCORE', 'PLAN', 'CHECK', 'PROPOSE'],
+    ['OBSERVE', 'RECALL', 'THINK', 'SCORE', 'PLAN', 'CHECK', 'PROPOSE'],
   );
   assert.equal(body.llmAugmented, false);
 
@@ -168,6 +169,44 @@ test('anomaly triager scores a reading against real telemetry history (robust z-
   assert.equal(action['baselineN'], baseline.length);
   const score = body.chain.find((s) => s.agent === 'anomalyTriager' && s.phase === 'SCORE');
   assert.ok(score && /z=.*ANOMALY/.test(score.text), `score step: ${score?.text}`);
+});
+
+test('memory: a later run recalls prior decisions for the same satellite', async () => {
+  const sat = 'oo1-mem';
+  // First run creates a prior proposal for this satellite.
+  await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: { satelliteId: sat, signals: [{ kind: 'battery_degradation', severity: 0.6 }] },
+  });
+
+  // Second run should recall it in the reasoning chain.
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: { satelliteId: sat, signals: [{ kind: 'thermal_anomaly', severity: 0.6 }] },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json() as RunResult;
+
+  assert.ok(body.path.includes('memory'), `path was ${body.path.join('→')}`);
+  const recall = body.chain.find((s) => s.phase === 'RECALL' && s.agent === 'memory');
+  assert.ok(recall, 'a RECALL step is present');
+  assert.ok(/prior proposal/.test(recall!.text), `recall text: ${recall!.text}`);
+});
+
+test('memory: a satellite with no history reports no prior proposals', async () => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/agent/run',
+    headers: AUTH,
+    payload: { satelliteId: 'oo1-fresh-xyz', signals: [{ kind: 'comms_degradation', severity: 0.5 }] },
+  });
+  const body = res.json() as RunResult;
+  const recall = body.chain.find((s) => s.phase === 'RECALL');
+  assert.ok(recall && /No prior proposals/.test(recall.text), `recall: ${recall?.text}`);
 });
 
 test('unknown signals fall back to an investigate proposal', async () => {

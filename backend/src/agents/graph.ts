@@ -3,6 +3,7 @@ import type { Proposals, Proposal } from '../proposals/index.js';
 import { llmAssess, llmEnabled } from '../agent/llm.js';
 import { withSpan } from '../observability.js';
 import type { Telemetry } from '../telemetry/index.js';
+import type { AgentMemory, PriorDecision } from './memory.js';
 import { config } from '../config.js';
 import {
   scoreCandidates,
@@ -30,7 +31,7 @@ import { sizeAvoidanceBurn } from './maneuver.js';
  */
 
 export interface ChainStep {
-  phase: 'OBSERVE' | 'THINK' | 'SCORE' | 'PLAN' | 'CHECK' | 'AI' | 'PROPOSE';
+  phase: 'OBSERVE' | 'RECALL' | 'THINK' | 'SCORE' | 'PLAN' | 'CHECK' | 'AI' | 'PROPOSE';
   agent: string;
   text: string;
 }
@@ -50,6 +51,8 @@ const AgentState = Annotation.Root({
   chain: Annotation<ChainStep[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
   path: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
   route: Annotation<'conjunctionScreener' | 'anomalyTriager' | 'investigate'>,
+  /** Prior decisions for this satellite, recalled by the memory node. */
+  priorDecisions: Annotation<PriorDecision[]>,
   candidates: Annotation<Candidate[]>,
   top: Annotation<Candidate | null>,
   plan: Annotation<Record<string, unknown>>,
@@ -63,8 +66,8 @@ const AgentState = Annotation.Root({
 
 type S = typeof AgentState.State;
 
-/** Build the compiled agent graph bound to the Proposals (and optional Telemetry) service. */
-export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
+/** Build the compiled agent graph bound to the Proposals (+ optional Telemetry, Memory). */
+export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, memory?: AgentMemory) {
   const supervisor = (state: S) => {
     const kinds = state.signals.map((s) => s.kind);
     const route = kinds.some((k) => CONJUNCTION_KINDS.has(k))
@@ -82,6 +85,23 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
           text: `Received ${state.signals.length} signal(s) for ${state.satelliteId}: ${kinds.join(', ') || 'none'}. Routing to ${route}.`,
         },
       ],
+    };
+  };
+
+  /**
+   * Memory: recall prior decisions for this satellite so the operator sees the
+   * history behind a new recommendation. Structured recall over stored proposals
+   * — deterministic, offline. No-op (empty recall) when no memory service is bound.
+   */
+  const memoryNode = async (state: S) => {
+    const prior = memory ? await memory.recall(state.customerId, state.satelliteId, 5) : [];
+    const summary = memory
+      ? memory.summarize(state.satelliteId, prior)
+      : `No memory service bound; running without recall.`;
+    return {
+      priorDecisions: prior,
+      path: ['memory'],
+      chain: [{ phase: 'RECALL' as const, agent: 'memory', text: `Recall: ${summary}` }],
     };
   };
 
@@ -344,6 +364,7 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
 
   return new StateGraph(AgentState)
     .addNode('supervisor', supervisor)
+    .addNode('memory', memoryNode)
     .addNode('conjunctionScreener', conjunctionScreener)
     .addNode('anomalyTriager', anomalyTriager)
     .addNode('investigate', specialist('investigate', 'No specialist matched; general review.'))
@@ -352,7 +373,8 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry) {
     .addNode('proposalDrafter', proposalDrafter)
     .addNode('persist', persist)
     .addEdge(START, 'supervisor')
-    .addConditionalEdges('supervisor', (s: S) => s.route, [
+    .addEdge('supervisor', 'memory')
+    .addConditionalEdges('memory', (s: S) => s.route, [
       'conjunctionScreener',
       'anomalyTriager',
       'investigate',
@@ -388,6 +410,7 @@ export async function runAgentGraph(
         customerId,
         satelliteId: input.satelliteId,
         signals: input.signals,
+        priorDecisions: [],
         top: null,
         plan: {},
         evidence: {},
