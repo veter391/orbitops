@@ -34,7 +34,12 @@ export function parseCdm(text: string): CdmMessage {
     const key = line.slice(0, eq).trim().toUpperCase();
     const value = cleanValue(line.slice(eq + 1));
     if (key === 'OBJECT') {
-      current = value.toUpperCase() === 'OBJECT2' ? object2 : object1;
+      // Route strictly by the CCSDS OBJECT1 / OBJECT2 tags. An unknown or
+      // mistyped tag must not silently merge into object1's bag and corrupt it,
+      // so it goes to a throwaway sink (and validateCdm will reject the message
+      // for the missing designator).
+      const tag = value.toUpperCase();
+      current = tag === 'OBJECT1' ? object1 : tag === 'OBJECT2' ? object2 : {};
       current['OBJECT'] = value;
       continue;
     }
@@ -54,13 +59,44 @@ function num(bag: Record<string, string>, key: string): number | undefined {
  *  position covariance diagonals (radial + transverse) of both objects. */
 function combinedSigmaKm(o1: Record<string, string>, o2: Record<string, string>): number | undefined {
   // Covariance is in m² (CR_R, CT_T are position variances in the RTN frame).
-  const parts = [num(o1, 'CR_R'), num(o1, 'CT_T'), num(o2, 'CR_R'), num(o2, 'CT_T')].filter(
-    (x): x is number => typeof x === 'number' && x >= 0,
-  );
-  if (parts.length === 0) return undefined;
-  // Effective isotropic 1σ from the summed in-plane variance, m → km.
-  const varSumM2 = parts.reduce((a, b) => a + b, 0);
-  return Math.sqrt(varSumM2 / parts.length) / 1000;
+  const rr1 = num(o1, 'CR_R');
+  const tt1 = num(o1, 'CT_T');
+  const rr2 = num(o2, 'CR_R');
+  const tt2 = num(o2, 'CT_T');
+  // Require a full in-plane covariance diagonal from BOTH objects. One-sided or
+  // partial covariance must not masquerade as fully-known combined uncertainty:
+  // if either object's covariance is missing we return undefined, and the
+  // screener falls back to a severity hint rather than a fabricated Pc.
+  if (rr1 === undefined || tt1 === undefined || rr2 === undefined || tt2 === undefined) return undefined;
+  if (rr1 < 0 || tt1 < 0 || rr2 < 0 || tt2 < 0) return undefined;
+  // The relative-position covariance is C1 + C2 (RTN frame), so the combined
+  // radial/transverse variances add. Effective isotropic 1σ = RMS over the two
+  // in-plane axes. m → km.
+  const varRadial = rr1 + rr2;
+  const varTransverse = tt1 + tt2;
+  return Math.sqrt((varRadial + varTransverse) / 2) / 1000;
+}
+
+/**
+ * Structural + physical validation of a parsed CDM before it is scored. Returns
+ * a list of human-readable problems (empty array = valid). The route rejects
+ * with 400 on any problem rather than silently scoring malformed or corrupt
+ * input into a spurious verdict (e.g. a negative miss distance or an empty
+ * message defaulting its way to a false "critical" or fail-open "clear").
+ */
+export function validateCdm(cdm: CdmMessage): string[] {
+  const problems: string[] = [];
+  if (!cdm.meta['TCA']) problems.push('missing TCA');
+  if (cdm.meta['MISS_DISTANCE'] === undefined) {
+    problems.push('missing MISS_DISTANCE');
+  } else {
+    const miss = num(cdm.meta, 'MISS_DISTANCE');
+    if (miss === undefined) problems.push('MISS_DISTANCE is not a number');
+    else if (miss < 0) problems.push('MISS_DISTANCE must be non-negative');
+  }
+  if (!cdm.object1['OBJECT_DESIGNATOR']) problems.push('missing OBJECT1 designator');
+  if (!cdm.object2['OBJECT_DESIGNATOR']) problems.push('missing OBJECT2 designator');
+  return problems;
 }
 
 export interface Encounter {

@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import type { FastifyInstance } from 'fastify';
-import { parseCdm, cdmToEncounter } from '../src/conjunction/cdm.js';
+import { parseCdm, validateCdm, cdmToEncounter } from '../src/conjunction/cdm.js';
 import { buildServer } from '../src/server.js';
 import { freshDb, DEMO_KEY } from './helpers.js';
 
@@ -50,9 +50,10 @@ test('cdmToEncounter maps geometry, time-to-TCA, and first-order sigma', () => {
   assert.equal(enc.missDistanceKm, 0.145);
   assert.equal(enc.timeToTcaSec, 3 * 3600); // 12:00 → 15:00
   assert.equal(enc.combinedRadiusKm, 0.02); // no HBR → default 20 m
-  // sqrt(mean([10000,40000,10000,40000]) m²) / 1000 = sqrt(25000)/1000 km.
+  // Combined covariance C1+C2: varR=10000+10000, varT=40000+40000; effective
+  // isotropic 1σ = sqrt((varR+varT)/2)/1000 = sqrt(50000)/1000 km.
   assert.ok(enc.sigmaKm !== undefined);
-  assert.ok(Math.abs(enc.sigmaKm! - Math.sqrt(25000) / 1000) < 1e-9);
+  assert.ok(Math.abs(enc.sigmaKm! - Math.sqrt(50000) / 1000) < 1e-9);
   assert.equal(enc.object1Designator, '25544');
   assert.equal(enc.object2Designator, '33333');
   assert.equal(enc.tca, '2026-07-02T15:00:00.000');
@@ -79,6 +80,50 @@ OBJECT_DESIGNATOR = 33333
   const enc = cdmToEncounter(parseCdm(noCov));
   assert.equal(enc.sigmaKm, undefined);
   assert.equal(enc.missDistanceKm, 0.5);
+});
+
+test('cdmToEncounter yields no sigma when only one object has covariance', () => {
+  // object1 fully covered, object2 covariance absent — must NOT masquerade as a
+  // fully-known combined uncertainty; sigma is undefined (severity-hint fallback).
+  const oneSided = `CCSDS_CDM_VERS = 1.0
+CREATION_DATE = 2026-07-02T12:00:00.000
+TCA = 2026-07-02T13:00:00.000
+MISS_DISTANCE = 300 [m]
+OBJECT = OBJECT1
+OBJECT_DESIGNATOR = 25544
+CR_R = 10000 [m**2]
+CT_T = 40000 [m**2]
+OBJECT = OBJECT2
+OBJECT_DESIGNATOR = 33333
+`;
+  assert.equal(cdmToEncounter(parseCdm(oneSided)).sigmaKm, undefined);
+});
+
+test('parseCdm routes only OBJECT1/OBJECT2; an unknown tag never corrupts object1', () => {
+  const mistagged = `CCSDS_CDM_VERS = 1.0
+MISS_DISTANCE = 100 [m]
+OBJECT = OBJECT1
+OBJECT_DESIGNATOR = 25544
+OBJECT = OBJECT3
+OBJECT_DESIGNATOR = 99999
+`;
+  const cdm = parseCdm(mistagged);
+  assert.equal(cdm.object1['OBJECT_DESIGNATOR'], '25544'); // object1 intact
+  assert.equal(cdm.object2['OBJECT_DESIGNATOR'], undefined); // OBJECT3 discarded
+});
+
+test('validateCdm flags missing fields and non-physical values', () => {
+  const good = validateCdm(parseCdm(SAMPLE_CDM));
+  assert.deepEqual(good, []);
+
+  const negMiss = parseCdm(SAMPLE_CDM.replace('MISS_DISTANCE = 145 [m]', 'MISS_DISTANCE = -50 [m]'));
+  assert.ok(validateCdm(negMiss).some((p) => /non-negative/.test(p)));
+
+  const empty = validateCdm(parseCdm('CCSDS_CDM_VERS = 1.0\n'));
+  assert.ok(empty.includes('missing TCA'));
+  assert.ok(empty.includes('missing MISS_DISTANCE'));
+  assert.ok(empty.includes('missing OBJECT1 designator'));
+  assert.ok(empty.includes('missing OBJECT2 designator'));
 });
 
 // ── Route: POST /v1/conjunctions/cdm ─────────────────────────────────────────
@@ -125,6 +170,29 @@ test('POST /v1/conjunctions/cdm rejects an empty body', async () => {
     url: '/v1/conjunctions/cdm',
     headers: AUTH,
     payload: { cdm: '' },
+  });
+  assert.equal(res.statusCode, 400);
+});
+
+test('POST /v1/conjunctions/cdm rejects a structurally invalid CDM (400, not a verdict)', async () => {
+  // A well-formed string that parses but is missing mandatory fields must be
+  // rejected, never silently scored into a default "critical"/"clear" verdict.
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/conjunctions/cdm',
+    headers: AUTH,
+    payload: { cdm: 'CCSDS_CDM_VERS = 1.0\nORIGINATOR = 18 SDS\n' },
+  });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json().error, 'invalid CDM');
+});
+
+test('POST /v1/conjunctions/cdm rejects a negative miss distance (no fail-open clear)', async () => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/conjunctions/cdm',
+    headers: AUTH,
+    payload: { cdm: SAMPLE_CDM.replace('MISS_DISTANCE = 145 [m]', 'MISS_DISTANCE = -145 [m]') },
   });
   assert.equal(res.statusCode, 400);
 });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { parseCdm, cdmToEncounter } from '../conjunction/cdm.js';
+import { parseCdm, validateCdm, cdmToEncounter } from '../conjunction/cdm.js';
 import { idempotent, idempotencyKey } from '../idempotency.js';
 
 const CdmBody = z.object({
@@ -20,6 +20,13 @@ export async function registerConjunctionRoutes(app: FastifyInstance): Promise<v
     if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
 
     const cdm = parseCdm(body.data.cdm);
+    // Reject structurally/physically invalid CDMs (missing mandatory fields,
+    // negative miss distance, missing an object) instead of scoring garbage into
+    // a spurious verdict. This route calls the agent directly, so it is the
+    // trust boundary — there is no downstream zod schema to catch bad geometry.
+    const problems = validateCdm(cdm);
+    if (problems.length) return reply.code(400).send({ error: 'invalid CDM', detail: problems });
+
     const encounter = cdmToEncounter(cdm);
     const satelliteId = body.data.satelliteId ?? encounter.object1Designator ?? 'unknown';
 
@@ -35,8 +42,9 @@ export async function registerConjunctionRoutes(app: FastifyInstance): Promise<v
               kind: 'conjunction',
               missDistanceKm: encounter.missDistanceKm,
               combinedRadiusKm: encounter.combinedRadiusKm,
-              // Omit non-positive values so the planner falls back to its own
-              // defaults instead of dividing by a zero time-to-TCA.
+              // A zero/missing time-to-TCA is not a usable maneuver horizon, so
+              // omit it — the planner then sizes the burn from its default safe
+              // horizon instead of a degenerate value.
               ...(encounter.timeToTcaSec > 0 ? { timeToTcaSec: encounter.timeToTcaSec } : {}),
               ...(encounter.sigmaKm !== undefined ? { sigmaKm: encounter.sigmaKm } : {}),
             },
