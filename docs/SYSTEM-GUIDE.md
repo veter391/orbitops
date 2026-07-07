@@ -2,7 +2,7 @@
 
 This document explains, in plain language, everything built in OrbitOps so far: what it is, how the pieces fit together, how each backend module works, what the tests actually prove, and how to run and verify it yourself. It is written so the owner can understand the system deeply, check every claim against real files, and explain it confidently in a technical interview.
 
-Every claim below is based on reading the actual source files in this repository (paths given in backticks). Nothing here is aspirational — planned-but-unbuilt work is called out explicitly in section 9.
+Every claim below is based on reading the actual source files in this repository (paths given in backticks). Nothing here is aspirational — planned-but-unbuilt work is called out explicitly in section 10.
 
 ---
 
@@ -59,7 +59,7 @@ The differentiator, verified against real competitors: existing open-source miss
 
 ## 3. The backend, piece by piece
 
-The backend is a single Node.js + TypeScript service built on **Fastify** (a fast HTTP framework with built-in schema validation and logging). It is built in small, reviewed, tested vertical "slices" — each one is a git commit (see the Definition of Done in section 6).
+The backend is a single Node.js + TypeScript service built on **Fastify** (a fast HTTP framework with built-in schema validation and logging). It is built in small, reviewed, tested vertical "slices" — each one is a git commit (see the Definition of Done in section 7).
 
 ### 3.1 Config & environment guards — `backend/src/config.ts`
 
@@ -139,7 +139,7 @@ The doc comment on `EventBus` notes explicitly that this in-process design is a 
 
 ### 3.8 Idempotency keys — `backend/src/idempotency.ts`
 
-An **idempotency key** lets a client safely retry a `POST` (e.g., after a network timeout where it's unclear if the first request succeeded) without creating a duplicate. The client sends an `Idempotency-Key` header; `idempotent()` checks the `idempotency_keys` table (`customer_id, key` as primary key, migration `006_idempotency.sql`) for a previously stored response. If found, it returns the exact same `{status, body}` instead of re-running the operation; if not, it runs the operation once and stores the result. Wired onto exactly three routes — `POST /v1/proposals`, `POST /v1/telemetry`, and `POST /v1/agent/run` (the *creation* endpoints, where a retry would otherwise duplicate data). The decision routes (`approve`/`reject`/`modify`) don't need idempotency keys: their atomic `WHERE status = 'pending'` guard already makes any retry a harmless no-op that returns the current state. The code comment is honest about a limit: this dedupes *sequential* retries, not truly concurrent simultaneous requests with the same key (that would need a lock, not just a lookup-then-insert).
+An **idempotency key** lets a client safely retry a `POST` (e.g., after a network timeout where it's unclear if the first request succeeded) without creating a duplicate. The client sends an `Idempotency-Key` header; `idempotent()` checks the `idempotency_keys` table (`customer_id, key` as primary key, migration `006_idempotency.sql`) for a previously stored response. If found, it returns the exact same `{status, body}` instead of re-running the operation; if not, it runs the operation once and stores the result. Wired onto the four *creation* endpoints, where a retry would otherwise duplicate data — `POST /v1/proposals`, `POST /v1/telemetry`, `POST /v1/agent/run`, and `POST /v1/conjunctions/cdm`. The decision routes (`approve`/`reject`/`modify`) don't need idempotency keys: their atomic `WHERE status = 'pending'` guard already makes any retry a harmless no-op that returns the current state. The code comment is honest about a limit: this dedupes *sequential* retries, not truly concurrent simultaneous requests with the same key (that would need a lock, not just a lookup-then-insert).
 
 ### 3.9 Security middleware, error shape, CORS — `backend/src/server.ts`
 
@@ -157,7 +157,7 @@ Every request gets a **correlation ID** (aka request ID): either the inbound `X-
 
 ---
 
-## 4. The multi-agent AI core (B1)
+## 4. The multi-agent AI core (B1–B4)
 
 This is the newest and most distinctive part of the backend: a real multi-agent system built with **LangGraph.js** (`@langchain/langgraph`) — a library for building "graphs" of steps (nodes) an AI pipeline moves through, with built-in support for pausing/resuming and inspecting state at each step. Files: `backend/src/agents/rules.ts` (the deterministic safety core), `backend/src/agents/graph.ts` (the graph), `backend/src/agent/index.ts` (a thin public facade), `backend/src/agent/llm.ts` (the optional LLM call).
 
@@ -168,15 +168,18 @@ Entry point: `POST /v1/agent/run` with a `satelliteId` and a list of `signals` (
 | Node | Role | What it does |
 |---|---|---|
 | **supervisor** | Router | Looks at the *kinds* of incoming signals and picks a route: `conjunctionScreener` if any signal is a `conjunction` kind, `anomalyTriager` if any is a known anomaly kind (battery/thermal/attitude/comms), else `investigate` (fallback). |
-| **conjunctionScreener** / **anomalyTriager** / **investigate** | Specialists (share one function body, different framing text) | Score every incoming signal against a rulebook (`scoreCandidates()` in `rules.ts`) — `score = baseSeverity × likelihood` — and pick the top-scoring hypothesis. |
-| **maneuverPlanner** | Planner | Turns the winning hypothesis's rule (e.g., "predicted close approach" → `{ type: 'maneuver', profile: 'avoidance_burn' }`) into a concrete planned action for that satellite. |
+| **memory** | Recall | Before the specialists run, recalls this satellite's recent prior proposals (`AgentMemory.recall()` over the `proposals` table) and emits a `RECALL` step — so the reasoning chain shows the agent is aware of what was decided before, not stateless. |
+| **conjunctionScreener** | Specialist (real math) | Turns each conjunction's geometry into a real **probability of collision** via a first-order 2D-Gaussian model (`probabilityOfCollision()` in `agents/conjunction.ts`), bands it (clear/watch/warning/critical), and picks the top hypothesis. No LLM. |
+| **anomalyTriager** | Specialist (real math) | Runs **modified z-score** outlier detection (median + MAD, `agents/anomaly.ts`) over the satellite's recent telemetry history to decide whether a metric is genuinely anomalous, and scores it. No LLM. |
+| **investigate** | Specialist (fallback) | Generic review when no specialist matches; scores signals against the rulebook (`scoreCandidates()`). |
+| **maneuverPlanner** | Planner | Turns the winning hypothesis into a concrete action. For a conjunction it sizes a real **avoidance burn** — along-track Δv and Tsiolkovsky propellant (`agents/maneuver.ts`) — for that satellite. |
 | **complianceChecker** | Critic | Checks the planned action's `type` against `KNOWN_ACTIONS` (a fixed allow-list: `maneuver`, `load_shed`, `thermal_mitigation`, `attitude_correction`, `link_handoff`, `investigate`). Unrecognized action types are downgraded to `investigate` rather than being proposed as-is. This is also the one node that optionally calls an LLM (see 4.2). |
 | **proposalDrafter** | Writer | Produces the human-readable "recommend action: X, awaiting operator approval" line for the reasoning chain. |
 | **persist** | Gate | Calls `proposals.create()` — the *only* place anything is actually written to the database, and it always writes status `pending`. |
 
 Every node also appends a `ChainStep` (`{ phase, agent, text }`) describing what it did in plain language — this becomes the proposal's `reasoningChain`, visible to the human operator as the "why" behind a suggestion. The graph is deliberately compiled **without** a checkpointer: every run is single-shot (start → end, never resumed), so keeping per-run state snapshots in memory would only accumulate forever under load. A durable Postgres checkpointer arrives with B3's human-in-the-loop `interrupt`, where pausing and resuming mid-graph genuinely needs saved state.
 
-**Reasoning-chain phases**, in order: `OBSERVE` (supervisor notes what came in and where it's routing) → `THINK` (specialist lists candidate hypotheses) → `SCORE` (specialist's top pick and its score) → `PLAN` (planner's concrete action) → `CHECK` (critic's compliance verdict) → optionally `AI` (the LLM's advisory note, if enabled) → `PROPOSE` (drafter's final recommendation).
+**Reasoning-chain phases**, in order: `OBSERVE` (supervisor notes what came in and where it's routing) → `RECALL` (memory node's note on prior decisions) → `THINK` (specialist lists candidate hypotheses) → `SCORE` (specialist's top pick and its score) → `PLAN` (planner's concrete action) → `CHECK` (critic's compliance verdict) → optionally `AI` (the LLM's advisory note, if enabled) → `PROPOSE` (drafter's final recommendation).
 
 ### 4.2 Why it's safe
 
@@ -195,9 +198,54 @@ Every node also appends a `ChainStep` (`{ phase, agent, text }`) describing what
 - **Auditable, deterministic control flow** — a LangGraph state graph (not a free-form agent loop) means the exact route taken (`path: string[]`) and every step's reasoning are recorded and inspectable per run, rather than living only in an opaque model conversation.
 - **Separation of concerns** — routing/scoring/critic logic (`rules.ts`, `graph.ts`) is fully isolated from the optional LLM call (`llm.ts`), so the LLM dependency can be swapped or removed without touching the safety-relevant code.
 
+### 4.4 The real domain math (B2–B4) — why this isn't a chatbot
+
+The specialists and planner run **real, citeable physics/statistics**, not model guesses:
+
+- **Probability of collision** (`agents/conjunction.ts`): first-order 2D-Gaussian encounter model, `Pc ≈ exp(−d²/2σ²)·(1 − exp(−R²/2σ²))` — the leading term of the standard Chan/Alfano series, accurate when the combined hard-body radius `R` ≪ position uncertainty `σ`. Banded to operator-style thresholds (`Pc ≥ 1e-3` critical, `1e-4` warning, `1e-5` watch).
+- **Anomaly detection** (`agents/anomaly.ts`): modified z-score using the **median and MAD** (median absolute deviation), `z = 0.6745·(x − median)/MAD`, flagged at `|z| ≥ 3.5`. Robust to outliers in the baseline, unlike a mean/stddev z-score.
+- **Avoidance-burn sizing** (`agents/maneuver.ts`): Clohessy–Wiltshire secular along-track model, `Δv ≈ Δs/(3·Δt)`, with propellant from the **Tsiolkovsky** rocket equation. Deterministic, with documented default satellite mass/Isp.
+- **Agent memory** (`agents/memory.ts`, B4): before scoring, the `memory` node recalls this satellite's recent proposals from the database and injects a `RECALL` step, so decisions are made in the context of prior ones (offline, structured recall — a pgvector semantic layer is a future env-gated enhancement).
+
+An **evals harness** (`test/agent-evals.test.ts`, run via `npm run evals`) runs fixture scenarios through the real graph and asserts routing, action type, Pc ranges, and — on every run — the safety invariant that **no scenario ever yields a non-pending proposal**. It is part of `npm test`, so CI is gated on it.
+
 ---
 
-## 5. The database
+## 5. The conjunction domain & connected mode (Tracks C, D)
+
+Two capabilities turn the backend from "an API" into an operator-facing system: ingesting the industry-standard collision message (Track C), and letting the browser app read the **live** backend instead of its in-browser simulation (Track D).
+
+### 5.1 CDM ingestion — `backend/src/conjunction/cdm.ts`, `backend/src/routes/conjunctions.ts`
+
+A **CDM (Conjunction Data Message)** is what satellite operators actually receive from the 18th/19th Space Defense Squadron, LeoLabs, and other space-situational-awareness providers when two objects are predicted to pass close. It is a flat **KVN** (Keyword=Value Notation) text format defined by CCSDS 508.0-B-1. No maintained permissive JS/TS CDM parser exists, so OrbitOps ships its own, dependency-free:
+
+- **`parseCdm(text)`** splits the flat KVN into a structured message: header/relative-metadata plus a per-object key/value bag for OBJECT1 and OBJECT2. It routes strictly by the `OBJECT1`/`OBJECT2` tags (an unknown tag is discarded, never allowed to corrupt object1), strips `[unit]` suffixes and `COMMENT` lines.
+- **`cdmToEncounter(cdm)`** maps the parsed message to the screener's geometry: miss distance (m→km), time-to-TCA (TCA − creation date), combined hard-body radius (per-object HBR, else a 20 m default), and a first-order combined position uncertainty `σ` from the RTN covariance of **both** objects (relative covariance `C1 + C2`; requires a full diagonal from each object, so partial/one-sided covariance never masquerades as fully-known).
+- **`validateCdm(cdm)`** is the trust-boundary guard: the route calls the agent directly (there is no downstream schema), so a structurally invalid CDM (missing TCA / MISS_DISTANCE / an object designator) or a non-physical value (negative miss distance) returns **400**, rather than being silently scored into a spurious "critical" or a fail-open "clear" verdict.
+
+The route **`POST /v1/conjunctions/cdm`** (authenticated + idempotent like every write) ingests a raw CDM, validates it, and runs the encounter through the same agent graph — so a real CDM arriving produces the same explainable, human-approval-gated proposal as any other signal.
+
+### 5.2 The browser backend client — `src/core/backend-client.js`
+
+The frontend ships as a zero-build vanilla-JS app that runs a full **deterministic simulation** in the browser (real orbital physics, SGP4, a client-side agent/audit/telemetry). "Connected mode" lets the same screens read a **live** backend instead. `backend-client.js` is a dependency-free ES-module client for the whole `/v1` API: proposals (list/get/approve/reject/modify), agent run, CDM screening, audit (recent/verify/export), telemetry, and the live WebSocket stream. Key properties:
+
+- The API key is sent only as the **`x-api-key` header**, stored only in the browser's localStorage, and **never placed in a URL** (query strings leak via logs/history/Referer).
+- The WebSocket uses the **ticket handshake**: `POST /v1/stream/ticket` (key in header) → short-lived HMAC ticket → open `ws://…/v1/stream?ticket=…`. The long-lived key never rides in the socket URL.
+- Every failure throws a `BackendError` carrying the real HTTP status, so callers can degrade gracefully; a hard timeout via `AbortController` prevents hung requests.
+
+### 5.3 Settings: choosing the data source — `src/pages/settings.js` §03
+
+A new "Connected Backend" settings section lets an operator set the backend URL + API key, toggle **Simulation ↔ Connected**, and run a real **Test connection** (health, then an authenticated queue read) that reports the honest outcome — including a 401 on a bad key and a CORS/unreachable hint on a network failure. It is off by default; the app stays in the simulation until the operator explicitly connects (and both a URL and key are present, or it warns that simulation is still active).
+
+### 5.4 Live triage on the Agent page — `src/pages/agent.js`
+
+In connected mode, the Agent page surfaces the **live backend's triage queue** above the simulation console (additive — hidden and inert in the default demo). It lists real proposals, opens any one's full **reasoning chain** (the explainable panel) with its computed facts (Pc, Δv, propellant, miss distance), and approves or rejects it through the real HITL endpoints — then **re-verifies the tamper-evident audit chain** server-side after each write. The queue **updates live**: it subscribes to the backend event stream over the WebSocket and auto-refreshes when a new proposal lands (shown by a "· live" indicator), degrading to a manual Refresh if the socket can't open. All backend-provided data is HTML-escaped before rendering, so a compromised backend can't inject script into the operator's browser.
+
+This is the "one OS" property: external inputs (a CDM) and live operations (the triage queue, the audit chain, streamed telemetry) live **inside** the existing screens, not in scattered tools.
+
+---
+
+## 6. The database
 
 Six SQL migrations, applied in order by `backend/src/db/migrate.ts` (each runs once, inside its own transaction, tracked in a `_migrations` table — safe to run on every boot).
 
@@ -225,7 +273,7 @@ Six SQL migrations, applied in order by `backend/src/db/migrate.ts` (each runs o
 
 ---
 
-## 6. How to run and verify everything yourself
+## 7. How to run and verify everything yourself
 
 ```bash
 cd backend
@@ -236,22 +284,29 @@ npm test             # run the full node:test suite (in-memory pglite, no extern
 npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 ```
 
-### The 45 tests, grouped by file
+### The 85 tests, grouped by file
 
 | File | What it proves | Tests |
 |---|---|---|
-| `test/agent.test.ts` | Multi-agent graph routing, approval lifecycle, auth requirement | 5 |
-| `test/audit.test.ts` | Hash-chain integrity, concurrent-append safety, tamper detection, per-tenant chains, export | 5 |
-| `test/health.test.ts` | Liveness endpoint, migration idempotency | 2 |
+| `test/agent.test.ts` | Multi-agent graph routing (incl. the memory/RECALL node), approval lifecycle, auth requirement | 10 |
+| `test/agent-evals.test.ts` | Fixture scenarios through the real graph: routing, action type, Pc ranges, determinism, and the always-pending safety invariant (CI-gated) | 9 |
+| `test/conjunction.test.ts` | Probability-of-collision math and risk banding | 4 |
+| `test/anomaly.test.ts` | Modified z-score (median/MAD) outlier detection | 5 |
+| `test/maneuver.test.ts` | Avoidance-burn Δv + Tsiolkovsky propellant sizing | 4 |
+| `test/cdm.test.ts` | CDM KVN parsing, unit mapping, one-sided-covariance guard, strict OBJECT routing, `validateCdm`, and the `/v1/conjunctions/cdm` route (incl. 400 on invalid/negative miss) | 12 |
+| `test/audit.test.ts` | Hash-chain integrity, concurrent-append safety, tamper detection, per-tenant chains, export | 6 |
+| `test/proposals.test.ts` | Auth requirement, approve/reject/modify, atomic no-op guards, tenant isolation, 404s, identity-from-auth, validation | 9 |
+| `test/telemetry.test.ts` | Ingest, raw query, bucket downsampling, latest-per-metric, tenant isolation, validation | 6 |
+| `test/stream.test.ts` | WebSocket event fan-out, tenant/satellite filtering, ticket auth | 4 |
+| `test/security.test.ts` | Helmet/rate-limit headers, body-size limit, OpenAPI spec served, middleware doesn't break auth/validation | 4 |
 | `test/idempotency.test.ts` | Retried POSTs don't duplicate; no key = no dedup | 3 |
 | `test/observability.test.ts` | Request-id correlation, OTel no-op safety, retention purge correctness | 3 |
 | `test/pagination.test.ts` | Cursor pagination covers all rows without overlap | 2 |
-| `test/proposals.test.ts` | Auth requirement, approve/reject/modify, atomic no-op guards, tenant isolation, 404s, identity-from-auth, validation | 9 |
 | `test/schema.test.ts` | FK enforcement, cascade delete | 2 |
-| `test/security.test.ts` | Helmet/rate-limit headers, body-size limit, OpenAPI spec served, middleware doesn't break auth/validation | 4 |
-| `test/stream.test.ts` | WebSocket event fan-out, tenant/satellite filtering, ticket auth | 4 |
-| `test/telemetry.test.ts` | Ingest, raw query, bucket downsampling, latest-per-metric, tenant isolation, validation | 6 |
-| **Total** | | **45** |
+| `test/health.test.ts` | Liveness endpoint, migration idempotency | 2 |
+| **Total** | | **85** |
+
+Run serial for a deterministic count: `node --import tsx --test --test-concurrency=1 test/*.test.ts` (parallel pglite instances can cause file-level flakiness that is not a regression). The frontend has its own gates: `npx tsc --noEmit` (the `// @ts-check` modules) and `npx eslint src/`.
 
 ### curl examples (demo tenant, key `demo-key`)
 
@@ -260,6 +315,11 @@ npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 curl -s -X POST http://127.0.0.1:8790/v1/agent/run \
   -H "x-api-key: demo-key" -H "content-type: application/json" \
   -d '{"satelliteId":"sat-1","signals":[{"kind":"conjunction","severity":0.8}]}'
+
+# Ingest a real CCSDS CDM (KVN) and get back the encounter + a pending proposal
+curl -s -X POST http://127.0.0.1:8790/v1/conjunctions/cdm \
+  -H "x-api-key: demo-key" -H "content-type: application/json" \
+  -d '{"cdm":"CCSDS_CDM_VERS = 1.0\nCREATION_DATE = 2026-07-02T12:00:00.000\nTCA = 2026-07-02T15:00:00.000\nMISS_DISTANCE = 145 [m]\nOBJECT = OBJECT1\nOBJECT_DESIGNATOR = 25544\nCR_R = 10000 [m**2]\nCT_T = 40000 [m**2]\nOBJECT = OBJECT2\nOBJECT_DESIGNATOR = 33333\nCR_R = 10000 [m**2]\nCT_T = 40000 [m**2]\n"}'
 
 # Approve it (replace :id with the proposal id from the response above)
 curl -s -X POST http://127.0.0.1:8790/v1/proposals/:id/approve -H "x-api-key: demo-key"
@@ -301,7 +361,7 @@ The CI workflow (`.github/workflows/backend-ci.yml`) runs `npm ci`, `npm run typ
 
 ---
 
-## 7. Security model in plain words
+## 8. Security model in plain words
 
 | Protection | Attack it stops |
 |---|---|
@@ -322,7 +382,7 @@ The CI workflow (`.github/workflows/backend-ci.yml`) runs `npm ci`, `npm run typ
 
 ---
 
-## 8. Interview talking points
+## 9. Interview talking points
 
 - **Hardest problem: multi-process-safe audit serialization.** A hash chain needs a strict "read last row, compute next hash, write" sequence; naive code forks the chain the moment two processes run. Solved with a `pg_advisory_xact_lock` keyed by tenant — a database-native lock, not an application-level queue, so it holds even across multiple server processes sharing one Postgres. Proven with 15 real concurrent appends against a live pooled connection, not just unit tests.
 - **Tamper-evident audit log, explained simply:** each entry's hash depends on the previous entry's hash *and* a server-only secret (HMAC), so changing history requires both rewriting every subsequent hash *and* knowing the secret — and `verify()` can point to exactly which entry broke.
@@ -335,16 +395,22 @@ The CI workflow (`.github/workflows/backend-ci.yml`) runs `npm ci`, `npm run typ
 - **Why the critic (complianceChecker) exists separately from the planner:** it lets a second, independent check (currently a fixed allow-list, extensible to real compliance rules) veto or downgrade a plan before a human ever sees it, and it's the single, contained place an LLM is allowed to add commentary — keeping the blast radius of "the LLM said something wrong" to an advisory note, never a decision.
 - **Why telemetry never touches the audit log:** the audit chain is for accountable decisions (who did what, when); mixing in high-volume sensor noise would both dilute its signal and hash-chain millions of rows for no accountability benefit.
 - **One-line "why X" answers:** *Why zod?* — schema validation at every input boundary with TypeScript types generated from the same schema. *Why Fastify?* — built-in JSON-schema validation and structured logging, fast enough not to be a bottleneck. *Why LangGraph over a custom loop?* — durable, inspectable state machine with first-class human-in-the-loop pause/resume semantics, not just a prompt loop.
+- **"It's not a chatbot" — the strongest single point.** The decisions are real math (probability-of-collision, MAD anomaly detection, Clohessy–Wiltshire burn sizing), the LLM is advisory-only and env-gated, and every decision is deterministic and reproducible (an evals test asserts identical inputs → identical decision). Show the reasoning chain: OBSERVE → RECALL → THINK → SCORE → PLAN → CHECK → PROPOSE, each step in plain language.
+- **Why I wrote a CDM parser from scratch:** a CDM (CCSDS 508.0-B-1) is the real message operators receive for a predicted conjunction; no maintained permissive JS/TS parser exists, and the parser is also a *trust boundary* — it validates and rejects malformed/non-physical input with a 400 rather than scoring garbage into a false verdict.
+- **"One OS" — connected mode:** the same browser screens run a full deterministic simulation offline *or* read the live backend (real triage queue, audit chain, streamed telemetry over a WebSocket) — additive and flag-gated, so the public demo never breaks. All backend data is HTML-escaped, and the API key is never put in a URL (the WS uses a short-lived ticket).
+- **How I found and fixed real bugs, not imaginary ones:** a team-review pass (independent code + security reviewers) surfaced confirmed issues — a one-sided-covariance correctness trap in the Pc math, a fail-open "clear" verdict on corrupt CDM input, and a browser event-listener leak — each fixed with a test or a live end-to-end verification, not a drive-by rewrite.
 
 ---
 
-## 9. What's next
+## 10. What's next
 
-Track A (hardening) and B1 (agent-graph scaffolding) are done; the planned next steps:
+**Done so far:** Track A (hardening), Track B (the full multi-agent core — B1 graph, B2 real Pc + MAD anomaly math, B3 burn sizing + generator-critic, B4 agent memory, B5 evals + CI gate), Track C (CDM ingestion), and Track D (connected mode: browser client, settings, live triage, WebSocket streaming). A team code + security review of Tracks C–D found and fixed the confirmed issues; the security review found no vulnerabilities.
 
-- **B2** — Add the real Supervisor + deterministic ConjunctionScreener/AnomalyTriager domain logic (today's rulebook is a first pass; B2 deepens the actual orbital/anomaly math behind it).
-- **B3** — ManeuverPlanner + ComplianceChecker as a true generator-critic pair, plus a native LangGraph HITL `interrupt` (pause mid-graph for approval, then resume with the same state) instead of always finishing the graph and waiting for an external approve call.
-- **B4** — Long-term agent memory using pgvector (a vector-search extension for Postgres) on pglite/Postgres, so the supervisor and specialists can recall prior operator decisions.
-- **B5** — An evals harness (automated test cases with known-correct answers) gating CI on agent output quality and on the invariant "never auto-executes an irreversible action."
-- **Track C** — Real conjunction-data-message (CDM) ingest, probability-of-collision math, and an explainable maneuver decision-support UI (evidence, contrastive reasoning, uncertainty, reversible preview).
-- **Track D** — Frontend "connected mode" wiring: a conjunction triage queue, an explainable-decision panel, and an audit-export UX in the browser app — additive, never breaking demo mode.
+Remaining path toward a production deployment:
+
+- **HITL `interrupt` in the graph** — a native LangGraph pause/resume (with the durable Postgres checkpointer) so the graph genuinely suspends mid-run awaiting approval, instead of finishing and waiting for a separate approve call. Requires the checkpointer that was deliberately deferred (section 4.1).
+- **pgvector semantic memory (B4b)** — an env-gated vector-search layer so recall is semantic, not just structured over recent rows.
+- **Live telemetry in the browser** — extend connected mode's WebSocket subscription to stream telemetry into the cockpit/dashboard (the client and the `telemetry` stream event already exist; this wires them to those screens).
+- **Real TLE/ephemeris feeds** — wire the settings "Data Sources" section (CelesTrak is real; Space-Track/N2YO proxies are planned) to feed the live catalog.
+- **Deployment & scale** — Cloudflare/edge or container deploy with managed Postgres (TimescaleDB hypertable for telemetry), a shared event bus/rate-limit store (Redis) if multi-instance, secrets management for `AUDIT_HMAC_KEY`, and CI wired to run `npm test` + `npm run evals` + `tsc` + `eslint` on every PR.
+- **Operator UX polish** — CDM upload UI (paste/drag a `.cdm`), modify-proposal flow in the live triage panel, and an audit-export UX in connected mode.
