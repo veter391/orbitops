@@ -18,7 +18,7 @@ import {
 } from './rules.js';
 import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
 import { detectAnomaly } from './anomaly.js';
-import { sizeAvoidanceBurn } from './maneuver.js';
+import { sizeAvoidanceBurn, avoidanceBurnAlternatives } from './maneuver.js';
 
 /**
  * The multi-agent core (LangGraph): a supervisor routes each event to a
@@ -268,7 +268,17 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
       plan['propellantKg'] = burn.propellantKg;
       plan['targetMissKm'] = burn.targetMissKm;
       plan['burnMethod'] = burn.method;
-      burnNote = ` Sized avoidance burn: Δv ${burn.deltaVMs.toFixed(3)} m/s, ${burn.propellantKg.toFixed(3)} kg propellant to reach ${burn.targetMissKm.toFixed(2)} km miss.`;
+      // Offer ranked alternatives (along-track / radial / cross-track) so the
+      // operator sees the trade, not a single plan.
+      const alternatives = avoidanceBurnAlternatives({
+        currentMissKm: plan['missDistanceKm'] as number,
+        timeToTcaSec: top.signal.timeToTcaSec,
+        ...(top.signal.satMassKg != null ? { satMassKg: top.signal.satMassKg } : {}),
+        ...(top.signal.ispSec != null ? { ispSec: top.signal.ispSec } : {}),
+      });
+      plan['alternatives'] = alternatives;
+      const cheapest = alternatives[0];
+      burnNote = ` Sized avoidance burn: Δv ${burn.deltaVMs.toFixed(3)} m/s, ${burn.propellantKg.toFixed(3)} kg propellant to reach ${burn.targetMissKm.toFixed(2)} km miss.${cheapest ? ` Cheapest direction: ${cheapest.direction} (Δv ${cheapest.deltaVMs.toFixed(3)} m/s).` : ''}`;
     }
 
     const pcNote =
