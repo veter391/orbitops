@@ -16,6 +16,11 @@ export interface Signal {
   missDistanceKm?: number;
   sigmaKm?: number;
   combinedRadiusKm?: number;
+  /** Precomputed high-fidelity Pc (e.g. full-covariance 2D from a CDM); overrides
+   *  the first-order estimate in the screener when present. */
+  pc?: number;
+  /** Label for how `pc` was computed, surfaced in the reasoning chain. */
+  pcMethod?: string;
   // Maneuver-sizing inputs (optional) — let the ManeuverPlanner size a real burn.
   timeToTcaSec?: number;
   satMassKg?: number;

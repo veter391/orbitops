@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { parseCdm, validateCdm, cdmToEncounter } from '../conjunction/cdm.js';
+import { parseCdm, validateCdm, cdmToEncounter, cdmToPc2dInput } from '../conjunction/cdm.js';
+import { probabilityOfCollision2D } from '../conjunction/pc2d.js';
 import { idempotent, idempotencyKey } from '../idempotency.js';
 
 const CdmBody = z.object({
@@ -30,6 +31,14 @@ export async function registerConjunctionRoutes(app: FastifyInstance): Promise<v
     const encounter = cdmToEncounter(cdm);
     const satelliteId = body.data.satelliteId ?? encounter.object1Designator ?? 'unknown';
 
+    // When the CDM carries full state vectors + RTN covariance for both objects,
+    // compute the high-fidelity full-covariance 2D Pc (Foster/CARA) and let it
+    // drive the decision; otherwise fall back to the first-order estimate.
+    const pc2dInput = cdmToPc2dInput(cdm);
+    const pc2d = pc2dInput
+      ? probabilityOfCollision2D(pc2dInput.o1, pc2dInput.o2, pc2dInput.combinedRadiusKm)
+      : null;
+
     const { status, body: out } = await idempotent(
       app.db,
       req.customerId,
@@ -47,10 +56,15 @@ export async function registerConjunctionRoutes(app: FastifyInstance): Promise<v
               // horizon instead of a degenerate value.
               ...(encounter.timeToTcaSec > 0 ? { timeToTcaSec: encounter.timeToTcaSec } : {}),
               ...(encounter.sigmaKm !== undefined ? { sigmaKm: encounter.sigmaKm } : {}),
+              // High-fidelity Pc from the full covariance wins over the first-order one.
+              ...(pc2d ? { pc: pc2d.pc, pcMethod: 'full-covariance 2D (Foster/CARA)' } : {}),
             },
           ],
         });
-        return { status: 201, body: { encounter, ...result } };
+        return {
+          status: 201,
+          body: { encounter, ...(pc2d ? { pc2d } : {}), ...result },
+        };
       },
     );
     return reply.code(status).send(out);

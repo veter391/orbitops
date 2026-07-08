@@ -113,6 +113,11 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
   const conjunctionScreener = (state: S) => {
     const events = state.signals.filter((s) => CONJUNCTION_KINDS.has(s.kind));
     const assessed = events.map((signal) => {
+      // A precomputed high-fidelity Pc (e.g. full-covariance 2D from a CDM) wins
+      // over the first-order single-σ estimate.
+      if (typeof signal.pc === 'number') {
+        return { signal, pc: signal.pc, band: riskBand(signal.pc) };
+      }
       const hasGeom =
         typeof signal.missDistanceKm === 'number' &&
         typeof signal.sigmaKm === 'number' &&
@@ -134,11 +139,13 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
     const likelihood = worst.band ? bandLikelihood(worst.band) : clamp01(worst.signal.severity ?? 0.6);
     const top: Candidate = { rule, signal: worst.signal, likelihood, score: rule.baseSeverity * likelihood };
 
+    const pcMethod = worst.signal.pcMethod ?? (worst.pc !== null ? 'first-order 2D-Gaussian' : undefined);
     const evidence: Record<string, unknown> =
       worst.pc !== null
         ? {
             pc: worst.pc,
             riskBand: worst.band,
+            pcMethod,
             missDistanceKm: worst.signal.missDistanceKm,
             sigmaKm: worst.signal.sigmaKm,
             combinedRadiusKm: worst.signal.combinedRadiusKm,
@@ -147,7 +154,9 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
 
     const scoreText =
       worst.pc !== null
-        ? `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss (σ=${worst.signal.sigmaKm} km, R=${worst.signal.combinedRadiusKm} km) → ${worst.band}.`
+        ? worst.signal.pcMethod
+          ? `Pc = ${worst.pc.toExponential(2)} (${worst.signal.pcMethod}) at ${worst.signal.missDistanceKm} km miss → ${worst.band}.`
+          : `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss (σ=${worst.signal.sigmaKm} km, R=${worst.signal.combinedRadiusKm} km) → ${worst.band}.`
         : `No encounter geometry supplied; scored from severity hint ${likelihood.toFixed(2)}.`;
 
     return {

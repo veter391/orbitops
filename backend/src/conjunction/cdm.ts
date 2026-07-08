@@ -7,6 +7,8 @@
  * ConjunctionScreener consumes. Deterministic, dependency-free.
  */
 
+import type { Vec3, Mat3, ObjectState } from './pc2d.js';
+
 export interface CdmMessage {
   /** Header + relative-metadata keys (everything before the first OBJECT block). */
   meta: Record<string, string>;
@@ -143,4 +145,114 @@ export function cdmToEncounter(cdm: CdmMessage, referenceIso?: string): Encounte
     ...(cdm.object2['OBJECT_DESIGNATOR'] ? { object2Designator: cdm.object2['OBJECT_DESIGNATOR'] } : {}),
     ...(tca ? { tca } : {}),
   };
+}
+
+// ── Full-covariance extraction for the high-fidelity 2D Pc (pc2d) ────────────
+
+const M2_PER_KM2 = 1e6; // 1 km² = 1e6 m²
+
+function v3sub(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+function v3cross(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+function v3norm(a: Vec3): number {
+  return Math.hypot(a[0], a[1], a[2]);
+}
+function v3unit(a: Vec3): Vec3 {
+  const n = v3norm(a);
+  return [a[0] / n, a[1] / n, a[2] / n];
+}
+/** A·C·Aᵀ for 3x3 matrices, with A given by its rows. */
+function abcT(A: Mat3, C: Mat3): Mat3 {
+  const [a0, a1, a2] = A;
+  const mul = (row: Vec3): Vec3 => [
+    row[0] * C[0][0] + row[1] * C[1][0] + row[2] * C[2][0],
+    row[0] * C[0][1] + row[1] * C[1][1] + row[2] * C[2][1],
+    row[0] * C[0][2] + row[1] * C[1][2] + row[2] * C[2][2],
+  ];
+  const m0 = mul(a0);
+  const m1 = mul(a1);
+  const m2 = mul(a2);
+  const d = (x: Vec3, y: Vec3): number => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+  return [
+    [d(m0, a0), d(m0, a1), d(m0, a2)],
+    [d(m1, a0), d(m1, a1), d(m1, a2)],
+    [d(m2, a0), d(m2, a1), d(m2, a2)],
+  ];
+}
+
+/**
+ * Build an ECI ObjectState from one CDM object bag: parse the state vector
+ * (X/Y/Z km, X_DOT/Y_DOT/Z_DOT km/s) and the RTN position covariance
+ * (CR_R..CN_N, m²), then rotate the covariance RTN→ECI. RTN axes: R̂ radial,
+ * N̂ = (r×v)/|r×v| cross-track, T̂ = N̂×R̂ in-track (CCSDS convention). Returns
+ * null if any required state or covariance term is missing.
+ */
+export function cdmObjectState(bag: Record<string, string>): ObjectState | null {
+  const X = num(bag, 'X');
+  const Y = num(bag, 'Y');
+  const Z = num(bag, 'Z');
+  const XD = num(bag, 'X_DOT');
+  const YD = num(bag, 'Y_DOT');
+  const ZD = num(bag, 'Z_DOT');
+  const crr = num(bag, 'CR_R');
+  const ctr = num(bag, 'CT_R');
+  const ctt = num(bag, 'CT_T');
+  const cnr = num(bag, 'CN_R');
+  const cnt = num(bag, 'CN_T');
+  const cnn = num(bag, 'CN_N');
+  if (
+    X === undefined || Y === undefined || Z === undefined ||
+    XD === undefined || YD === undefined || ZD === undefined ||
+    crr === undefined || ctr === undefined || ctt === undefined ||
+    cnr === undefined || cnt === undefined || cnn === undefined
+  ) {
+    return null;
+  }
+  const r: Vec3 = [X, Y, Z];
+  const v: Vec3 = [XD, YD, ZD];
+  // RTN position covariance (order R,T,N), m² → km².
+  const s = 1 / M2_PER_KM2;
+  const covRtn: Mat3 = [
+    [crr * s, ctr * s, cnr * s],
+    [ctr * s, ctt * s, cnt * s],
+    [cnr * s, cnt * s, cnn * s],
+  ];
+  // Q columns = [R̂, T̂, N̂]; Cov_eci = Q·Cov_rtn·Qᵀ (rows of Q below).
+  const Rh = v3unit(r);
+  const cr = v3cross(r, v);
+  if (v3norm(cr) === 0) return null; // r ∥ v: no RTN frame
+  const Nh = v3unit(cr);
+  const Th = v3cross(Nh, Rh);
+  const Q: Mat3 = [
+    [Rh[0], Th[0], Nh[0]],
+    [Rh[1], Th[1], Nh[1]],
+    [Rh[2], Th[2], Nh[2]],
+  ];
+  return { r, v, cov: abcT(Q, covRtn) };
+}
+
+export interface Pc2dCdmInput {
+  o1: ObjectState;
+  o2: ObjectState;
+  combinedRadiusKm: number;
+}
+
+/**
+ * Extract both objects' ECI states + covariances and the combined hard-body
+ * radius for the full-covariance 2D Pc. Returns null when either object lacks a
+ * complete state vector or RTN covariance (then the route falls back to the
+ * first-order estimate from {@link cdmToEncounter}).
+ */
+export function cdmToPc2dInput(cdm: CdmMessage): Pc2dCdmInput | null {
+  const o1 = cdmObjectState(cdm.object1);
+  const o2 = cdmObjectState(cdm.object2);
+  if (!o1 || !o2) return null;
+  const hbr1 = num(cdm.object1, 'HBR');
+  const hbr2 = num(cdm.object2, 'HBR');
+  const combined =
+    hbr1 !== undefined || hbr2 !== undefined ? ((hbr1 ?? 0) + (hbr2 ?? 0)) / 1000 : DEFAULT_COMBINED_HBR_KM;
+  return { o1, o2, combinedRadiusKm: combined > 0 ? combined : DEFAULT_COMBINED_HBR_KM };
 }
