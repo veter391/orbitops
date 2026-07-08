@@ -58,11 +58,17 @@ test('pc2d rises monotonically with a larger hard-body radius', () => {
   assert.ok(large > small, `Pc should grow with HBR: ${small} -> ${large}`);
 });
 
-test('a very large hard-body radius returns a finite probability (no overflow/hang)', () => {
-  // Regression: the split-exponential form used to overflow to NaN and hang the
-  // quadrature here. A 550 km combined radius is unphysical but must stay finite.
-  const res = probabilityOfCollision2D(OMITRON_1, OMITRON_2, 550);
+test('an extreme hard-body radius returns a finite probability fast (no overflow/hang)', () => {
+  // Regression: a huge HBR used to overflow to NaN and burn the full recursion,
+  // hanging the (single-threaded) event loop. The eval budget + finite guard must
+  // now bound it: 1e200 km returns quickly with a finite, clamped result.
+  const t0 = Date.now();
+  const res = probabilityOfCollision2D(OMITRON_1, OMITRON_2, 1e200);
   assert.ok(Number.isFinite(res.pc) && res.pc >= 0 && res.pc <= 1, `pc = ${res.pc}`);
+  assert.ok(Date.now() - t0 < 3000, 'must return quickly, not hang');
+  // A merely-large (but finite-behaving) radius still gives a valid probability.
+  const big = probabilityOfCollision2D(OMITRON_1, OMITRON_2, 550);
+  assert.ok(Number.isFinite(big.pc) && big.pc >= 0 && big.pc <= 1, `pc = ${big.pc}`);
 });
 
 test('degenerate geometry (zero relative velocity) returns a clean result, no NaN', () => {

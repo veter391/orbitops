@@ -673,6 +673,8 @@ function mountLiveTriage(app) {
   function wireDecision(id) {
     const approve = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltApprove'));
     const reject = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltReject'));
+    const modify = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltModify'));
+    const dirSel = /** @type {HTMLSelectElement|null} */ (detailEl.querySelector('#ltModifyDir'));
     const result = /** @type {HTMLElement|null} */ (detailEl.querySelector('#ltResult'));
     const reasonEl = /** @type {HTMLTextAreaElement|null} */ (detailEl.querySelector('#ltReason'));
     if (!approve || !reject || !result) return;
@@ -680,10 +682,16 @@ function mountLiveTriage(app) {
     /** True while this exact proposal is still the one on screen. */
     const stillCurrent = () => !disposed && selectedId === id;
 
+    /** Disable/enable all three decision buttons together. @param {boolean} on */
+    const setBusy = (on) => {
+      approve.disabled = on;
+      reject.disabled = on;
+      if (modify) modify.disabled = on;
+    };
+
     /** @param {() => Promise<unknown>} fn @param {string} label */
     const decide = async (fn, label) => {
-      approve.disabled = true;
-      reject.disabled = true;
+      setBusy(true);
       result.innerHTML = `<span class="lt-result__pending">${esc(label)}…</span>`;
       try {
         await fn();
@@ -704,8 +712,7 @@ function mountLiveTriage(app) {
         if (stillCurrent()) await selectProposal(id);
       } catch (e) {
         if (!stillCurrent()) return;
-        approve.disabled = false;
-        reject.disabled = false;
+        setBusy(false);
         result.innerHTML = `<span class="lt-result__err">${esc(triageErr(e))}</span>`;
         error(triageErr(e), { title: 'Triage failed', durationMs: 4000 });
       }
@@ -718,8 +725,6 @@ function mountLiveTriage(app) {
     reject.onclick = () =>
       decide(() => client.rejectProposal(id, reasonEl ? reasonEl.value.trim() : ''), 'Rejected');
 
-    const modify = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltModify'));
-    const dirSel = /** @type {HTMLSelectElement|null} */ (detailEl.querySelector('#ltModifyDir'));
     if (modify) {
       modify.onclick = () => {
         const note = reasonEl ? reasonEl.value.trim() : '';

@@ -126,6 +126,16 @@ test('validateCdm flags missing fields and non-physical values', () => {
   assert.ok(empty.includes('missing OBJECT2 designator'));
 });
 
+test('validateCdm rejects physically-implausible HBR and covariance (DoS/overflow guard)', () => {
+  // A huge HBR would blow up the Pc integration domain; a huge covariance would
+  // overflow to an Infinity sigma. Both must be rejected before scoring.
+  const bigHbr = SAMPLE_CDM.replace('CR_R = 10000 [m**2]', 'HBR = 1e200 [m]\nCR_R = 10000 [m**2]');
+  assert.ok(validateCdm(parseCdm(bigHbr)).some((p) => /HBR is implausible/.test(p)));
+
+  const bigCov = SAMPLE_CDM.replace('CR_R = 10000 [m**2]', 'CR_R = 1e300 [m**2]');
+  assert.ok(validateCdm(parseCdm(bigCov)).some((p) => /covariance is implausible/.test(p)));
+});
+
 // ── Route: POST /v1/conjunctions/cdm ─────────────────────────────────────────
 let app: FastifyInstance;
 const AUTH = { 'x-api-key': DEMO_KEY };

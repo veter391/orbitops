@@ -98,8 +98,28 @@ export function validateCdm(cdm: CdmMessage): string[] {
   }
   if (!cdm.object1['OBJECT_DESIGNATOR']) problems.push('missing OBJECT1 designator');
   if (!cdm.object2['OBJECT_DESIGNATOR']) problems.push('missing OBJECT2 designator');
+  // Reject physically-implausible magnitudes: a huge hard-body radius would blow
+  // up the Pc integration domain, and huge covariances overflow to an Infinity
+  // sigma. Real HBR is meters-to-tens-of-meters; real position covariance is at
+  // most ~(hundreds of km)². These ceilings are generous but block abuse.
+  for (const [name, bag] of [['OBJECT1', cdm.object1], ['OBJECT2', cdm.object2]] as const) {
+    const hbr = num(bag, 'HBR');
+    if (hbr !== undefined && (hbr < 0 || hbr > MAX_HBR_M)) {
+      problems.push(`${name} HBR is implausible (0…${MAX_HBR_M} m)`);
+    }
+    for (const c of ['CR_R', 'CT_T', 'CN_N']) {
+      const v = num(bag, c);
+      if (v !== undefined && (v < 0 || v > MAX_COV_M2)) {
+        problems.push(`${name} ${c} covariance is implausible (0…${MAX_COV_M2.toExponential(0)} m²)`);
+      }
+    }
+  }
   return problems;
 }
+
+/** Physical ceilings for input sanity (defense-in-depth against abuse/overflow). */
+const MAX_HBR_M = 1e5; // 100 km combined hard-body radius — real values are meters
+const MAX_COV_M2 = 1e14; // (10,000 km)² — far beyond any real position covariance
 
 export interface Encounter {
   missDistanceKm: number;

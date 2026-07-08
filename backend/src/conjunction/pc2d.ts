@@ -116,12 +116,22 @@ function erf(x: number): number {
   return s * y;
 }
 
+/** Hard cap on integrand evaluations — a pathological input (e.g. an absurd
+ *  hard-body radius) can otherwise recurse near-indefinitely; this guarantees the
+ *  quadrature returns and can never monopolize the (single-threaded) event loop. */
+const MAX_QUADRATURE_EVALS = 200_000;
+
 /** Adaptive Simpson 1D quadrature of f over [a, b] to absolute tolerance `tol`. */
 function adaptiveSimpson(f: (x: number) => number, a: number, b: number, tol: number): number {
-  const fa = f(a);
-  const fb = f(b);
+  let evals = 0;
+  const F = (x: number): number => {
+    evals++;
+    return f(x);
+  };
+  const fa = F(a);
+  const fb = F(b);
   const c = (a + b) / 2;
-  const fc = f(c);
+  const fc = F(c);
   const s = ((b - a) / 6) * (fa + 4 * fc + fb);
   const rec = (
     a1: number,
@@ -136,12 +146,15 @@ function adaptiveSimpson(f: (x: number) => number, a: number, b: number, tol: nu
     const c1 = (a1 + b1) / 2;
     const d = (a1 + c1) / 2;
     const e = (c1 + b1) / 2;
-    const fd = f(d);
-    const fe = f(e);
+    const fd = F(d);
+    const fe = F(e);
     const sl = ((c1 - a1) / 6) * (fa1 + 4 * fd + fc1);
     const sr = ((b1 - c1) / 6) * (fc1 + 4 * fe + fb1);
     const s2 = sl + sr;
-    if (depth <= 0 || Math.abs(s2 - s1) <= 15 * tol1) return s2 + (s2 - s1) / 15;
+    // Converged, out of depth, or out of evaluation budget → stop subdividing.
+    if (depth <= 0 || evals >= MAX_QUADRATURE_EVALS || Math.abs(s2 - s1) <= 15 * tol1) {
+      return s2 + (s2 - s1) / 15;
+    }
     return (
       rec(a1, c1, fa1, fc1, fd, sl, tol1 / 2, depth - 1) +
       rec(c1, b1, fc1, fb1, fe, sr, tol1 / 2, depth - 1)
@@ -188,7 +201,9 @@ function integratePc(Cp: Mat2, x0: number, R: number): number {
   // (asking for 1e-12 only forces needless subdivision for no accuracy gain).
   const raw = adaptiveSimpson(outer, x0 - R, x0 + R, 1e-9);
   const pc = norm * raw;
-  return Math.min(1, Math.max(0, pc));
+  // Never leak a NaN/Infinity (e.g. from an extreme, budget-truncated input) into
+  // a safety-relevant field — a non-finite result is treated as no signal (0).
+  return Number.isFinite(pc) ? Math.min(1, Math.max(0, pc)) : 0;
 }
 
 /**
@@ -228,11 +243,12 @@ export function probabilityOfCollision2D(
 
   const pc = integratePc(Cp, missKm, combinedRadiusKm);
   const [l1, l2] = eig2(Cp);
+  const fin = (x: number): number => (Number.isFinite(x) ? x : 0);
   return {
     pc,
     missKm,
-    sigmaMinKm: Math.sqrt(Math.max(0, Math.min(l1, l2))),
-    sigmaMaxKm: Math.sqrt(Math.max(0, Math.max(l1, l2))),
+    sigmaMinKm: fin(Math.sqrt(Math.max(0, Math.min(l1, l2)))),
+    sigmaMaxKm: fin(Math.sqrt(Math.max(0, Math.max(l1, l2)))),
   };
 }
 
