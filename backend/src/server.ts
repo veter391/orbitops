@@ -23,6 +23,7 @@ import { registerStreamRoutes } from './routes/stream.js';
 import { registerAgentRoutes } from './routes/agent.js';
 import { registerConjunctionRoutes } from './routes/conjunctions.js';
 import { registerFeedbackRoutes } from './routes/feedback.js';
+import { registerComplianceRoutes } from './routes/compliance.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -132,6 +133,7 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   await registerAgentRoutes(app);
   await registerConjunctionRoutes(app);
   await registerFeedbackRoutes(app);
+  await registerComplianceRoutes(app);
   return app;
 }
 
