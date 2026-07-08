@@ -2082,3 +2082,18 @@
 @media (prefers-reduced-motion: reduce) {
   .ask-modal { animation: none; }
 }
+
+/* Feedback modal — thank-you state after a successful backend submit. */
+.ask-thanks { text-align: center; padding: 18px 4px 6px; }
+.ask-thanks__mark {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(62, 207, 116, 0.5);
+  color: var(--v3-ok);
+  font-size: 20px;
+}

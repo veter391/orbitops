@@ -272,6 +272,16 @@ export class BackendClient {
     return this.request(`/v1/telemetry${qs ? `?${qs}` : ''}`);
   }
 
+  // ── Feedback (public) ───────────────────────────────────────────────────────
+  /**
+   * POST /v1/feedback — public product feedback (no auth). Used by the pricing
+   * "should we build this?" brief so the owner receives real demand signal.
+   * @param {{kind: string, source?: string, tier?: string, wantsCloud?: string, fleetSize?: string, note?: string}} payload
+   */
+  submitFeedback(payload) {
+    return this.request('/v1/feedback', { method: 'POST', body: payload, auth: false });
+  }
+
   // ── Live stream (WebSocket) ─────────────────────────────────────────────────
   /**
    * Open the live event stream. Performs the ticket handshake, then connects the

@@ -11,6 +11,7 @@
 'use strict';
 
 import { mountAmbient } from '../ui/ambient.js';
+import { getBackendConfig, BackendClient } from '../core/backend-client.js';
 
 const GITHUB_URL = 'https://github.com/veter391/orbitops';
 
@@ -415,10 +416,51 @@ function openBuildFeedback(tierName) {
   });
   modal.querySelector('#askClose')?.addEventListener('click', close);
 
-  modal.querySelector('#askSubmit')?.addEventListener('click', () => {
+  /** Swap the panel to a brief thank-you, then auto-close. @param {string} msg */
+  const showThanks = (msg) => {
+    const panel = modal.querySelector('.ask-modal__panel');
+    if (panel) {
+      panel.innerHTML = `
+        <div class="ask-thanks">
+          <div class="ask-thanks__mark" aria-hidden="true">✓</div>
+          <h3 class="ask-modal__title">Signal received</h3>
+          <p class="ask-modal__lead">${msg}</p>
+        </div>`;
+    }
+    setTimeout(close, 1800);
+  };
+
+  const submitBtn = /** @type {HTMLButtonElement|null} */ (modal.querySelector('#askSubmit'));
+  submitBtn?.addEventListener('click', async () => {
     const tier = /** @type {HTMLSelectElement} */ (modal.querySelector('#askTier')).value;
     const fleet = /** @type {HTMLInputElement} */ (modal.querySelector('#askFleet')).value.trim();
     const note = /** @type {HTMLTextAreaElement} */ (modal.querySelector('#askNote')).value.trim();
+
+    // Prefer the real backend (a durable feedback table the owner reads) when
+    // one is configured; fall back to a pre-filled GitHub issue otherwise, so
+    // this works today with no deployed backend and upgrades cleanly once one is.
+    const cfg = getBackendConfig();
+    if (cfg.url) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+      try {
+        await new BackendClient(cfg).submitFeedback({
+          kind: 'pricing',
+          source: 'pricing-page',
+          tier,
+          wantsCloud: cloud,
+          fleetSize: fleet,
+          note,
+        });
+        showThanks('Logged to the backend — thank you for shaping the roadmap.');
+        return;
+      } catch {
+        // Backend unreachable — fall through to the GitHub route.
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Open a GitHub issue →';
+      }
+    }
+
     const title = `Pricing feedback: ${tier} tier`;
     const body = [
       `**Tier:** ${tier}`,
