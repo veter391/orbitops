@@ -595,6 +595,7 @@ function mountLiveTriage(app) {
     const a = p.proposedAction || {};
     const chain = Array.isArray(p.reasoningChain) ? p.reasoningChain : [];
     const pending = p.status === 'pending';
+    const alternatives = Array.isArray(a.alternatives) ? a.alternatives : [];
     /** @type {Array<[string, string]>} */
     const facts = [];
     if (a.type) facts.push(['action', String(a.type)]);
@@ -638,10 +639,27 @@ function mountLiveTriage(app) {
       ${
         pending
           ? `<div class="lt-actions">
-        <textarea class="lt-reason" id="ltReason" rows="2" placeholder="Rejection reason (optional)"></textarea>
+        <textarea class="lt-reason" id="ltReason" rows="2" placeholder="Reason / modification note (optional)"></textarea>
+        ${
+          alternatives.length
+            ? `<div class="lt-modify">
+          <label class="lt-modify__label" for="ltModifyDir">Modify — burn direction</label>
+          <select class="lt-modify__select" id="ltModifyDir">
+            <option value="">keep recommended</option>
+            ${alternatives
+              .map(
+                /** @param {any} o */ (o) =>
+                  `<option value="${esc(o.direction)}" data-dv="${Number(o.deltaVMs)}">${esc(o.direction)} · Δv ${Number(o.deltaVMs).toFixed(4)} m/s</option>`,
+              )
+              .join('')}
+          </select>
+        </div>`
+            : ''
+        }
         <div class="lt-actions__btns">
           <button class="btn btn--primary" id="ltApprove" type="button">Approve</button>
           <button class="btn" id="ltReject" type="button">Reject</button>
+          <button class="btn" id="ltModify" type="button">Modify</button>
         </div>
         <div class="lt-result" id="ltResult"></div>
       </div>`
@@ -699,6 +717,29 @@ function mountLiveTriage(app) {
     approve.onclick = () => decide(() => client.approveProposal(id), 'Approved');
     reject.onclick = () =>
       decide(() => client.rejectProposal(id, reasonEl ? reasonEl.value.trim() : ''), 'Rejected');
+
+    const modify = /** @type {HTMLButtonElement|null} */ (detailEl.querySelector('#ltModify'));
+    const dirSel = /** @type {HTMLSelectElement|null} */ (detailEl.querySelector('#ltModifyDir'));
+    if (modify) {
+      modify.onclick = () => {
+        const note = reasonEl ? reasonEl.value.trim() : '';
+        const dir = dirSel ? dirSel.value : '';
+        if (!note && !dir) {
+          if (result) result.innerHTML = `<span class="lt-result__err">add a note or choose a direction to modify</span>`;
+          return;
+        }
+        /** @type {Record<string, unknown>} */
+        const mods = {};
+        if (note) mods['operatorNote'] = note;
+        if (dir) {
+          mods['chosenDirection'] = dir;
+          const opt = dirSel && dirSel.selectedOptions[0];
+          const dv = opt ? Number(opt.getAttribute('data-dv')) : NaN;
+          if (Number.isFinite(dv)) mods['deltaVMs'] = dv;
+        }
+        decide(() => client.modifyProposal(id, mods), 'Modified');
+      };
+    }
   }
 
   // Coalesce bursty stream events into at most one queue reload per 400ms.

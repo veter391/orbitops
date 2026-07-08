@@ -1699,3 +1699,23 @@
 .lt-cdm__status--err { color: var(--v3-alert); }
 .lt-cdm__status--warn { color: var(--v3-warn); }
 .lt-cdm__status--mute { color: var(--v3-mute); }
+
+/* Modify-proposal controls in the triage detail (HITL). */
+.lt-modify { margin: 8px 0; display: flex; flex-direction: column; gap: 5px; }
+.lt-modify__label {
+  font-family: var(--v3-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+}
+.lt-modify__select {
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 3px;
+  color: var(--v3-text);
+  font-family: var(--v3-mono);
+  font-size: 0.74rem;
+  padding: 6px 8px;
+}
+.lt-modify__select:focus { outline: none; border-color: var(--v3-hairline-2); }
