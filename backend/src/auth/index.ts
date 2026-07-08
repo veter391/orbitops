@@ -55,6 +55,11 @@ export function registerAuth(app: FastifyInstance): void {
     const path = req.url.split('?')[0] ?? req.url;
     if (!path.startsWith('/v1/')) return;
 
+    // Public product-feedback submission: a prospect on the marketing site has
+    // no operator account, so the POST is whitelisted (rate-limited + validated
+    // downstream). Reading feedback (GET /v1/feedback) still requires auth.
+    if (path === '/v1/feedback' && req.method === 'POST') return;
+
     if (path === '/v1/stream') {
       const ticket = (req.query as { ticket?: string } | undefined)?.ticket;
       const customerId = ticket ? verifyTicket(ticket) : null;
