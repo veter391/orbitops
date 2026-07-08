@@ -608,18 +608,29 @@ function mountLiveTelemetry(app) {
   let streaming = false;
   let loadFailed = false;
   let satCount = 0;
+  let truncated = false;
   /** @type {WebSocket|null} */
   let socket = null;
   /** @type {ReturnType<typeof setTimeout>|null} */
   let refreshTimer = null;
   const pending = new Set();
+  const VISIBLE_CAP = 24;
   /** @type {Map<string, any[]>} satelliteId → latest points */
   const fleet = new Map();
+  /** @type {Map<string, number>} satelliteId → latest issued fetch sequence */
+  const seq = new Map();
 
   /** @param {string} kind @param {string} text */
   const setConn = (kind, text) => {
     conn.className = `ltm-conn ltm-conn--${kind}`;
     conn.innerHTML = `<span class="ltm-conn__dot"></span>${esc(text)}`;
+  };
+
+  /** Status line from the authoritative fleet count (+ truncation + live). */
+  const setConnCount = () => {
+    if (loadFailed) return;
+    const trunc = truncated ? ` (showing ${Math.min(fleet.size, VISIBLE_CAP)})` : '';
+    setConn('ok', `${satCount} satellites${trunc}${streaming ? ' · live' : ''}`);
   };
 
   const render = () => {
@@ -650,9 +661,13 @@ function mountLiveTelemetry(app) {
 
   /** @param {string} sat */
   const fetchSat = async (sat) => {
+    // Sequence-guard: drop a response if a newer fetch for this satellite has
+    // started, so overlapping in-flight requests can't resolve out of order.
+    const my = (seq.get(sat) || 0) + 1;
+    seq.set(sat, my);
     try {
       const { points } = await client.latestTelemetry(sat);
-      if (disposed) return;
+      if (disposed || seq.get(sat) !== my) return;
       fleet.set(sat, Array.isArray(points) ? points : []);
       render();
     } catch {
@@ -660,15 +675,29 @@ function mountLiveTelemetry(app) {
     }
   };
 
+  /**
+   * Reconcile the panel against the authoritative fleet list: set the count,
+   * cap the visible set, and drop satellites that no longer report.
+   * @param {Array<{satelliteId: string}>} list @returns {string[]} visible ids
+   */
+  const applyList = (list) => {
+    satCount = list.length;
+    truncated = list.length > VISIBLE_CAP;
+    const visible = list.slice(0, VISIBLE_CAP).map((s) => s.satelliteId);
+    const keep = new Set(visible);
+    for (const id of [...fleet.keys()]) if (!keep.has(id)) fleet.delete(id);
+    return visible;
+  };
+
   const loadFleet = async () => {
     try {
       const { satellites } = await client.telemetrySatellites();
       if (disposed) return;
       loadFailed = false;
-      const list = Array.isArray(satellites) ? satellites : [];
-      satCount = list.length;
-      setConn('ok', `${satCount} satellites${streaming ? ' · live' : ''}`);
-      await Promise.all(list.slice(0, 24).map((s) => fetchSat(s.satelliteId)));
+      const visible = applyList(Array.isArray(satellites) ? satellites : []);
+      setConnCount();
+      await Promise.all(visible.map(fetchSat));
+      if (!disposed) render();
     } catch (e) {
       if (disposed) return;
       loadFailed = true;
@@ -689,9 +718,19 @@ function mountLiveTelemetry(app) {
       refreshTimer = null;
       const sats = [...pending];
       pending.clear();
+      // Refresh the changed satellites' values, then reconcile membership+count
+      // against the authoritative list (so a departed satellite drops out).
       await Promise.all(sats.map(fetchSat));
-      satCount = Math.max(satCount, fleet.size);
-      if (!disposed && !loadFailed) setConn('ok', `${satCount} satellites${streaming ? ' · live' : ''}`);
+      try {
+        const { satellites } = await client.telemetrySatellites();
+        if (disposed) return;
+        loadFailed = false;
+        applyList(Array.isArray(satellites) ? satellites : []);
+        render();
+        setConnCount();
+      } catch {
+        /* reconcile is best-effort; the changed values are already applied */
+      }
     }, 400);
   };
 
@@ -713,8 +752,8 @@ function mountLiveTelemetry(app) {
       }
       socket = ws;
       streaming = true;
-      // Don't claim "live" over a load error — the grid still shows the error.
-      if (!loadFailed) setConn('ok', `${satCount} satellites · live`);
+      // setConnCount no-ops during a load error, so it won't claim "live".
+      setConnCount();
     })
     .catch(() => { /* streaming optional — manual snapshot still shown */ });
 

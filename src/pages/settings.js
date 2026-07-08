@@ -371,6 +371,7 @@ function sectionAI() {
         <input type="text" id="aiBaseUrl" class="set-input set-input--mono"
           placeholder="https://your-endpoint/v1" autocomplete="off" spellcheck="false"
           value="${esc(llm.preset.custom ? llm.baseUrl : '')}" aria-label="Custom base URL" />
+        <span class="set-hint">Only point this at an endpoint you trust — your API key is sent here.</span>
       </div>
       <div class="set-inline">
         <input type="text" id="aiModel" class="set-input set-input--mono"
