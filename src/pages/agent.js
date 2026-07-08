@@ -475,6 +475,19 @@ function mountLiveTriage(app) {
           <button class="agent-status-pill" id="ltRefresh" type="button">Refresh</button>
         </div>
       </header>
+      <div class="lt-cdm" id="ltCdmZone">
+        <div class="lt-cdm__head">
+          <span class="lt-cdm__label">Screen a CDM</span>
+          <span class="lt-cdm__hint">Paste or drop a CCSDS CDM (KVN) — a full state + covariance yields a NASA-grade Pc</span>
+        </div>
+        <textarea class="lt-cdm__input" id="ltCdmInput" rows="3" spellcheck="false"
+          placeholder="CCSDS_CDM_VERS = 1.0&#10;TCA = ...&#10;MISS_DISTANCE = ...&#10;OBJECT = OBJECT1&#10;..."></textarea>
+        <div class="lt-cdm__actions">
+          <button class="btn btn--primary" id="ltCdmScreen" type="button">Screen →</button>
+          <button class="btn" id="ltCdmClear" type="button">Clear</button>
+          <span class="lt-cdm__status" id="ltCdmStatus"></span>
+        </div>
+      </div>
       <div class="lt-grid">
         <aside class="lt-queue" id="ltQueue" aria-label="Proposal queue"></aside>
         <div class="lt-detail" id="ltDetail">
@@ -696,6 +709,79 @@ function mountLiveTriage(app) {
       if (!disposed) loadQueue();
     }, 400);
   };
+
+  // ── Screen a CDM ────────────────────────────────────────────────────────
+  // Paste or drop a CCSDS CDM; POST it, and the resulting proposal (with its
+  // high-fidelity Pc when the CDM carries full covariance) appears in the queue.
+  const cdmInput = /** @type {HTMLTextAreaElement|null} */ (host.querySelector('#ltCdmInput'));
+  const cdmZone = /** @type {HTMLElement|null} */ (host.querySelector('#ltCdmZone'));
+  const cdmStatus = /** @type {HTMLElement|null} */ (host.querySelector('#ltCdmStatus'));
+  const cdmScreenBtn = /** @type {HTMLButtonElement|null} */ (host.querySelector('#ltCdmScreen'));
+  const cdmClearBtn = host.querySelector('#ltCdmClear');
+
+  /** @param {string} kind @param {string} text */
+  const setCdmStatus = (kind, text) => {
+    if (!cdmStatus) return;
+    cdmStatus.className = `lt-cdm__status lt-cdm__status--${kind}`;
+    cdmStatus.textContent = text;
+  };
+
+  const doScreenCdm = async () => {
+    const cdm = cdmInput ? cdmInput.value.trim() : '';
+    if (!cdm) {
+      setCdmStatus('warn', 'paste a CDM first');
+      return;
+    }
+    if (cdmScreenBtn) cdmScreenBtn.disabled = true;
+    setCdmStatus('mute', 'screening…');
+    try {
+      const res = await client.screenCdm(cdm);
+      if (disposed) return;
+      const action = res && res.proposal && res.proposal.proposedAction;
+      const pc = action && action.pc;
+      const band = action && action.riskBand;
+      const method = action && action.pcMethod;
+      const label =
+        typeof pc === 'number'
+          ? `Pc ${fmtPc(pc)}${band ? ` · ${band}` : ''}${method ? ` (${method})` : ''} — proposal filed`
+          : 'screened — proposal filed';
+      setCdmStatus('ok', label);
+      await loadQueue();
+      if (res && res.proposal && res.proposal.id) await selectProposal(res.proposal.id);
+    } catch (e) {
+      if (disposed) return;
+      setCdmStatus('err', triageErr(e));
+    } finally {
+      if (cdmScreenBtn) cdmScreenBtn.disabled = false;
+    }
+  };
+
+  on(cdmScreenBtn, 'click', doScreenCdm);
+  on(cdmClearBtn, 'click', () => {
+    if (cdmInput) cdmInput.value = '';
+    setCdmStatus('mute', '');
+  });
+
+  if (cdmZone && cdmInput) {
+    on(cdmZone, 'dragover', (e) => {
+      e.preventDefault();
+      cdmZone.classList.add('is-drag');
+    });
+    on(cdmZone, 'dragleave', () => cdmZone.classList.remove('is-drag'));
+    on(cdmZone, 'drop', (e) => {
+      e.preventDefault();
+      cdmZone.classList.remove('is-drag');
+      const dt = /** @type {DragEvent} */ (e).dataTransfer;
+      const file = dt && dt.files ? dt.files[0] : null;
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        cdmInput.value = String(reader.result || '');
+        setCdmStatus('mute', `loaded ${file.name}`);
+      };
+      reader.readAsText(file);
+    });
+  }
 
   setConn('mute', 'connecting…');
   loadQueue();

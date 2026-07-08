@@ -1632,3 +1632,70 @@
 @media (max-width: 720px) {
   .lt-grid { grid-template-columns: 1fr; }
 }
+
+/* --------------------------------------------------------------------------
+   CONNECTED-MODE — Screen a CDM (paste/drop → /v1/conjunctions/cdm)
+   -------------------------------------------------------------------------- */
+.agent-live-triage .lt-cdm {
+  border: 1px solid var(--v3-hairline);
+  border-radius: 4px;
+  background: var(--v3-surface);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  transition: border-color 0.2s var(--v3-ease), background 0.2s var(--v3-ease);
+}
+.agent-live-triage .lt-cdm.is-drag {
+  border-color: var(--v3-ice);
+  background: var(--v3-surface-2);
+}
+.lt-cdm__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.lt-cdm__label {
+  font-family: var(--v3-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v3-text);
+}
+.lt-cdm__hint {
+  font-family: var(--v3-mono);
+  font-size: 0.62rem;
+  color: var(--v3-mute);
+}
+.lt-cdm__input {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  background: var(--v3-surface-2);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 3px;
+  color: var(--v3-text);
+  font-family: var(--v3-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+.lt-cdm__input:focus {
+  outline: none;
+  border-color: var(--v3-hairline-2);
+}
+.lt-cdm__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.lt-cdm__status {
+  font-family: var(--v3-mono);
+  font-size: 0.68rem;
+  color: var(--v3-text-2);
+}
+.lt-cdm__status--ok { color: var(--v3-ok); }
+.lt-cdm__status--err { color: var(--v3-alert); }
+.lt-cdm__status--warn { color: var(--v3-warn); }
+.lt-cdm__status--mute { color: var(--v3-mute); }
