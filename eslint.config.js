@@ -55,7 +55,9 @@ export default [
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-var': 'error',
       'prefer-const': 'warn',
-      eqeqeq: ['error', 'always'],
+      // Strict equality everywhere, except the idiomatic `x != null` / `x == null`
+      // check (matches both null and undefined) — the standard, safe exception.
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
