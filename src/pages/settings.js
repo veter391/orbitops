@@ -61,6 +61,7 @@ import {
   setStoredKey,
   hasLiveAI,
 } from '../core/openrouter-client.js';
+import { PROVIDERS, getLlmConfig, setLlmConfig } from '../core/llm-provider.js';
 import { MODEL_ROUTING, modelsFor } from '../core/model-routing.js';
 import { audit } from '../core/audit-log.js';
 import { isAppMode } from '../core/app-config.js';
@@ -354,13 +355,39 @@ function sectionAI() {
   const temp = getLS(K.aiTemperature, DEFAULTS.aiTemperature);
   const runLoc = getLS(K.agentRunLocation, DEFAULTS.agentRunLocation);
   const live = hasLiveAI();
+  const llm = getLlmConfig();
+
+  const providerField = `
+    <div class="set-key">
+      <div class="set-inline">
+        <select id="aiProvider" class="set-select" aria-label="LLM provider">
+          ${PROVIDERS.map(
+            (p) => `<option value="${p.id}" ${p.id === llm.providerId ? 'selected' : ''}>${esc(p.label)}</option>`,
+          ).join('')}
+        </select>
+        <span id="aiProviderHint" class="set-hint">${esc(llm.preset.note)}</span>
+      </div>
+      <div class="set-inline" id="aiBaseUrlWrap" style="${llm.preset.custom ? '' : 'display:none'}">
+        <input type="text" id="aiBaseUrl" class="set-input set-input--mono"
+          placeholder="https://your-endpoint/v1" autocomplete="off" spellcheck="false"
+          value="${esc(llm.preset.custom ? llm.baseUrl : '')}" aria-label="Custom base URL" />
+      </div>
+      <div class="set-inline">
+        <input type="text" id="aiModel" class="set-input set-input--mono"
+          placeholder="${esc(llm.preset.modelHint || 'model id')}" autocomplete="off" spellcheck="false"
+          value="${esc(llm.model)}" aria-label="Model id" />
+        <button type="button" class="set-btn" id="aiProviderSave">Save</button>
+        <span id="aiProviderStatus"></span>
+      </div>
+    </div>
+  `;
 
   const keyField = `
     <div class="set-key">
       <div class="set-key__inputwrap">
         <input type="password" id="aiKey" class="set-input set-input--mono"
-          placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false"
-          value="${esc(getStoredKey() || '')}" aria-label="OpenRouter API key" />
+          placeholder="your API key" autocomplete="off" spellcheck="false"
+          value="${esc(getStoredKey() || '')}" aria-label="Provider API key" />
         <button type="button" class="set-ghost-btn" id="aiKeyToggle"
           aria-pressed="false" aria-label="Show API key">SHOW</button>
       </div>
@@ -370,12 +397,12 @@ function sectionAI() {
         <span id="aiKeyStatus">${
           live
             ? statusDot('ok', 'LIVE · key stored in this browser')
-            : statusDot('mute', 'NO KEY · free deterministic fallback')
+            : statusDot('mute', 'NO KEY · deterministic fallback')
         }</span>
       </div>
       <p class="set-note">
-        The key is stored only in this browser's localStorage and sent only to
-        <code>openrouter.ai</code>. It is never committed, proxied, or logged.
+        The key is stored only in this browser's localStorage and sent only to the
+        provider endpoint you set above. It is never committed, proxied, or logged.
       </p>
     </div>
   `;
@@ -398,8 +425,15 @@ function sectionAI() {
     `${chip('real')}${chip('planned')}`,
     `
     ${row(
-      'OpenRouter API key',
-      'Bring your own key. Free-tier models run the public demo at zero cost.',
+      'LLM provider',
+      'Route the optional live AI through any OpenAI-compatible endpoint — OpenRouter, OpenAI, xAI (Grok), Groq, or your own (self-hosted vLLM/Ollama, an Azure gateway, or a LiteLLM proxy fronting Anthropic/Bedrock). Not locked to any vendor.',
+      providerField,
+      { chip: chip('real') },
+    )}
+
+    ${row(
+      'Provider API key',
+      'Bring your own key. On OpenRouter, free-tier models run the public demo at zero cost.',
       keyField,
       { chip: chip('real') },
     )}
@@ -529,8 +563,37 @@ function wireAiSection(root) {
   const refreshStatus = () => {
     status.innerHTML = hasLiveAI()
       ? statusDot('ok', 'LIVE · key stored in this browser')
-      : statusDot('mute', 'NO KEY · free deterministic fallback');
+      : statusDot('mute', 'NO KEY · deterministic fallback');
   };
+
+  // Provider selection — switch the LLM endpoint without touching any vendor lock.
+  const provider = /** @type {HTMLSelectElement|null} */ (root.querySelector('#aiProvider'));
+  const providerHint = /** @type {HTMLElement|null} */ (root.querySelector('#aiProviderHint'));
+  const baseUrlWrap = /** @type {HTMLElement|null} */ (root.querySelector('#aiBaseUrlWrap'));
+  const baseUrl = /** @type {HTMLInputElement|null} */ (root.querySelector('#aiBaseUrl'));
+  const model = /** @type {HTMLInputElement|null} */ (root.querySelector('#aiModel'));
+  const providerSave = root.querySelector('#aiProviderSave');
+  const providerStatus = /** @type {HTMLElement|null} */ (root.querySelector('#aiProviderStatus'));
+
+  on(provider, 'change', () => {
+    if (!provider) return;
+    setLlmConfig({ providerId: provider.value });
+    const cfg = getLlmConfig();
+    if (providerHint) providerHint.textContent = cfg.preset.note;
+    // Note: rely on inline display, not the `hidden` attribute — `.set-inline`
+    // forces display:flex and would override [hidden].
+    if (baseUrlWrap) baseUrlWrap.style.display = cfg.preset.custom ? '' : 'none';
+    if (baseUrl) baseUrl.value = cfg.preset.custom ? cfg.baseUrl : '';
+    if (model) model.placeholder = cfg.preset.modelHint || 'model id';
+    // The API key is provider-scoped — show the key stored for this provider.
+    keyInput.value = getStoredKey() || '';
+    refreshStatus();
+  });
+
+  on(providerSave, 'click', () => {
+    setLlmConfig({ baseUrl: baseUrl ? baseUrl.value : '', model: model ? model.value : '' });
+    if (providerStatus) providerStatus.innerHTML = statusDot('ok', 'endpoint saved');
+  });
 
   on(toggle, 'click', () => {
     const showing = keyInput.type === 'text';
