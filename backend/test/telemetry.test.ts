@@ -78,6 +78,32 @@ test('another tenant sees none of this tenant\'s telemetry', async () => {
   assert.equal(res.statusCode, 401); // unknown key never reaches data
 });
 
+test('lists distinct satellites that have telemetry, most-recent first', async () => {
+  await app.inject({
+    method: 'POST',
+    url: '/v1/telemetry',
+    headers: AUTH,
+    payload: {
+      readings: [
+        { satelliteId: 'oo1-02', ts: at(200), subsystem: 'pwr', metric: 'battery_v', value: 26.9, unit: 'V' },
+        { satelliteId: 'oo1-02', ts: at(200), subsystem: 'thm', metric: 'cpu_c', value: 40.1, unit: 'C' },
+      ],
+    },
+  });
+  const res = await app.inject({ method: 'GET', url: '/v1/telemetry/satellites', headers: AUTH });
+  assert.equal(res.statusCode, 200);
+  const { satellites } = res.json() as {
+    satellites: { satelliteId: string; lastTs: string; metrics: number }[];
+  };
+  const ids = satellites.map((s) => s.satelliteId);
+  assert.ok(ids.includes('oo1-01') && ids.includes('oo1-02'));
+  const oo2 = satellites.find((s) => s.satelliteId === 'oo1-02');
+  assert.equal(oo2?.metrics, 2); // battery_v + cpu_c
+
+  const unauth = await app.inject({ method: 'GET', url: '/v1/telemetry/satellites' });
+  assert.equal(unauth.statusCode, 401);
+});
+
 test('rejects an empty batch and a non-finite value', async () => {
   const empty = await app.inject({ method: 'POST', url: '/v1/telemetry', headers: AUTH, payload: { readings: [] } });
   assert.equal(empty.statusCode, 400);

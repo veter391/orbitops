@@ -67,4 +67,10 @@ export async function registerTelemetryRoutes(app: FastifyInstance): Promise<voi
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
     return { points: await app.telemetry.latestPerMetric(req.customerId, q.data.satelliteId) };
   });
+
+  // Distinct satellites with telemetry — lets a client show the whole fleet's
+  // live health without knowing satellite ids up front.
+  app.get('/v1/telemetry/satellites', async (req) => {
+    return { satellites: await app.telemetry.satellites(req.customerId) };
+  });
 }

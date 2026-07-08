@@ -174,6 +174,27 @@ export class Telemetry {
     return Number(rows[0]?.n ?? 0);
   }
 
+  /** Distinct satellites that have telemetry for this tenant, most-recent first. */
+  async satellites(
+    customerId: string,
+  ): Promise<{ satelliteId: string; lastTs: string; metrics: number }[]> {
+    const rows = await this.db.query<{
+      satellite_id: string;
+      last_ts: string | Date;
+      metrics: string | number;
+    }>(
+      `SELECT satellite_id, max(ts) AS last_ts, count(DISTINCT metric) AS metrics
+       FROM telemetry WHERE customer_id = $1
+       GROUP BY satellite_id ORDER BY last_ts DESC LIMIT 200`,
+      [customerId],
+    );
+    return rows.map((r) => ({
+      satelliteId: r.satellite_id,
+      lastTs: r.last_ts instanceof Date ? r.last_ts.toISOString() : String(r.last_ts),
+      metrics: Number(r.metrics),
+    }));
+  }
+
   /** The newest reading for each metric of one satellite (dashboard snapshot). */
   async latestPerMetric(customerId: string, satelliteId: string): Promise<TelemetryPoint[]> {
     const rows = await this.db.query<Row>(
