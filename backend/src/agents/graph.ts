@@ -19,6 +19,7 @@ import {
 import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
 import { detectAnomaly } from './anomaly.js';
 import { sizeAvoidanceBurn, avoidanceBurnAlternatives } from './maneuver.js';
+import { assessEscalation } from './escalation.js';
 
 /**
  * The multi-agent core (LangGraph): a supervisor routes each event to a
@@ -335,6 +336,23 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
         : `Action "${type}" is a known playbook; no compliance objections. Requires operator approval before execution.`;
     const chain: ChainStep[] = [{ phase: 'CHECK', agent: 'complianceChecker', text: verdict }];
 
+    // On-call escalation policy: how loudly to ring the phone for this proposal.
+    const escalation = assessEscalation({
+      ...(typeof state.plan['riskBand'] === 'string' ? { riskBand: state.plan['riskBand'] as string } : {}),
+      ...(state.top && typeof state.top.signal.timeToTcaSec === 'number'
+        ? { timeToTcaSec: state.top.signal.timeToTcaSec }
+        : {}),
+      ...(state.top && typeof state.top.signal.severity === 'number'
+        ? { severity: state.top.signal.severity }
+        : {}),
+      complianceFlagCount: flags.length,
+    });
+    chain.push({
+      phase: 'CHECK',
+      agent: 'complianceChecker',
+      text: `Escalation: ${escalation.level.toUpperCase()}${escalation.notify ? ' · page on-call' : ''} — ${escalation.reasons.join('; ')}.`,
+    });
+
     let llmAugmented = false;
     if (llmEnabled()) {
       const note = await llmAssess(
@@ -352,10 +370,8 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
       criticOk: ok && flags.length === 0,
       llmAugmented,
       plan: ok
-        ? flags.length
-          ? { ...state.plan, complianceFlags: flags }
-          : state.plan
-        : { type: 'investigate', satelliteId: state.satelliteId },
+        ? { ...state.plan, ...(flags.length ? { complianceFlags: flags } : {}), escalation }
+        : { type: 'investigate', satelliteId: state.satelliteId, escalation },
       path: ['complianceChecker'],
       chain,
     };

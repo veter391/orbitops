@@ -54,9 +54,10 @@ test('multi-agent graph: supervisor routes a conjunction through screener → pl
   ]);
 
   // Full reasoning chain across the agents; no AI step without an LLM key.
+  // Two CHECK steps: the compliance verdict and the on-call escalation policy.
   assert.deepEqual(
     body.chain.map((s) => s.phase),
-    ['OBSERVE', 'RECALL', 'THINK', 'SCORE', 'PLAN', 'CHECK', 'PROPOSE'],
+    ['OBSERVE', 'RECALL', 'THINK', 'SCORE', 'PLAN', 'CHECK', 'CHECK', 'PROPOSE'],
   );
   assert.equal(body.llmAugmented, false);
 
