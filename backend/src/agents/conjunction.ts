@@ -37,6 +37,15 @@ export function probabilityOfCollision(i: ConjunctionInputs): number {
 
 export type RiskBand = 'clear' | 'watch' | 'warning' | 'critical';
 
+/** Below this Pc a conjunction is treated as noise (auto-dismissed to cut the
+ *  alert flood) — an order of magnitude under the 'clear' band's 1e-5. */
+export const NOISE_FLOOR_PC = 1e-6;
+
+/** True when a computed Pc is low enough to auto-dismiss as noise. */
+export function isNoise(pc: number | null): boolean {
+  return pc !== null && pc >= 0 && pc < NOISE_FLOOR_PC;
+}
+
 /**
  * Operator-style banding by Pc. Thresholds follow common practice (many
  * operators and ESA act around Pc ≥ 1e-4; conservative fleets go lower). These

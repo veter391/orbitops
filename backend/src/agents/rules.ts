@@ -96,6 +96,7 @@ export const KNOWN_ACTIONS = new Set([
   'attitude_correction',
   'link_handoff',
   'investigate',
+  'monitor', // low-risk / auto-dismissed noise — recorded, no action needed
 ]);
 
 export function clamp01(n: number): number {

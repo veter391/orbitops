@@ -16,7 +16,7 @@ import {
   type Signal,
   type Candidate,
 } from './rules.js';
-import { probabilityOfCollision, riskBand, bandLikelihood } from './conjunction.js';
+import { probabilityOfCollision, riskBand, bandLikelihood, isNoise, NOISE_FLOOR_PC } from './conjunction.js';
 import { detectAnomaly } from './anomaly.js';
 import { sizeAvoidanceBurn, avoidanceBurnAlternatives } from './maneuver.js';
 import { assessEscalation } from './escalation.js';
@@ -141,12 +141,17 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
     const top: Candidate = { rule, signal: worst.signal, likelihood, score: rule.baseSeverity * likelihood };
 
     const pcMethod = worst.signal.pcMethod ?? (worst.pc !== null ? 'first-order 2D-Gaussian' : undefined);
+    // Auto-dismiss the alert flood: a Pc below the noise floor is not worth a
+    // maneuver proposal — it is recorded (audited) but flagged as noise so the
+    // planner recommends monitoring, not acting.
+    const noise = isNoise(worst.pc);
     const evidence: Record<string, unknown> =
       worst.pc !== null
         ? {
             pc: worst.pc,
             riskBand: worst.band,
             pcMethod,
+            noise,
             missDistanceKm: worst.signal.missDistanceKm,
             sigmaKm: worst.signal.sigmaKm,
             combinedRadiusKm: worst.signal.combinedRadiusKm,
@@ -155,9 +160,11 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
 
     const scoreText =
       worst.pc !== null
-        ? worst.signal.pcMethod
-          ? `Pc = ${worst.pc.toExponential(2)} (${worst.signal.pcMethod}) at ${worst.signal.missDistanceKm} km miss → ${worst.band}.`
-          : `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss (σ=${worst.signal.sigmaKm} km, R=${worst.signal.combinedRadiusKm} km) → ${worst.band}.`
+        ? noise
+          ? `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss → below noise floor (${NOISE_FLOOR_PC.toExponential(0)}); auto-dismissed as noise.`
+          : worst.signal.pcMethod
+            ? `Pc = ${worst.pc.toExponential(2)} (${worst.signal.pcMethod}) at ${worst.signal.missDistanceKm} km miss → ${worst.band}.`
+            : `Pc = ${worst.pc.toExponential(2)} at ${worst.signal.missDistanceKm} km miss (σ=${worst.signal.sigmaKm} km, R=${worst.signal.combinedRadiusKm} km) → ${worst.band}.`
         : `No encounter geometry supplied; scored from severity hint ${likelihood.toFixed(2)}.`;
 
     return {
@@ -265,6 +272,23 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
     const evidence = state.evidence ?? {};
     const plan: Record<string, unknown> = { ...top.rule.action, satelliteId: state.satelliteId, ...evidence };
 
+    // Noise auto-dismiss: a sub-noise-floor conjunction becomes a "monitor" —
+    // no maneuver is sized. It is still filed (audited) so nothing is hidden.
+    if (plan['noise'] === true) {
+      plan['type'] = 'monitor';
+      return {
+        plan,
+        path: ['maneuverPlanner'],
+        chain: [
+          {
+            phase: 'PLAN' as const,
+            agent: 'maneuverPlanner',
+            text: `Auto-dismissed as noise for ${state.satelliteId} (Pc below ${NOISE_FLOOR_PC.toExponential(0)}); recommend monitor, no maneuver.`,
+          },
+        ],
+      };
+    }
+
     let burnNote = '';
     // Size a real avoidance burn when this is a maneuver with encounter geometry.
     if (plan['type'] === 'maneuver' && typeof plan['missDistanceKm'] === 'number' && typeof top.signal.timeToTcaSec === 'number') {
@@ -337,16 +361,21 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
     const chain: ChainStep[] = [{ phase: 'CHECK', agent: 'complianceChecker', text: verdict }];
 
     // On-call escalation policy: how loudly to ring the phone for this proposal.
-    const escalation = assessEscalation({
-      ...(typeof state.plan['riskBand'] === 'string' ? { riskBand: state.plan['riskBand'] as string } : {}),
-      ...(state.top && typeof state.top.signal.timeToTcaSec === 'number'
-        ? { timeToTcaSec: state.top.signal.timeToTcaSec }
-        : {}),
-      ...(state.top && typeof state.top.signal.severity === 'number'
-        ? { severity: state.top.signal.severity }
-        : {}),
-      complianceFlagCount: flags.length,
-    });
+    // Auto-dismissed noise (or a monitor recommendation) is always routine — an
+    // imminent TCA on a sub-noise-floor conjunction is not a reason to page.
+    const isNoiseDismiss = state.plan['noise'] === true || type === 'monitor';
+    const escalation = isNoiseDismiss
+      ? { level: 'routine' as const, notify: false, reasons: ['auto-dismissed as noise — no action needed'] }
+      : assessEscalation({
+          ...(typeof state.plan['riskBand'] === 'string' ? { riskBand: state.plan['riskBand'] as string } : {}),
+          ...(state.top && typeof state.top.signal.timeToTcaSec === 'number'
+            ? { timeToTcaSec: state.top.signal.timeToTcaSec }
+            : {}),
+          ...(state.top && typeof state.top.signal.severity === 'number'
+            ? { severity: state.top.signal.severity }
+            : {}),
+          complianceFlagCount: flags.length,
+        });
     chain.push({
       phase: 'CHECK',
       agent: 'complianceChecker',
