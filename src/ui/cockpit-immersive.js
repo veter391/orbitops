@@ -17,6 +17,7 @@ import { SATELLITES } from '../data/satellites.js';
 import { agent, SCENARIOS } from '../scenarios/index.js';
 import { mountAgentPanel } from './agent-panel.js';
 import { audit } from '../core/audit-log.js';
+import { isConnected, BackendClient } from '../core/backend-client.js';
 import { error as toastError } from './toast.js';
 import { loadConstellation } from '../core/live-constellation.js';
 import { propagateEci, geodetic, speedKms } from '../core/sgp4.js';
@@ -52,6 +53,205 @@ function eciToScene(p) {
   _scenePt[1] = p.z * SCENE_SCALE;
   _scenePt[2] = -p.y * SCENE_SCALE;
   return _scenePt;
+}
+
+/** Telemetry `quality` → cockpit status color. */
+const QUALITY_COLOR = {
+  good: 'var(--ok)',
+  suspect: 'var(--warn)',
+  bad: 'var(--alert)',
+  stale: 'var(--text-mute)',
+};
+
+// Defensive render caps — the backend is a trust boundary and `latestPerMetric`
+// carries no LIMIT, so an oversized/adversarial payload must not be able to
+// freeze the footer. Mirrors the dashboard's `slice` caps.
+const MAX_LIVE_POINTS = 64; // bound the grouping pass over the readings
+const MAX_LIVE_SUBSYSTEMS = 8; // bound the number of rendered subsystem cells
+
+/**
+ * Render the LIVE telemetry panel for a selected object from real backend
+ * points, grouped by subsystem and colored by reading quality. Mirrors the
+ * SIMULATED panel's markup (same `.cockpit-tlm__*` classes) so the footer looks
+ * identical apart from an honest green "LIVE TELEMETRY" chip.
+ * @param {{name: string}} sat
+ * @param {Array<{subsystem: string, metric: string, value: number, unit: string|null, quality: string}>} points
+ * @returns {string}
+ */
+function liveTelemetryHtml(sat, points) {
+  /** @type {Map<string, typeof points>} subsystem → its points */
+  const bySub = new Map();
+  for (const p of points.slice(0, MAX_LIVE_POINTS)) {
+    const key = p.subsystem || '—';
+    const arr = bySub.get(key) || [];
+    arr.push(p);
+    bySub.set(key, arr);
+  }
+  let html =
+    `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(sat.name)}</span>` +
+    `<span class="cockpit-tlm__sub cockpit-tlm__sub--live" title="Real readings streamed from the connected backend for this satellite id.">LIVE TELEMETRY</span></div>` +
+    `<div class="cockpit-tlm__grid">`;
+  for (const [sub, pts] of [...bySub].slice(0, MAX_LIVE_SUBSYSTEMS)) {
+    html += `<div class="cockpit-tlm__cell"><div class="cockpit-tlm__cell-head">${esc(sub)}</div>`;
+    for (const p of pts.slice(0, 4)) {
+      const v = Number(p.value);
+      const val = !Number.isFinite(v)
+        ? '—'
+        : Math.abs(v) >= 100
+          ? v.toFixed(0)
+          : Math.abs(v) >= 10
+            ? v.toFixed(1)
+            : v.toFixed(2);
+      const color = QUALITY_COLOR[/** @type {keyof typeof QUALITY_COLOR} */ (p.quality)] || 'var(--ok)';
+      html +=
+        `<div class="cockpit-tlm__metric"><span class="cockpit-tlm__metric-label">${esc(p.metric)}</span>` +
+        `<span class="cockpit-tlm__metric-val" style="color: ${color};">${val}${p.unit ? ' ' + esc(p.unit) : ''}</span></div>`;
+    }
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+
+/**
+ * Connected-mode live telemetry controller for the cockpit.
+ *
+ * The cockpit shows the public catalog (Starlink/OneWeb); the backend serves an
+ * OPERATOR's own fleet telemetry keyed by an arbitrary `satelliteId`. When the
+ * operator keys their readings by a catalog object's NORAD id or exact name, the
+ * selected object's footer panel switches from SIMULATED to the real streamed
+ * readings — otherwise it stays honestly labelled SIMULATED. Fully additive and
+ * fail-safe: any backend/stream error silently leaves the cockpit in its
+ * deterministic simulation, so demo mode is never affected.
+ *
+ * @param {() => ({name: string, noradId: number}|null)} getSelected
+ * @returns {{ pointsFor: (sat: any) => any[]|null, onSelect: (sat: any) => void, dispose: () => void }}
+ */
+function createLiveTelemetry(getSelected) {
+  const client = new BackendClient();
+  let disposed = false;
+  /** @type {WebSocket|null} */
+  let socket = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let refreshTimer = null;
+  /** @type {Set<string>} coalesced ids awaiting refresh */
+  const pending = new Set();
+  /** @type {Map<string, string>} lowercased match-key → canonical backend satelliteId */
+  const ids = new Map();
+  /** @type {Map<string, any[]>} canonical satelliteId → latest points */
+  const cache = new Map();
+  /** @type {Map<string, number>} canonical satelliteId → latest issued fetch sequence */
+  const seq = new Map();
+
+  /** Resolve a catalog object to the backend satelliteId that reports it, if any.
+   * @param {any} sat @returns {string|null} */
+  const resolve = (sat) => {
+    if (!sat) return null;
+    return ids.get(String(sat.noradId).toLowerCase()) || ids.get(String(sat.name || '').toLowerCase()) || null;
+  };
+
+  /** Sequence-guarded latest-readings fetch (drops out-of-order responses).
+   * @param {string} id */
+  const fetchSat = async (id) => {
+    const my = (seq.get(id) || 0) + 1;
+    seq.set(id, my);
+    try {
+      const { points } = await client.latestTelemetry(id);
+      if (disposed || seq.get(id) !== my) return;
+      cache.set(id, Array.isArray(points) ? points : []);
+    } catch {
+      /* one satellite's fetch failing is non-fatal — the sim panel stays */
+    }
+  };
+
+  /** @param {string} id */
+  const scheduleRefresh = (id) => {
+    if (disposed) return;
+    pending.add(id);
+    if (refreshTimer) return;
+    refreshTimer = setTimeout(async () => {
+      refreshTimer = null;
+      const batch = [...pending];
+      pending.clear();
+      await Promise.all(batch.map(fetchSat));
+      // Reconcile the id/cache maps against the live fleet so a departed
+      // satellite ages out (mirrors the dashboard's post-fetch reconcile).
+      await loadIds();
+    }, 400);
+  };
+
+  const loadIds = async () => {
+    try {
+      const { satellites } = await client.telemetrySatellites();
+      if (disposed || !Array.isArray(satellites)) return;
+      // Rebuild the resolve map from the authoritative fleet list and prune any
+      // satellite that no longer reports, so ids/cache/seq stay bounded to the
+      // live fleet over a long session (the dashboard prunes the same way).
+      ids.clear();
+      for (const s of satellites) {
+        if (s && s.satelliteId) ids.set(String(s.satelliteId).toLowerCase(), s.satelliteId);
+      }
+      const live = new Set(ids.values());
+      for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id);
+      for (const id of [...seq.keys()]) if (!live.has(id)) seq.delete(id);
+      // The selected object may now resolve — warm its panel.
+      const id = resolve(getSelected());
+      if (id && !cache.has(id)) fetchSat(id);
+    } catch {
+      /* backend unreachable — the cockpit stays in its deterministic simulation */
+    }
+  };
+
+  loadIds();
+  client
+    .openStream(
+      (evt) => {
+        const d = /** @type {{satelliteId?: string}} */ ((evt && evt.data) || {});
+        if (!evt || evt.type !== 'telemetry' || !d.satelliteId) return;
+        // React only to the object currently on screen, matched directly against
+        // the selection — so we never accumulate ids for satellites never viewed.
+        const sel = getSelected();
+        if (!sel) return;
+        const key = String(d.satelliteId).toLowerCase();
+        if (key === String(sel.noradId).toLowerCase() || key === String(sel.name || '').toLowerCase()) {
+          scheduleRefresh(d.satelliteId);
+        }
+      },
+      {},
+    )
+    .then((ws) => {
+      if (disposed) {
+        try { ws.close(); } catch { /* already closing */ }
+        return;
+      }
+      socket = ws;
+    })
+    .catch(() => { /* streaming optional — the panel keeps its last snapshot / sim */ });
+
+  return {
+    /** @param {any} sat @returns {any[]|null} live points for this object, or null */
+    pointsFor(sat) {
+      const id = resolve(sat);
+      if (!id) return null;
+      const pts = cache.get(id);
+      return pts && pts.length ? pts : null;
+    },
+    /** @param {any} sat fetch the object's readings on selection if not cached */
+    onSelect(sat) {
+      if (disposed) return;
+      const id = resolve(sat);
+      if (id) {
+        if (!cache.has(id)) fetchSat(id);
+      } else {
+        // Unknown so far — reconcile in case it started reporting since load.
+        loadIds();
+      }
+    },
+    dispose() {
+      disposed = true;
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+      if (socket) { try { socket.close(); } catch { /* already closing */ } socket = null; }
+    },
+  };
 }
 
 /**
@@ -583,6 +783,7 @@ export async function mountCockpit(host, THREE) {
   function selectSat(s) {
     if (!s) return;
     selected = s;
+    liveTlm?.onSelect(s);
     rebuildOrbit();
     updateFocusHud();
     updateNextPassHud();
@@ -661,6 +862,12 @@ export async function mountCockpit(host, THREE) {
     /** @type {HTMLElement} */ (host.querySelector('#hudAudit')).textContent = `${audit.entries.length} entries`;
   }
 
+  // Connected mode: a live telemetry controller streams the operator's real
+  // fleet health from the backend and lights up the panel for any selected
+  // object whose NORAD id / name it reports. Null (and inert) in the default
+  // simulation, so demo mode is untouched.
+  const liveTlm = isConnected() ? createLiveTelemetry(() => selected) : null;
+
   // Simulated telemetry (no public per-sat feed exists) — deterministic per object.
   /** @type {Array<[string, Array<[string, number, number, string]>]>} */
   const SUBSYS = [
@@ -671,6 +878,12 @@ export async function mountCockpit(host, THREE) {
   ];
   function telemetryHtml() {
     if (!selected) return '<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">No object selected</span></div>';
+    // Connected mode: if the backend reports real telemetry for this object,
+    // show it (honestly labelled LIVE); otherwise fall through to SIMULATED.
+    if (liveTlm) {
+      const livePts = liveTlm.pointsFor(selected);
+      if (livePts) return liveTelemetryHtml(selected, livePts);
+    }
     const seed = selected.noradId;
     let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span><span class="cockpit-tlm__sub" title="No public per-satellite telemetry feed exists; these values are modelled.">SIMULATED TELEMETRY</span></div><div class="cockpit-tlm__grid">`;
     for (const [label, metrics] of SUBSYS) {
@@ -694,6 +907,7 @@ export async function mountCockpit(host, THREE) {
     const result = await loadConstellation(['starlink', 'oneweb'], { max: MAX_SATS });
     sats = /** @type {Sat[]} */ (result.sats);
     selected = sats[0] || null;
+    liveTlm?.onSelect(selected);
     buildSatObjects(sats.length);
     rebuildOrbit();
     renderList('');
@@ -823,6 +1037,7 @@ export async function mountCockpit(host, THREE) {
 
   return {
     unmount() {
+      liveTlm?.dispose();
       cancelAnimationFrame(rafId);
       cancelAnimationFrame(uiId);
       cancelAnimationFrame(hoverRaf);

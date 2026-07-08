@@ -423,6 +423,13 @@
   letter-spacing: 0.12em;
   box-shadow: 0 0 8px rgba(240, 184, 96, 0.12);
 }
+/* LIVE TELEMETRY chip — real streamed backend readings (green, not amber) */
+.cockpit-tlm__sub--live {
+  background: rgba(122, 240, 160, 0.09);
+  border-color: rgba(122, 240, 160, 0.55);
+  color: var(--ok);
+  box-shadow: 0 0 8px rgba(122, 240, 160, 0.16);
+}
 
 .cockpit-tlm__cell {
   background: rgba(9, 15, 24, 0.6);
