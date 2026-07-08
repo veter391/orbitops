@@ -57,3 +57,19 @@ test('pc2d rises monotonically with a larger hard-body radius', () => {
   const large = probabilityOfCollision2D(OMITRON_1, OMITRON_2, 0.1).pc;
   assert.ok(large > small, `Pc should grow with HBR: ${small} -> ${large}`);
 });
+
+test('a very large hard-body radius returns a finite probability (no overflow/hang)', () => {
+  // Regression: the split-exponential form used to overflow to NaN and hang the
+  // quadrature here. A 550 km combined radius is unphysical but must stay finite.
+  const res = probabilityOfCollision2D(OMITRON_1, OMITRON_2, 550);
+  assert.ok(Number.isFinite(res.pc) && res.pc >= 0 && res.pc <= 1, `pc = ${res.pc}`);
+});
+
+test('degenerate geometry (zero relative velocity) returns a clean result, no NaN', () => {
+  // Co-moving objects have no well-defined encounter plane — must not leak NaN.
+  const a: ObjectState = { r: [0, 0, 0], v: [1, 0, 0], cov: OMITRON_1.cov };
+  const b: ObjectState = { r: [0, 1, 0], v: [1, 0, 0], cov: OMITRON_2.cov };
+  const res = probabilityOfCollision2D(a, b, 0.01);
+  assert.equal(res.pc, 0);
+  assert.ok(Number.isFinite(res.sigmaMinKm) && Number.isFinite(res.sigmaMaxKm), 'sigmas must not be NaN');
+});

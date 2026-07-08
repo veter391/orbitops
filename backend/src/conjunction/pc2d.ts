@@ -174,15 +174,19 @@ function integratePc(Cp: Mat2, x0: number, R: number): number {
     const b = Math.sqrt(half);
     const beta = (iC12 + iC21) * x; // linear-in-z coefficient
     const shift = beta / (2 * a);
-    // ∫_{-b}^{b} exp(-½(a z² + beta z)) dz = exp(beta²/(8a))·√(π/2a)·[erf(...) - erf(...)]
-    const inner =
-      Math.exp((beta * beta) / (8 * a)) *
-      Math.sqrt(Math.PI / (2 * a)) *
-      (erf((b + shift) * sA) - erf((-b + shift) * sA));
-    return Math.exp(-0.5 * iC11 * x * x) * inner;
+    // ∫_{-b}^{b} exp(-½(a z² + beta z)) dz = exp(beta²/8a)·√(π/2a)·[erf(...) - erf(...)].
+    // Combine the beta²/8a term with the outer -½·C11·x² into ONE exponent: for a
+    // positive-definite covariance this marginal exponent is ≤ 0, so exp() cannot
+    // overflow (the old split form did exp(huge)·tiny → Inf·small → NaN, which
+    // then hung the quadrature on a large hard-body radius).
+    const expo = -0.5 * iC11 * x * x + (beta * beta) / (8 * a);
+    const erfDiff = erf((b + shift) * sA) - erf((-b + shift) * sA);
+    return Math.exp(expo) * Math.sqrt(Math.PI / (2 * a)) * erfDiff;
   };
 
-  const raw = adaptiveSimpson(outer, x0 - R, x0 + R, 1e-12);
+  // Absolute tolerance consistent with the erf approximation's ~1.5e-7 error floor
+  // (asking for 1e-12 only forces needless subdivision for no accuracy gain).
+  const raw = adaptiveSimpson(outer, x0 - R, x0 + R, 1e-9);
   const pc = norm * raw;
   return Math.min(1, Math.max(0, pc));
 }
@@ -201,6 +205,13 @@ export function probabilityOfCollision2D(
   const v = sub(o1.v, o2.v);
   const h = cross(r, v);
   const missKm = normV(r);
+
+  // Degenerate encounter geometry — zero relative velocity (co-moving objects) or
+  // r ∥ v (h = 0) — has no well-defined encounter plane, so the short-term method
+  // does not apply. Return a clean zero rather than leaking NaN into the sigmas.
+  if (!(normV(v) > 0) || !(normV(h) > 0)) {
+    return { pc: 0, missKm, sigmaMinKm: 0, sigmaMaxKm: 0 };
+  }
 
   // Encounter frame: ŷ along relative velocity, ẑ along relative angular
   // momentum, x̂ completing the right-handed triad (in-plane miss direction).

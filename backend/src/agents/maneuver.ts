@@ -81,7 +81,12 @@ export function avoidanceBurnAlternatives(
   const safe = i.safeMissKm ?? DEFAULT_SAFE_MISS_KM;
   const mass = i.satMassKg ?? DEFAULT_SAT_MASS_KG;
   const isp = i.ispSec ?? DEFAULT_ISP_SEC;
-  const n = i.meanMotionRadPerSec ?? DEFAULT_MEAN_MOTION_RAD_S;
+  // Mean motion must be positive; a non-positive value would yield negative Δv
+  // that sorts as "cheapest" and slips past the compliance envelope check.
+  const n =
+    i.meanMotionRadPerSec && i.meanMotionRadPerSec > 0
+      ? i.meanMotionRadPerSec
+      : DEFAULT_MEAN_MOTION_RAD_S;
   const target = Math.max(i.currentMissKm, safe);
   const addedM = Math.max(0, target - i.currentMissKm) * 1000;
   const dt = i.timeToTcaSec;
