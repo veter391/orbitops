@@ -27,7 +27,8 @@ We publish this table because a demo that blurs the line is a demo you can't tru
 | Backend API | **Real** | Node + TypeScript (Fastify) service: authenticated REST + WebSocket, per-tenant isolation, real Postgres in prod (in-process pglite for zero-setup dev). Runs standalone; the browser app is an additive layer on top. See [docs/SYSTEM-GUIDE.md](docs/SYSTEM-GUIDE.md). |
 | Audit log | **Real** | Append-only, tamper-evident hash chain. The browser signs with SHA-256; the backend upgrades it to keyed **HMAC** with multi-process-safe serialization, plus `verify` and JSON/CSV export. |
 | Telemetry | **Real (your fleet) · simulated only in the keyless demo** | The backend **ingests and serves your constellation's real telemetry** (`POST /v1/telemetry`, time-bucket downsampling, retention). No public API exposes a spacecraft's internal battery/thermal/comms health, so the keyless browser demo clearly labels those streams as simulated **until you connect your own feed**. |
-| Multi-agent AI copilot | **Real · your OpenRouter key only for the optional LLM step** | A LangGraph multi-agent pipeline (supervisor → conjunction screener / anomaly triager → maneuver planner → compliance critic → drafter) files a *pending* proposal that a human approves. All scoring and planning is deterministic and runs with **no key**; the LLM adds an advisory note only when you supply an OpenRouter key — and never changes the decision. |
+| Multi-agent AI copilot | **Real · deterministic math; optional bring-your-own-model LLM** | A LangGraph multi-agent pipeline (supervisor → conjunction screener / anomaly triager → maneuver planner → compliance critic → drafter) files a *pending* proposal a human approves. All scoring and planning is deterministic and runs with **no key**. The optional LLM adds only an advisory note (never changes the decision) and can point at **any OpenAI-compatible endpoint** — OpenRouter, OpenAI, xAI (Grok), Groq, or your own self-hosted / gateway model. |
+| Conjunction probability of collision (Pc) | **Real · NASA-validated** | The screener computes a **full-covariance 2D Pc — the Foster-1992 / CARA method** (covariance projected into the encounter plane, analytic + adaptive-quadrature integration), not a simplified circular estimate. Validated against NASA CARA's own `Pc2D_Foster` reference vector to a **relative error of ~3×10⁻⁶** — about 260× tighter than NASA's own 1×10⁻³ test tolerance — and independently cross-checked by a second, from-scratch quadrature. Deterministic, no LLM. |
 | AI scenarios (browser demo) | **Demo** | The 5 in-browser scenario chains are scripted demonstrations over deterministically computed numbers. The real, non-scripted reasoning pipeline is the backend copilot above. |
 | Anomaly accuracy figures | **Not published** | There is no pilot fleet, so there are no precision/lead-time numbers. We won't invent them. |
 
@@ -50,7 +51,7 @@ The npx installer ships with the open-source release.
 git clone https://github.com/veter391/orbitops && cd orbitops && npx serve .
 ```
 
-Open `http://localhost:8080`. No build step, no signup, no environment variables, no API keys required. Optional: add an OpenRouter key in the Agent page settings to switch the reasoning console from simulated to live LLM output.
+Open `http://localhost:8080`. No build step, no signup, no environment variables, no API keys required. Optional: add a model-provider key in Settings (OpenRouter, OpenAI, xAI/Grok, or your own OpenAI-compatible endpoint) to switch the reasoning console from simulated to live LLM output.
 
 ---
 
@@ -70,8 +71,8 @@ Open `http://localhost:8080`. No build step, no signup, no environment variables
  │  ├─ pricing        ├─ telemetry.js (demo feed; real via backend) │
  │  └─ docs           ├─ audit-log.js (SHA-256 hash chain)          │
  │                    ├─ model-routing.js ──┐                       │
- │                    ├─ llm-agents.js ─────┼── OpenRouter (BYOK,   │
- │                    └─ openrouter-client ─┘   optional)           │
+ │                    ├─ llm-provider.js ───┼── any OpenAI-compat.  │
+ │                    └─ llm-agents.js ─────┘   endpoint (BYO model)│
  │                                                                  │
  │  ui/ (cockpit 3D, agent panel, ambient, toast)  styles/ (CSS)    │
  └──────────────────────────────────────────────────────────────────┘
@@ -83,11 +84,11 @@ Vanilla JS ES modules, Three.js vendored locally, no framework, no bundler. The 
 
 ---
 
-## AI: bring your own key
+## AI: bring your own model
 
 The reasoning console runs a three-agent pipeline — **Analyst → Strategist → Safety Reviewer** — over numbers that deterministic flight-dynamics code has already computed. The LLMs interpret; they never invent telemetry or delta-v figures. Nothing executes without human approval.
 
-- **BYOK**: your OpenRouter key, stored only in your browser's localStorage, sent only to openrouter.ai.
+- **Bring your own model** — not locked to any vendor. Point the optional LLM at **any OpenAI-compatible endpoint**: OpenRouter, OpenAI, xAI (Grok, `api.x.ai/v1`), Groq, or your own self-hosted vLLM/Ollama, an Azure gateway, or a LiteLLM proxy fronting Anthropic/Bedrock/an in-house model. The key is stored only in your browser's localStorage and sent only to the endpoint you set. Configure it in Settings → *LLM provider*.
 - **Model routing**: each task gets an ordered fallback chain of models — see [`src/core/model-routing.js`](src/core/model-routing.js). Three profiles: `free` (verified free-tier models, works today, the default), `balanced` and `frontier` (empty by design — operators fill in their org-approved paid models; we don't guess model IDs for you).
 - **Graceful degradation**: if a model is saturated the chain falls through; if everything fails the UI keeps the deterministic output. A public demo must never hard-fail on shared free infrastructure.
 
@@ -97,11 +98,14 @@ The reasoning console runs a three-agent pipeline — **Analyst → Strategist �
 
 **Shipped (open source, tested):**
 - **Node + TypeScript backend** — authenticated REST + WebSocket API, multi-tenant isolation, HMAC-signed tamper-evident audit, real telemetry ingest, and a LangGraph multi-agent human-in-the-loop copilot. Verified live on real Postgres; see [docs/SYSTEM-GUIDE.md](docs/SYSTEM-GUIDE.md).
+- **NASA-validated conjunction Pc** — full-covariance 2D probability of collision (Foster/CARA), matching NASA's reference vector to ~3×10⁻⁶; **ranked avoidance-burn alternatives** (along-track / radial / cross-track) attached to each proposal.
+- **CCSDS CDM ingest** — a dependency-free CDM (KVN) parser + a `POST /v1/conjunctions/cdm` screening route.
+- **Bring-your-own-model** — the optional LLM works against any OpenAI-compatible endpoint (OpenRouter, OpenAI, xAI/Grok, self-hosted), not locked to one vendor.
+- **Connected mode** — Settings toggle + live backend triage queue on the Agent page and live health telemetry on the Dashboard (additive; the demo is untouched).
 
 **Planned (labelled PLANNED in the UI until shipped):**
-- Browser **connected mode** — the cockpit wired to the backend for live telemetry and real (non-scripted) agent runs
+- Wire the full-covariance Pc to the CDM's own state + covariance (RTN→ECI), and the cockpit to live telemetry
 - **Streaming LLM output** in the agent console
-- Deeper conjunction screening: CCSDS **CDM** ingest + probability-of-collision decision support
 - **Managed service** (the tiers on the pricing page are indicative and clearly labelled PLANNED)
 - LeoLabs / 18 SDS integration, SOC 2
 
