@@ -1301,3 +1301,78 @@
   12.5% { opacity: 0; transform: translateY(100vh); }
   100% { opacity: 0; transform: translateY(100vh); }
 }
+
+/* --------------------------------------------------------------------------
+   CONNECTED-MODE LIVE HEALTH TELEMETRY (additive band; hidden in demo)
+   -------------------------------------------------------------------------- */
+.dv2-panel--live-tlm { --accent: var(--v3-ice); }
+.ltm-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--dv2-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v3-text-2);
+}
+.ltm-conn__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--v3-mute); }
+.ltm-conn--ok .ltm-conn__dot { background: var(--v3-ok); box-shadow: 0 0 8px var(--v3-ok); }
+.ltm-conn--err { color: var(--v3-alert); }
+.ltm-conn--err .ltm-conn__dot { background: var(--v3-alert); }
+
+.ltm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.ltm-empty {
+  padding: 1.5rem 0.5rem;
+  font-family: var(--dv2-mono);
+  font-size: 0.8rem;
+  color: var(--v3-mute);
+}
+.ltm-empty--err { color: var(--v3-alert); }
+
+.ltm-sat {
+  border: 1px solid var(--v3-hairline);
+  border-radius: 4px;
+  background: var(--v3-surface-2);
+  padding: 10px 12px;
+}
+.ltm-sat__name {
+  font-family: var(--dv2-mono);
+  font-size: 0.82rem;
+  color: var(--v3-text);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+.ltm-sat__metrics { display: flex; flex-direction: column; gap: 4px; }
+.ltm-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--v3-hairline);
+}
+.ltm-metric:last-child { border-bottom: 0; }
+.ltm-metric__k {
+  font-family: var(--dv2-mono);
+  font-size: 0.66rem;
+  color: var(--v3-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ltm-metric__v {
+  font-family: var(--dv2-mono);
+  font-size: 0.82rem;
+  color: var(--v3-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Quality: colour the value dot-free but tinted for non-good readings. */
+.ltm-metric--suspect .ltm-metric__v { color: var(--v3-warn); }
+.ltm-metric--bad .ltm-metric__v,
+.ltm-metric--stale .ltm-metric__v { color: var(--v3-alert); }

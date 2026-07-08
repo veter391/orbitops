@@ -254,9 +254,17 @@ export class BackendClient {
   }
 
   // ── Telemetry ───────────────────────────────────────────────────────────────
-  /** GET /v1/telemetry/latest — the most recent sample per satellite. */
-  latestTelemetry() {
-    return this.request('/v1/telemetry/latest');
+  /**
+   * GET /v1/telemetry/latest — newest reading per metric for one satellite.
+   * @param {string} satelliteId
+   */
+  latestTelemetry(satelliteId) {
+    return this.request(`/v1/telemetry/latest?satelliteId=${encodeURIComponent(satelliteId)}`);
+  }
+
+  /** GET /v1/telemetry/satellites — distinct satellites that have telemetry. */
+  telemetrySatellites() {
+    return this.request('/v1/telemetry/satellites');
   }
 
   /**

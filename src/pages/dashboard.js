@@ -17,6 +17,7 @@
 'use strict';
 
 import { audit } from '../core/audit-log.js';
+import { isConnected, BackendClient } from '../core/backend-client.js';
 import { loadConstellation } from '../core/live-constellation.js';
 import { meanElements, propagateEci, geodetic, parseTle } from '../core/sgp4.js';
 import { sunEciDirection } from '../core/sun.js';
@@ -293,6 +294,10 @@ export async function mount(app) {
         </div>
       </section>
 
+      <!-- CONNECTED-MODE LIVE TELEMETRY — additive; hidden and inert in the
+           default simulation, populated only when a backend is configured. -->
+      <section class="dv2-band dv2-band--live-tlm" id="dashLiveTelemetry" hidden></section>
+
       <section class="dv2-band dv2-band--roster">
         <div class="dv2-wrap">
           <div class="dv2-panel dv2-panel--roster">
@@ -317,6 +322,11 @@ export async function mount(app) {
   // Orchestrated load reveal: header → gauges → charts → roster, 80 ms apart,
   // once per visit. Reduced motion: CSS shows everything instantly.
   revealBands(app, cleanups);
+
+  // Connected mode: stream the real backend fleet's health telemetry into an
+  // additive band. Pushed before the catalog load so it is cleaned up on every
+  // return path. Untouched (hidden) in the default simulation.
+  if (isConnected()) cleanups.push(mountLiveTelemetry(app));
 
   let data;
   try {
@@ -560,6 +570,159 @@ export async function mount(app) {
   await audit.append('system', 'dashboard.analysed', { total: data.total, shown: enriched.length, source: data.source });
 
   return { unmount() { cleanups.forEach((fn) => fn()); } };
+}
+
+/** Compact number formatting for a telemetry value. @param {number} v */
+function fmtTlm(v) {
+  if (!Number.isFinite(v)) return '—';
+  return Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
+}
+
+/**
+ * Connected-mode live fleet telemetry. Fetches the backend's satellites and
+ * their latest per-metric readings, renders a compact grid, and keeps it fresh
+ * over the WebSocket stream (per-satellite refresh, coalesced). Additive — the
+ * band stays hidden in the default simulation.
+ * @param {HTMLElement} app
+ * @returns {() => void} cleanup
+ */
+function mountLiveTelemetry(app) {
+  const host = /** @type {HTMLElement|null} */ (app.querySelector('#dashLiveTelemetry'));
+  if (!host) return () => {};
+  const client = new BackendClient();
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="dv2-wrap">
+      <div class="dv2-panel dv2-panel--live-tlm">
+        <div class="dv2-panel__head">
+          <h3 class="dv2-panel__title">Live health telemetry</h3>
+          <span class="ltm-conn" id="ltmConn"><span class="ltm-conn__dot"></span>connecting…</span>
+        </div>
+        <div class="ltm-grid" id="ltmGrid"><div class="ltm-empty">Waiting for telemetry…</div></div>
+      </div>
+    </div>`;
+  const grid = /** @type {HTMLElement} */ (host.querySelector('#ltmGrid'));
+  const conn = /** @type {HTMLElement} */ (host.querySelector('#ltmConn'));
+
+  let disposed = false;
+  let streaming = false;
+  let loadFailed = false;
+  let satCount = 0;
+  /** @type {WebSocket|null} */
+  let socket = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let refreshTimer = null;
+  const pending = new Set();
+  /** @type {Map<string, any[]>} satelliteId → latest points */
+  const fleet = new Map();
+
+  /** @param {string} kind @param {string} text */
+  const setConn = (kind, text) => {
+    conn.className = `ltm-conn ltm-conn--${kind}`;
+    conn.innerHTML = `<span class="ltm-conn__dot"></span>${esc(text)}`;
+  };
+
+  const render = () => {
+    if (fleet.size === 0) {
+      grid.innerHTML = `<div class="ltm-empty">No telemetry yet — ingest readings and they appear here live.</div>`;
+      return;
+    }
+    grid.innerHTML = [...fleet.entries()]
+      .map(
+        ([sat, points]) => `
+        <div class="ltm-sat">
+          <div class="ltm-sat__name">${esc(sat)}</div>
+          <div class="ltm-sat__metrics">
+            ${points
+              .slice(0, 10)
+              .map(
+                (p) => `<div class="ltm-metric ltm-metric--${esc(p.quality || 'good')}">
+                  <span class="ltm-metric__k">${esc(p.subsystem)} · ${esc(p.metric)}</span>
+                  <span class="ltm-metric__v">${fmtTlm(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</span>
+                </div>`,
+              )
+              .join('')}
+          </div>
+        </div>`,
+      )
+      .join('');
+  };
+
+  /** @param {string} sat */
+  const fetchSat = async (sat) => {
+    try {
+      const { points } = await client.latestTelemetry(sat);
+      if (disposed) return;
+      fleet.set(sat, Array.isArray(points) ? points : []);
+      render();
+    } catch {
+      /* a single satellite's fetch failing is non-fatal */
+    }
+  };
+
+  const loadFleet = async () => {
+    try {
+      const { satellites } = await client.telemetrySatellites();
+      if (disposed) return;
+      loadFailed = false;
+      const list = Array.isArray(satellites) ? satellites : [];
+      satCount = list.length;
+      setConn('ok', `${satCount} satellites${streaming ? ' · live' : ''}`);
+      await Promise.all(list.slice(0, 24).map((s) => fetchSat(s.satelliteId)));
+    } catch (e) {
+      if (disposed) return;
+      loadFailed = true;
+      const err = /** @type {{status?: number, message?: string}} */ (e);
+      setConn('err', 'disconnected');
+      grid.innerHTML = `<div class="ltm-empty ltm-empty--err">${esc(
+        err.status === 0 ? 'backend unreachable (check URL/CORS)' : err.message || 'telemetry unavailable',
+      )}</div>`;
+    }
+  };
+
+  /** @param {string} sat */
+  const scheduleRefresh = (sat) => {
+    if (disposed) return;
+    pending.add(sat);
+    if (refreshTimer) return;
+    refreshTimer = setTimeout(async () => {
+      refreshTimer = null;
+      const sats = [...pending];
+      pending.clear();
+      await Promise.all(sats.map(fetchSat));
+      satCount = Math.max(satCount, fleet.size);
+      if (!disposed && !loadFailed) setConn('ok', `${satCount} satellites${streaming ? ' · live' : ''}`);
+    }, 400);
+  };
+
+  setConn('mute', 'connecting…');
+  loadFleet();
+
+  client
+    .openStream(
+      (evt) => {
+        const d = /** @type {{satelliteId?: string}} */ (evt && evt.data) || {};
+        if (evt && evt.type === 'telemetry' && d.satelliteId) scheduleRefresh(d.satelliteId);
+      },
+      { onClose: () => { streaming = false; } },
+    )
+    .then((ws) => {
+      if (disposed) {
+        try { ws.close(); } catch { /* already closing */ }
+        return;
+      }
+      socket = ws;
+      streaming = true;
+      // Don't claim "live" over a load error — the grid still shows the error.
+      if (!loadFailed) setConn('ok', `${satCount} satellites · live`);
+    })
+    .catch(() => { /* streaming optional — manual snapshot still shown */ });
+
+  return () => {
+    disposed = true;
+    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+    if (socket) { try { socket.close(); } catch { /* already closing */ } socket = null; }
+  };
 }
 
 // ---------------------------------------------------------------------------
