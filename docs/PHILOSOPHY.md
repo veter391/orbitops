@@ -77,12 +77,13 @@ We prefer:
 
 ## 5. Dogfood relentlessly
 
-We operate a **demo constellation** of 50 simulated satellites 24/7 using OrbitOps
-itself. Every anomaly, every maneuver, every false positive is logged and reviewed
-by the team weekly. If we would not trust OrbitOps with our own demo constellation,
-we do not ship it to a customer.
+OrbitOps ships with a **simulated demo constellation** you can run in the browser
+right now — the same cockpit, agent console, and audit log a real operator would
+use, driven by real orbital math on clearly-labelled simulated telemetry. The
+principle: if a workflow isn't good enough for that demo, it isn't good enough to
+ship. Nothing here is a mockup we've never exercised.
 
-We reject the "build it and they will come" fallacy. We are the first customer.
+We reject the "build it and they will come" fallacy. We are our own first user.
 
 ## 6. Boring infrastructure, exciting product
 

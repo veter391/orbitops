@@ -250,8 +250,8 @@ function renderTemplate() {
           </p>
           <h1 class="hv3-hero__title"><span class="hv3-w">Mission</span> <span class="hv3-w">control</span><br><span class="hv3-w">for</span> <span class="hv3-w">the</span> <span class="hv3-w">real</span> <span class="hv3-w">sky.</span></h1>
           <p class="hv3-hero__sub">
-            OrbitOps propagates 11,000+ tracked objects from the live CelesTrak
-            catalog — real SGP4, an accountable AI agent, and a human in every loop.
+            OrbitOps tracks 11,000+ objects from the live CelesTrak catalog and
+            flies them on real SGP4 — an accountable AI agent, and a human in every loop.
           </p>
           <div class="hv3-hero__ctas">
             <a href="/cockpit" data-route="/cockpit" class="hv3-btn hv3-btn--primary">Enter the cockpit</a>
@@ -477,7 +477,7 @@ function renderTemplate() {
                 <h3 class="hv3-panel__title">The whole sky, live</h3>
               </div>
               <div class="hv3-panel__desc">
-                <p>The full catalog around a live 3D Earth — 11,000+ objects, propagated in real time with SGP4.</p>
+                <p>The full catalog around a live 3D Earth — 11,000+ catalogued objects, up to 2,200 propagated live with SGP4.</p>
                 <span class="hv3-panel__open">Open <span aria-hidden="true">→</span></span>
               </div>
               <div class="hv3-panel__glyph" aria-hidden="true">

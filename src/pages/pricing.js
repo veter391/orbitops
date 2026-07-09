@@ -100,7 +100,7 @@ export async function mount(app) {
               <ul class="tier__features">
                 <li>Up to 50 satellites</li>
                 <li>Everything in Pilot, plus:</li>
-                <li>Slack + PagerDuty integration</li>
+                <li>Slack + PagerDuty integration <span class="planned-chip">PLANNED</span></li>
                 <li>Custom scenarios (up to 10)</li>
                 <li>Priority support · 4h SLA</li>
               </ul>

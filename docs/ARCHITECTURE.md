@@ -269,13 +269,20 @@ an operator teammate I can supervise".
 
 See [SECURITY.md](../.github/SECURITY.md) for the full threat model.
 
-In short:
-- Single-tenant data plane per customer
-- All data encrypted at rest (AES-256) and in transit (TLS 1.3)
-- AI agent runs in a sandbox with no outbound network
-- Every AI proposal carries an HMAC signature
-- Customers can verify their audit log offline
-- SOC 2 Type II target by month 9
+In short — what the code does today, and what the deployment provides:
+- **Per-customer tenant isolation** — every query is scoped by `customer_id`, and
+  an optional Postgres Row-Level Security layer enforces it at the database too
+  (`DB_RLS`, see [INFRA.md](INFRA.md)).
+- **Encrypted in transit** (TLS, terminated at the edge). **Encryption at rest** is
+  provided by the managed database at deploy (RDS / Cloud SQL / Neon all do
+  AES-256 at rest) — a deploy requirement, not app code.
+- The **deterministic decision engine makes no outbound network calls**; the only
+  outbound path is the *optional*, operator-configured LLM advisory call, which is
+  disabled by default.
+- **Every decision is recorded in a tamper-evident, HMAC-SHA-256 hash-chained
+  audit log**; a customer can re-verify the whole chain offline.
+- **SOC 2** is a business/process goal (access reviews, vendor management, incident
+  response — see [INFRA.md §7](INFRA.md)), not a shipped code feature.
 
 ---
 
