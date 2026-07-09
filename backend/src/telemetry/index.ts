@@ -1,5 +1,6 @@
 import type { Db } from '../db/index.js';
 import type { EventBus } from '../events/index.js';
+import { withMaintenance } from '../db/rls.js';
 import { withSpan } from '../observability.js';
 
 export type Quality = 'good' | 'suspect' | 'bad' | 'stale';
@@ -165,11 +166,16 @@ export class Telemetry {
    */
   async purgeOlderThan(days: number): Promise<number> {
     if (!Number.isInteger(days) || days <= 0) return 0;
-    const rows = await this.db.query<{ n: string | number }>(
-      `WITH del AS (
-         DELETE FROM telemetry WHERE ts < now() - ($1 || ' days')::interval RETURNING 1
-       ) SELECT COUNT(*) AS n FROM del`,
-      [String(days)],
+    // Cross-tenant maintenance with no request context: run in the maintenance
+    // scope the telemetry RLS policy allows, or under RLS this would delete
+    // nothing (fail closed). Harmless (a no-op GUC) when RLS is off.
+    const rows = await withMaintenance(this.db, (tx) =>
+      tx.query<{ n: string | number }>(
+        `WITH del AS (
+           DELETE FROM telemetry WHERE ts < now() - ($1 || ' days')::interval RETURNING 1
+         ) SELECT COUNT(*) AS n FROM del`,
+        [String(days)],
+      ),
     );
     return Number(rows[0]?.n ?? 0);
   }

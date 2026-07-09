@@ -48,6 +48,14 @@ running app's `DATABASE_URL` at `orbitops_app` and set `DB_RLS=on`. Dev/pglite i
 a single superuser connection, so leave `DB_RLS` off there (it would be a no-op
 anyway).
 
+**Coverage note:** CI proves the policies on pglite by `SET ROLE`-ing to a
+non-superuser test role (`test/rls.test.ts`), and the SET-LOCAL/query single-
+connection binding by contract test. The one thing CI cannot exercise is the real
+`pg.Pool` under a managed instance — so the deploy checklist includes a one-time
+smoke test with `DB_RLS=on` against the actual database: create two customers,
+confirm each API key only ever returns its own rows, and confirm the retention
+purge deletes across tenants.
+
 ---
 
 ## 2. Managed Postgres / TimescaleDB [deploy]

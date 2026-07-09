@@ -21,5 +21,8 @@ CREATE TABLE IF NOT EXISTS proposal_situations (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Recall filters by (customer_id[, satellite_id]) then ORDER BY created_at DESC
+-- LIMIT candidateCap (see memory.recallSimilar), so created_at is in the index
+-- to serve the ordering without a separate sort as a tenant's history grows.
 CREATE INDEX IF NOT EXISTS proposal_situations_scope_idx
-  ON proposal_situations (customer_id, satellite_id);
+  ON proposal_situations (customer_id, satellite_id, created_at DESC);

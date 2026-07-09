@@ -13,6 +13,8 @@ import { rlsScopedDb } from './rls.js';
 /** A query surface inside a transaction (a subset of Db). */
 export interface DbTx {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  /** Run multi-statement SQL (no params) on THIS transaction's pinned connection. */
+  exec(sql: string): Promise<void>;
 }
 
 export interface Db {
@@ -60,6 +62,9 @@ export async function getDb(): Promise<Db> {
         return fn({
           async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
             return (await tx.query<R>(sql, params)).rows;
+          },
+          async exec(sql: string) {
+            await tx.exec(sql);
           },
         });
       });

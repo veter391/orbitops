@@ -115,6 +115,30 @@ test('four-eyes: the requester cannot confirm their own execution', async () => 
   }
 });
 
+test('resuming an already-settled thread returns the prior result flagged, not a replay', async () => {
+  const db = await freshDb();
+  try {
+    const graph = buildConfirmationGraph(new DbCheckpointSaver(db));
+    const started = await startConfirmation(graph, 'cust', REQ);
+    assert.equal(started.status, 'pending');
+    if (started.status !== 'pending') return;
+
+    const first = await resumeConfirmation(graph, 'cust', started.threadId, { approve: true, operatorId: 'op-bob' });
+    assert.equal(first.status, 'confirmed');
+
+    // A retry / double-click with a DIFFERENT decision must not overwrite; it
+    // returns the original result marked alreadySettled, and op-carol is ignored.
+    const second = await resumeConfirmation(graph, 'cust', started.threadId, { approve: false, operatorId: 'op-carol' });
+    assert.equal(second.status, 'confirmed', 'still the original outcome');
+    if (second.status === 'confirmed' || second.status === 'rejected') {
+      assert.equal(second.alreadySettled, true);
+      assert.ok(!second.log.some((l) => l.includes('op-carol')), 'the discarded decision was not recorded');
+    }
+  } finally {
+    await db.close();
+  }
+});
+
 test('a tenant cannot resume another tenant’s thread', async () => {
   const db = await freshDb();
   try {

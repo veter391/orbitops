@@ -78,6 +78,13 @@ export interface SettledConfirmation {
   /** Present when rejected: why (declined, or a four-eyes violation). */
   reason?: string;
   log: string[];
+  /**
+   * True when a resume was attempted on a thread that was already settled (or
+   * never pending): the supplied decision was IGNORED and this is the prior
+   * result, not a fresh one. Lets a caller distinguish a real settle from a
+   * replay (e.g. a retried request or a double-click).
+   */
+  alreadySettled?: boolean;
 }
 
 export type ConfirmationResult = PendingConfirmation | SettledConfirmation;
@@ -218,6 +225,14 @@ export async function resumeConfirmation(
   decision: ConfirmationDecision,
 ): Promise<ConfirmationResult> {
   assertThreadOwnership(customerId, threadId);
+  // Only a thread currently suspended at the human gate can be resumed. If it is
+  // already settled (or unknown), resuming would replay the OLD result as if the
+  // new decision took effect — so return the prior result flagged `alreadySettled`
+  // and drop the decision, rather than silently pretending it was recorded.
+  const snapshot = await graph.getState({ configurable: { thread_id: threadId } });
+  if (!snapshot || snapshot.next.length === 0) {
+    return { ...settledFrom((snapshot?.values ?? {}) as CS, threadId), alreadySettled: true };
+  }
   const res = await graph.invoke(new Command({ resume: decision }), {
     configurable: { thread_id: threadId },
   });

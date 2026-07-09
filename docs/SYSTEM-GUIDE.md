@@ -284,7 +284,7 @@ npm test             # run the full node:test suite (in-memory pglite, no extern
 npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 ```
 
-### The 118 tests, grouped by file
+### The 155 tests, grouped by file
 
 | File | What it proves | Tests |
 |---|---|---|
@@ -310,7 +310,12 @@ npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 | `test/pagination.test.ts` | Cursor pagination covers all rows without overlap | 2 |
 | `test/schema.test.ts` | FK enforcement, cascade delete | 2 |
 | `test/health.test.ts` | Liveness endpoint, migration idempotency | 2 |
-| **Total** | **22 files** | **118** |
+| `test/checkpointer.test.ts` | Durable LangGraph checkpointer (put/getTuple round-trip, latest-by-id, idempotent writes, deleteThread, tenant isolation) | 6 |
+| `test/interruptible.test.ts` | Native HITL interrupt/resume (suspend at the gate, resume across a simulated restart, four-eyes, thread-ownership, already-settled replay guard) | 8 |
+| `test/semantic-memory.test.ts` | Similarity recall + lexical embedder/cosine (determinism, ranking, tenant scope, candidate cap, graph wiring on/off) | 9 |
+| `test/config-secrets.test.ts` | File-backed secret resolution (`<NAME>_FILE`, file-wins, empty-fail-closed) | 5 |
+| `test/rls.test.ts` | Row-Level Security tenant isolation (cross-tenant reads/inserts blocked, fail-closed, maintenance-scope retention, single-transaction binding) | 9 |
+| **Total** | **27 files** | **155** |
 
 Run serial for a deterministic count: `node --import tsx --test --test-concurrency=1 test/*.test.ts` (parallel pglite instances can cause file-level flakiness that is not a regression). The frontend has its own gates: `npx tsc --noEmit` (the `// @ts-check` modules) and `npx eslint src/`.
 

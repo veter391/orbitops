@@ -27,8 +27,17 @@ CREATE POLICY tenant_isolation ON proposals
   USING (customer_id = NULLIF(current_setting('app.current_customer', true), '')::uuid)
   WITH CHECK (customer_id = NULLIF(current_setting('app.current_customer', true), '')::uuid);
 
+-- Telemetry also allows a MAINTENANCE carve-out on reads/deletes: the retention
+-- purge (src/telemetry/index.ts) is a cross-tenant system DELETE that runs with
+-- no request tenant context and would otherwise match zero rows under RLS. Only
+-- the system maintenance path sets app.maintenance='on' (withMaintenance); no
+-- request path can (requests set only app.current_customer). WITH CHECK stays
+-- tenant-only — maintenance never inserts rows.
 CREATE POLICY tenant_isolation ON telemetry
-  USING (customer_id = NULLIF(current_setting('app.current_customer', true), '')::uuid)
+  USING (
+    customer_id = NULLIF(current_setting('app.current_customer', true), '')::uuid
+    OR current_setting('app.maintenance', true) = 'on'
+  )
   WITH CHECK (customer_id = NULLIF(current_setting('app.current_customer', true), '')::uuid);
 
 CREATE POLICY tenant_isolation ON audit_log

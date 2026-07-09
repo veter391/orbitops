@@ -29,6 +29,11 @@ export function createPgDb(connectionString: string): Db {
           async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
             return (await client.query(sql, params)).rows as R[];
           },
+          async exec(sql: string) {
+            // Simple-query protocol (no params) on the SAME pinned client, so
+            // multi-statement migration SQL runs inside this transaction.
+            await client.query(sql);
+          },
         };
         const result = await fn(tx);
         await client.query('COMMIT');

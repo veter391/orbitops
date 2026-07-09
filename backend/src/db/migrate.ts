@@ -29,14 +29,17 @@ export async function migrate(db?: Db): Promise<string[]> {
   for (const file of files) {
     if (done.has(file)) continue;
     const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
-    await d.exec('BEGIN');
+    // One transaction on a single pinned connection (d.transaction), so the
+    // migration SQL + its _migrations bookkeeping commit or roll back together.
+    // (Separate d.exec('BEGIN')/exec/exec('COMMIT') calls could land on different
+    // pooled connections in prod and would not actually be one transaction.)
     try {
-      await d.exec(sql);
-      await d.query('INSERT INTO _migrations (name) VALUES ($1)', [file]);
-      await d.exec('COMMIT');
+      await d.transaction(async (tx) => {
+        await tx.exec(sql);
+        await tx.query('INSERT INTO _migrations (name) VALUES ($1)', [file]);
+      });
       applied.push(file);
     } catch (err) {
-      await d.exec('ROLLBACK');
       throw new Error(`Migration ${file} failed: ${(err as Error).message}`, { cause: err });
     }
   }

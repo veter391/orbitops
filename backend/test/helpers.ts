@@ -23,6 +23,9 @@ export async function freshDb(): Promise<Db> {
           async query<R = Record<string, unknown>>(sql: string, params: unknown[] = []) {
             return (await tx.query<R>(sql, params)).rows;
           },
+          async exec(sql: string) {
+            await tx.exec(sql);
+          },
         });
       });
     },

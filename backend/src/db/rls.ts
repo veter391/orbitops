@@ -20,6 +20,7 @@ import { currentTenant } from './tenant-context.js';
 export const RLS_TABLES = ['proposals', 'telemetry', 'audit_log', 'proposal_situations'] as const;
 
 const SET_TENANT = `SELECT set_config('app.current_customer', $1, true)`;
+const SET_MAINTENANCE = `SELECT set_config('app.maintenance', 'on', true)`;
 
 /** Enable + FORCE Row-Level Security on every guarded table. Idempotent. */
 export async function enableRls(db: Db): Promise<void> {
@@ -39,6 +40,21 @@ export async function enableRls(db: Db): Promise<void> {
 export async function withTenant<T>(db: Db, customerId: string, fn: (tx: DbTx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.query(SET_TENANT, [customerId]);
+    return fn(tx);
+  });
+}
+
+/**
+ * Run `fn` in a MAINTENANCE-scoped transaction — sets `app.maintenance = 'on'`,
+ * which the telemetry policy allows as a cross-tenant carve-out for system
+ * maintenance (retention purge). No request path ever sets this GUC (requests set
+ * only `app.current_customer`), so it cannot be reached by a tenant. Harmless when
+ * RLS is off. This exists because a cross-tenant admin DELETE run with no tenant
+ * context would otherwise match zero rows under RLS (fail closed).
+ */
+export async function withMaintenance<T>(db: Db, fn: (tx: DbTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.query(SET_MAINTENANCE);
     return fn(tx);
   });
 }

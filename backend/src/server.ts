@@ -125,7 +125,7 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   // Similarity memory is opt-in (config): inject the offline lexical embedder so
   // AgentMemory activates recallSimilar/remember. Off → structured recall only.
   const memory = new AgentMemory(database, config.AGENT_SEMANTIC_MEMORY ? new LexicalEmbedder() : undefined);
-  app.decorate('agent', new Agent(proposals, telemetry, memory));
+  app.decorate('agent', new Agent(proposals, telemetry, memory, app.log));
   app.decorate('feedback', new Feedback(database));
 
   registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key

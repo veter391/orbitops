@@ -1,7 +1,7 @@
 import type { Proposals } from '../proposals/index.js';
 import type { Telemetry } from '../telemetry/index.js';
 import type { AgentMemory } from '../agents/memory.js';
-import { buildAgentGraph, runAgentGraph, type CompiledAgentGraph } from '../agents/graph.js';
+import { buildAgentGraph, runAgentGraph, type CompiledAgentGraph, type AgentLogger } from '../agents/graph.js';
 import type { Signal } from '../agents/rules.js';
 
 export type { Signal } from '../agents/rules.js';
@@ -21,8 +21,8 @@ export interface AgentInput {
 export class Agent {
   readonly #graph: CompiledAgentGraph;
 
-  constructor(proposals: Proposals, telemetry?: Telemetry, memory?: AgentMemory) {
-    this.#graph = buildAgentGraph(proposals, telemetry, memory);
+  constructor(proposals: Proposals, telemetry?: Telemetry, memory?: AgentMemory, logger?: AgentLogger) {
+    this.#graph = buildAgentGraph(proposals, telemetry, memory, logger);
   }
 
   run(customerId: string, input: AgentInput) {

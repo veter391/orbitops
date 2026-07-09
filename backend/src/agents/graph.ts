@@ -85,7 +85,17 @@ const AgentState = Annotation.Root({
 type S = typeof AgentState.State;
 
 /** Build the compiled agent graph bound to the Proposals (+ optional Telemetry, Memory). */
-export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, memory?: AgentMemory) {
+/** Minimal logger surface (satisfied by Fastify's pino logger). */
+export interface AgentLogger {
+  warn(obj: unknown, msg: string): void;
+}
+
+export function buildAgentGraph(
+  proposals: Proposals,
+  telemetry?: Telemetry,
+  memory?: AgentMemory,
+  logger?: AgentLogger,
+) {
   const supervisor = (state: S) => {
     const kinds = state.signals.map((s) => s.kind);
     const route = kinds.some((k) => CONJUNCTION_KINDS.has(k))
@@ -127,8 +137,10 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
           k: 3,
         });
         chain.push({ phase: 'RECALL', agent: 'memory', text: `Similarity: ${memory.summarizeSimilar(similar)}` });
-      } catch {
-        // Non-fatal: fall through with structured recall only.
+      } catch (err) {
+        // Non-fatal: fall through with structured recall only — but log so a
+        // systemic failure (bad embedder, schema drift) is visible, not silent.
+        logger?.warn({ err, satelliteId: state.satelliteId }, 'similarity recall failed');
       }
     }
 
@@ -467,8 +479,10 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
           satelliteId: state.satelliteId,
           situation: buildSituation(state.satelliteId, state.signals),
         });
-      } catch {
-        // Non-fatal: the proposal stands; only its similarity index entry is missing.
+      } catch (err) {
+        // Non-fatal: the proposal stands; only its similarity index entry is
+        // missing. Log so a systemic memory-write failure is observable in prod.
+        logger?.warn({ err, satelliteId: state.satelliteId }, 'similarity remember failed');
       }
     }
     return { proposal, path: ['persist'] };

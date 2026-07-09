@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, createCustomer, DEMO_ID } from './helpers.js';
-import { enableRls, withTenant, rlsScopedDb, RLS_TABLES } from '../src/db/rls.js';
+import { enableRls, withTenant, withMaintenance, rlsScopedDb, RLS_TABLES } from '../src/db/rls.js';
 import { runWithTenant, enterTenant, clearTenant, currentTenant } from '../src/db/tenant-context.js';
 import type { Db, DbTx } from '../src/db/index.js';
 
@@ -39,6 +39,9 @@ test('rlsScopedDb sets the tenant and the query in ONE transaction (same connect
         async query<R = Record<string, unknown>>(sql: string, params?: unknown[]) {
           calls.push(`tx:${sql}${params ? `|${JSON.stringify(params)}` : ''}`);
           return [] as R[];
+        },
+        async exec(sql: string) {
+          calls.push(`exec:${sql}`);
         },
       };
       const r = await fn(tx);
@@ -143,6 +146,43 @@ test('the WITH CHECK policy refuses inserting another tenant’s row', async () 
       ),
       /row-level security|policy/i,
     );
+  } finally {
+    await db.close();
+  }
+});
+
+test('maintenance scope purges telemetry across tenants under RLS (retention fix)', async () => {
+  const db = await freshDb();
+  try {
+    const other = await createCustomer(db, 'other-co', 'other-key');
+    await useAppRole(db);
+    // Old telemetry for two tenants, each inserted under its own context (WITH CHECK).
+    const insertOld = (cid: string) =>
+      withTenant(db, cid, (tx) =>
+        tx.query(
+          `INSERT INTO telemetry (customer_id, satellite_id, subsystem, metric, ts, value)
+           VALUES ($1, 'S', 'power', 'm', now() - interval '400 days', 1)`,
+          [cid],
+        ),
+      );
+    await insertOld(DEMO_ID);
+    await insertOld(other);
+
+    // A tenant-scoped delete only removes that tenant's row (RLS in effect)...
+    const demoOnly = await withTenant(db, DEMO_ID, (tx) =>
+      tx.query<{ n: string | number }>(
+        `WITH del AS (DELETE FROM telemetry WHERE ts < now() - interval '365 days' RETURNING 1) SELECT COUNT(*) AS n FROM del`,
+      ),
+    );
+    assert.equal(Number(demoOnly[0]!.n), 1, 'tenant scope deletes only its own row');
+
+    // ...but the MAINTENANCE scope (retention purge) removes across tenants.
+    const maint = await withMaintenance(db, (tx) =>
+      tx.query<{ n: string | number }>(
+        `WITH del AS (DELETE FROM telemetry WHERE ts < now() - interval '365 days' RETURNING 1) SELECT COUNT(*) AS n FROM del`,
+      ),
+    );
+    assert.equal(Number(maint[0]!.n), 1, 'maintenance scope reaches the other tenant’s remaining row');
   } finally {
     await db.close();
   }
