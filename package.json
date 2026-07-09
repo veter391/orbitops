@@ -13,7 +13,8 @@
     "format": "prettier --write \"src/**/*.{js,css,md}\" \"*.md\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"src/**/*.{js,css,md}\" \"*.md\" \"docs/**/*.md\"",
     "test": "echo \"no tests yet — see CONTRIBUTING.md\" && exit 0",
-    "deploy": "echo \"Open the repo on Netlify Drop, or push to gh-pages. See README.md.\""
+    "cf:dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "keywords": [
     "space",

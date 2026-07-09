@@ -1,0 +1,29 @@
+# Files kept OUT of the Cloudflare Static Assets upload (gitignore syntax).
+# The deployed SPA needs only: index.html, src/, public/, and the root
+# robots.txt / sitemap.xml / llms.txt / .well-known. Everything below is
+# backend, tooling, installed deps, or repo metadata the browser never fetches.
+# (In a clean git checkout node_modules/.data don't exist; this also covers a
+#  local `wrangler deploy` from a dirty working tree.)
+
+node_modules
+backend
+docs
+internal
+scratchpad
+.data
+.git
+.github
+worker.js
+wrangler.toml
+.assetsignore
+package.json
+package-lock.json
+tsconfig.json
+eslint.config.js
+.prettierrc
+.editorconfig
+.gitignore
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+README.md
