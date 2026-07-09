@@ -209,4 +209,90 @@ export function closestApproach(elA, elB, tStart = 0, tEnd = 7200, stepSec = 30)
   return { tClosest, distanceKm: minDist };
 }
 
+/**
+ * Clamp to [lo, hi] — guards acos() against |x|>1 from rounding.
+ * @param {number} x
+ * @param {number} lo
+ * @param {number} hi
+ * @returns {number}
+ */
+function clamp(x, lo, hi) {
+  return x < lo ? lo : x > hi ? hi : x;
+}
+
+/**
+ * Convert an ECI state vector (position km, velocity km/s) to the classical
+ * orbital elements this propagator consumes. Standard two-body reduction
+ * (Vallado, "Fundamentals of Astrodynamics", Algorithm 9 — rv2coe): angular
+ * momentum, node and eccentricity vectors, then the angles, with near-circular
+ * and near-equatorial fallbacks. Angles in radians; `meanMotion` in rad/s and
+ * `meanAnomaly` at the instant of this state — so `propagate(el, t)` advances
+ * from *this* state. Lets a hypothetical (post-burn) state be screened with the
+ * same Kepler engine as everything else.
+ *
+ * NOTE: two-body only (no drag/J2) — a planning-grade snapshot, not SGP4.
+ * @param {Vec3} r ECI position (km)
+ * @param {Vec3} v ECI velocity (km/s)
+ * @returns {OrbitalElements}
+ */
+export function stateToElements(r, v) {
+  const rmag = Math.sqrt(r.x * r.x + r.y * r.y + r.z * r.z);
+  const vmag2 = v.x * v.x + v.y * v.y + v.z * v.z;
+  const rv = r.x * v.x + r.y * v.y + r.z * v.z;
+
+  // Specific angular momentum h = r × v, and node vector n = k̂ × h = (-h_y, h_x, 0).
+  const hx = r.y * v.z - r.z * v.y;
+  const hy = r.z * v.x - r.x * v.z;
+  const hz = r.x * v.y - r.y * v.x;
+  const hmag = Math.sqrt(hx * hx + hy * hy + hz * hz);
+  const nx = -hy;
+  const ny = hx;
+  const nmag = Math.sqrt(nx * nx + ny * ny);
+
+  // Eccentricity vector e = ((v²−μ/r)·r − (r·v)·v)/μ.
+  const c1 = vmag2 - MU / rmag;
+  const ex = (c1 * r.x - rv * v.x) / MU;
+  const ey = (c1 * r.y - rv * v.y) / MU;
+  const ez = (c1 * r.z - rv * v.z) / MU;
+  const eccentricity = Math.sqrt(ex * ex + ey * ey + ez * ez);
+
+  // Semi-major axis from the vis-viva energy, then mean motion (rad/s).
+  const energy = vmag2 / 2 - MU / rmag;
+  const a = -MU / (2 * energy);
+  const meanMotion = Math.sqrt(MU / (a * a * a));
+
+  const inclination = Math.acos(clamp(hz / hmag, -1, 1));
+
+  let raan = 0;
+  if (nmag > 1e-9) {
+    raan = Math.acos(clamp(nx / nmag, -1, 1));
+    if (ny < 0) raan = 2 * Math.PI - raan;
+  }
+
+  let argPerigee = 0;
+  if (nmag > 1e-9 && eccentricity > 1e-9) {
+    argPerigee = Math.acos(clamp((nx * ex + ny * ey) / (nmag * eccentricity), -1, 1));
+    if (ez < 0) argPerigee = 2 * Math.PI - argPerigee;
+  }
+
+  // True anomaly ν; near-circular falls back to the argument of latitude.
+  let nu;
+  if (eccentricity > 1e-9) {
+    nu = Math.acos(clamp((ex * r.x + ey * r.y + ez * r.z) / (eccentricity * rmag), -1, 1));
+    if (rv < 0) nu = 2 * Math.PI - nu;
+  } else if (nmag > 1e-9) {
+    nu = Math.acos(clamp((nx * r.x + ny * r.y) / (nmag * rmag), -1, 1));
+    if (r.z < 0) nu = 2 * Math.PI - nu;
+    nu -= argPerigee;
+  } else {
+    nu = Math.atan2(r.y, r.x); // fully degenerate (equatorial + circular)
+  }
+
+  const E = Math.atan2(Math.sqrt(1 - eccentricity * eccentricity) * Math.sin(nu), eccentricity + Math.cos(nu));
+  let meanAnomaly = E - eccentricity * Math.sin(E);
+  meanAnomaly = ((meanAnomaly % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+  return { inclination, raan, eccentricity, argPerigee, meanAnomaly, meanMotion };
+}
+
 export const CONSTANTS = { EARTH_OMEGA, MU, EARTH_RADIUS_KM };

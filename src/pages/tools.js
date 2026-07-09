@@ -27,7 +27,7 @@
 
 'use strict';
 
-import { propagate, propagateECI, closestApproach, CONSTANTS } from '../core/orbit-propagator.js';
+import { propagate, propagateECI, closestApproach, stateToElements, CONSTANTS } from '../core/orbit-propagator.js';
 import { avoidanceBurn } from '../core/maneuver-planner.js';
 import { SATELLITES } from '../data/satellites.js';
 import { mountAmbient } from '../ui/ambient.js';
@@ -99,6 +99,7 @@ export async function mount(app) {
   wireConjunctionTool(app, viz, THREE);
   wireBurnTool(app, viz, THREE);
   wirePassTool(app); // W4-C · D3 — no 3D stage; TLE catalog lazy-loads on tab open
+  wireWhatifTool(app); // no 3D stage; live catalog lazy-loads on tab open
   viz.setMode('orbit');
 
   return {
@@ -226,6 +227,7 @@ function shellHTML() {
             <button class="tools-tab" data-tool="conjunction" type="button">CONJUNCTION CHECKER</button>
             <button class="tools-tab" data-tool="burn" type="button">BURN PLANNER</button>
             <button class="tools-tab" data-tool="passes" type="button">PASS PREDICTOR</button>
+            <button class="tools-tab" data-tool="whatif" type="button">WHAT-IF SANDBOX</button>
           </div>
         </div>
       </section>
@@ -513,6 +515,84 @@ function shellHTML() {
                   <div class="pass-empty">Switch to this tab — the real catalog loads on demand.</div>
                 </div>
                 <div class="pass-board__foot" id="passFoot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= WHAT-IF SANDBOX ================= -->
+      <section class="tools-panel" id="toolWhatif">
+        <div class="container">
+          <div class="tool-grid" data-depth>
+            <div class="tool-controls">
+              <h2>What-if sandbox</h2>
+              <p class="section__lede">
+                Fly a hypothetical burn and see who you get close to. Pick a real
+                catalogued object, apply an along-track Δv, and its post-burn
+                orbit is screened against the live catalog for close approaches —
+                before vs after, so you can see a maneuver clear one conjunction
+                without quietly creating another.
+              </p>
+
+              <div class="tool-form hover-lift">
+                <label class="t-field">
+                  <span class="t-field__label">Object <output id="wiSrc"></output></span>
+                  <span class="t-field__box">
+                    <select id="wiSat" disabled><option>Open this tab to load the catalog…</option></select>
+                  </span>
+                </label>
+
+                <label class="t-field">
+                  <span class="t-field__label">Along-track Δv <span class="k">(+ prograde / − retrograde)</span></span>
+                  <span class="t-field__box">
+                    <input id="wiDv" type="number" inputmode="decimal" min="-3000" max="3000" step="10" value="100">
+                    <span class="t-field__unit">M/S</span>
+                  </span>
+                </label>
+
+                <label class="t-field">
+                  <span class="t-field__label">Screening window</span>
+                  <span class="t-field__box">
+                    <input id="wiWindow" type="number" inputmode="decimal" min="1" max="24" step="1" value="6">
+                    <span class="t-field__unit">H</span>
+                  </span>
+                </label>
+
+                <div class="tool-hint" id="wiHint"></div>
+                <button class="t-chip" id="wiCopy" type="button">COPY RESULTS</button>
+              </div>
+
+              <p class="tool-caveat">
+                Snapshot two-body screen: every object and your post-burn orbit is
+                reduced from its current SGP4 state, then propagated with Kepler
+                only — no drag, no J2, no covariance, no collision probability.
+                Along-track Δv only. Screening-only, planning-grade — operational
+                collision avoidance uses CDMs, covariance and Pc. Perturbation and
+                frame drift grow across the window; verify anything real against a
+                proper CDM screen.
+              </p>
+            </div>
+
+            <div class="tool-stage">
+              <div class="tool-stage__head">
+                <span class="stage-label">CONJUNCTION SCREEN — BEFORE vs AFTER</span>
+                <span class="pass-real-chip">REAL CATALOG · TWO-BODY</span>
+              </div>
+              <div class="tool-readout">
+                <div class="tool-readout__item"><div class="tool-readout__label">Nearest after · km</div><div class="tool-readout__value" id="wiAfter">—</div></div>
+                <div class="tool-readout__item"><div class="tool-readout__label">Nearest before · km</div><div class="tool-readout__value" id="wiBefore">—</div></div>
+                <div class="tool-readout__item"><div class="tool-readout__label">Net effect</div><div class="tool-readout__value" id="wiNet">—</div></div>
+                <div class="tool-readout__item"><div class="tool-readout__label">Objects screened</div><div class="tool-readout__value" id="wiCount">—</div></div>
+              </div>
+              <div class="pass-board pass-board--wi">
+                <div class="pass-board__cols" aria-hidden="true">
+                  <span>#</span><span>OBJECT</span><span>BEFORE KM</span><span>AFTER KM</span><span>TCA H</span>
+                </div>
+                <div class="pass-list" id="wiList" aria-live="polite">
+                  <div class="pass-empty">Switch to this tab — the real catalog loads on demand.</div>
+                </div>
+                <div class="pass-board__foot" id="wiFoot"></div>
               </div>
             </div>
           </div>
@@ -1474,6 +1554,284 @@ function wirePassTool(app) {
 }
 
 /* ============================================================
+   WHAT-IF SANDBOX — a hypothetical along-track burn screened
+   against the live catalog as a two-body snapshot. No 3D stage.
+   ============================================================ */
+const WI_MAX_CATALOG = 800; // live objects reduced for screening
+const WI_STEP_SEC = 45; // screening sample step (s)
+const WI_ALT_BAND_KM = 40; // only screen objects within this altitude shell
+const WI_MAX_CANDIDATES = 250; // hard cap on screened objects (nearest-altitude first)
+const WI_MAX_SHOWN = 8; // rows rendered
+const WI_CONJ_KM = 25; // "close" threshold for coloring (matches the conjunction checker)
+
+/**
+ * Mean altitude (km) from a two-body element set's mean motion.
+ * @param {OrbitalElements} el
+ * @returns {number}
+ */
+function altOfEl(el) {
+  const a = Math.cbrt(CONSTANTS.MU / (el.meanMotion * el.meanMotion));
+  return a - CONSTANTS.EARTH_RADIUS_KM;
+}
+/**
+ * Perigee / apogee altitude (km) of a two-body orbit — the band it actually
+ * sweeps. A burn makes the orbit eccentric, so this range (not the mean
+ * altitude) is what conjunction screening must overlap on.
+ * @param {OrbitalElements} el
+ * @returns {{peri: number, apo: number}}
+ */
+function periApoKm(el) {
+  const a = Math.cbrt(CONSTANTS.MU / (el.meanMotion * el.meanMotion));
+  return {
+    peri: a * (1 - el.eccentricity) - CONSTANTS.EARTH_RADIUS_KM,
+    apo: a * (1 + el.eccentricity) - CONSTANTS.EARTH_RADIUS_KM,
+  };
+}
+/**
+ * Squared ECI distance between two points (avoids a sqrt in the hot loop).
+ * @param {Vec3} a
+ * @param {Vec3} b
+ * @returns {number}
+ */
+function dist2(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return dx * dx + dy * dy + dz * dz;
+}
+/** Compact km formatting for a miss distance. @param {number} km */
+function fmtKm(km) {
+  if (!Number.isFinite(km)) return '—';
+  return km < 10 ? km.toFixed(2) : km < 100 ? km.toFixed(1) : Math.round(km).toLocaleString();
+}
+
+/** @param {HTMLElement} app */
+function wireWhatifTool(app) {
+  /** @param {string} s */
+  const $ = (s) => app.querySelector(s);
+  const satSel = /** @type {HTMLSelectElement} */ ($('#wiSat'));
+  const dvIn = /** @type {HTMLInputElement} */ ($('#wiDv'));
+  const winIn = /** @type {HTMLInputElement} */ ($('#wiWindow'));
+  const srcOut = /** @type {HTMLElement} */ ($('#wiSrc'));
+  const hint = /** @type {HTMLElement} */ ($('#wiHint'));
+  const list = /** @type {HTMLElement} */ ($('#wiList'));
+  const foot = /** @type {HTMLElement} */ ($('#wiFoot'));
+
+  /** @type {Array<{name: string, noradId: number, group: string, el: any, altKm: number, peri: number, apo: number, r: Vec3, v: Vec3}>} */
+  let cat = [];
+  let loadState = 'idle'; // idle | loading | ready | failed
+  /** @type {any} */
+  let last = null;
+
+  async function initCatalog() {
+    if (loadState === 'loading' || loadState === 'ready') return;
+    loadState = 'loading';
+    satSel.innerHTML = '<option>Loading real catalog…</option>';
+    list.innerHTML = '<div class="pass-empty">Fetching element sets from CelesTrak (or local cache)…</div>';
+    try {
+      const [{ loadConstellation }, sgp4] = await Promise.all([
+        import('../core/live-constellation.js'),
+        import('../core/sgp4.js'),
+      ]);
+      const res = await loadConstellation(['starlink', 'oneweb'], { max: WI_MAX_CATALOG });
+      if (!res.sats.length) throw new Error('empty catalog');
+      // One shared epoch: reduce every object to two-body elements from its SGP4
+      // state at THIS instant, so the screen's t=0 lines them all up in one frame.
+      const epoch = new Date();
+      cat = [];
+      for (const s of res.sats) {
+        const pv = sgp4.propagateEci(s.satrec, epoch);
+        if (!pv || !pv.velocity || !pv.position) continue;
+        const el = stateToElements(pv.position, pv.velocity);
+        if (!Number.isFinite(el.meanMotion) || !Number.isFinite(el.eccentricity) || el.eccentricity >= 1) continue;
+        const range = periApoKm(el);
+        cat.push({
+          name: s.name,
+          noradId: s.noradId,
+          group: s.group || '',
+          el,
+          altKm: altOfEl(el),
+          peri: range.peri,
+          apo: range.apo,
+          r: { x: pv.position.x, y: pv.position.y, z: pv.position.z },
+          v: { x: pv.velocity.x, y: pv.velocity.y, z: pv.velocity.z },
+        });
+      }
+      if (!cat.length) throw new Error('no propagable objects');
+      /** @type {Record<string, string>} */
+      const srcLabels = { live: 'LIVE', cache: 'CACHED', snapshot: 'SNAPSHOT' };
+      srcOut.textContent = srcLabels[res.source] || '';
+      satSel.innerHTML = cat
+        .map((c) => `<option value="${c.noradId}">${esc(c.name)} · ${Math.round(c.altKm)} km</option>`)
+        .join('');
+      satSel.value = String(cat[0].noradId);
+      satSel.disabled = false;
+      loadState = 'ready';
+      run();
+    } catch (err) {
+      console.error('what-if: catalog load failed', err);
+      loadState = 'failed';
+      satSel.innerHTML = '<option>Catalog unavailable</option>';
+      list.innerHTML =
+        '<div class="pass-empty">Could not load a real element set — nothing is invented here. Retry when back online.</div>';
+    }
+  }
+
+  function run() {
+    if (loadState !== 'ready') return;
+    const chosen = cat.find((c) => String(c.noradId) === satSel.value);
+    if (!chosen) return;
+
+    const dv = clampNum(dvIn.value, -3000, 3000, 100);
+    const winH = clampNum(winIn.value, 1, 24, 6);
+    hint.textContent = '';
+    hint.classList.remove('is-warn');
+    if (dv.clamped || winH.clamped) {
+      hint.textContent = 'Clamped to honest ranges: Δv ±3000 m/s, window 1–24 h.';
+      hint.classList.add('is-warn');
+    }
+
+    // Apply the along-track Δv to the chosen object's velocity, then reduce the
+    // post-burn state back to elements — screened in the same frame as the rest.
+    const vmag = Math.sqrt(chosen.v.x * chosen.v.x + chosen.v.y * chosen.v.y + chosen.v.z * chosen.v.z);
+    const dvKmS = dv.v / 1000;
+    const vp = {
+      x: chosen.v.x + (dvKmS * chosen.v.x) / vmag,
+      y: chosen.v.y + (dvKmS * chosen.v.y) / vmag,
+      z: chosen.v.z + (dvKmS * chosen.v.z) / vmag,
+    };
+    const elHypo = stateToElements(chosen.r, vp);
+    // A burn at/above escape Δv yields a hyperbolic or degenerate orbit (a<0 →
+    // NaN mean motion). Screen nothing and say so honestly rather than render NaN.
+    if (!Number.isFinite(elHypo.meanMotion) || !(elHypo.eccentricity < 1)) {
+      setColoredValue($('#wiAfter'), '—', '');
+      setText(app, '#wiBefore', '—');
+      setColoredValue($('#wiNet'), 'unbound orbit', 'alert');
+      setText(app, '#wiCount', '0');
+      list.innerHTML = `<div class="pass-empty">Δv ${dv.v} m/s puts ${esc(chosen.name)} on an escape / hyperbolic trajectory — no bound orbit to screen. Reduce the burn.</div>`;
+      foot.textContent = `${chosen.name} · Δv ${dv.v} m/s · no bound orbit`;
+      last = null;
+      return;
+    }
+    const hypoRange = periApoKm(elHypo); // {peri, apo} altitude (km) the post-burn orbit sweeps
+    const altHypo = altOfEl(elHypo); // mean altitude — sort center only
+
+    // A conjunction needs altitude-RANGE overlap, not equal mean altitude: a burn
+    // makes the orbit eccentric (perigee at the burn point, apogee raised), so a
+    // mean-altitude shell would silently drop the objects it approaches at
+    // perigee/apogee. Filter on perigee–apogee band overlap; nearest-mean first, capped.
+    const candidates = cat
+      .filter(
+        (c) =>
+          c.noradId !== chosen.noradId &&
+          hypoRange.peri - WI_ALT_BAND_KM <= c.apo + WI_ALT_BAND_KM &&
+          c.peri - WI_ALT_BAND_KM <= hypoRange.apo + WI_ALT_BAND_KM,
+      )
+      .sort((a, b) => Math.abs(a.altKm - altHypo) - Math.abs(b.altKm - altHypo))
+      .slice(0, WI_MAX_CANDIDATES);
+
+    // Precompute the before/after tracks once, then screen each candidate against
+    // both — O(steps + candidates·steps) instead of re-propagating the tracks.
+    const windowSec = winH.v * 3600;
+    const steps = Math.floor(windowSec / WI_STEP_SEC) + 1;
+    const origTrack = new Array(steps);
+    const hypoTrack = new Array(steps);
+    const times = new Array(steps);
+    for (let k = 0; k < steps; k++) {
+      const t = k * WI_STEP_SEC;
+      times[k] = t;
+      origTrack[k] = propagateECI(chosen.el, t);
+      hypoTrack[k] = propagateECI(elHypo, t);
+    }
+
+    /** @type {Array<{name: string, noradId: number, before: number, after: number, tcaAfter: number}>} */
+    const rows = [];
+    for (const c of candidates) {
+      let minB2 = Infinity;
+      let minA2 = Infinity;
+      let tA = 0;
+      for (let k = 0; k < steps; k++) {
+        const pc = propagateECI(c.el, times[k]);
+        const dB2 = dist2(pc, origTrack[k]);
+        if (dB2 < minB2) minB2 = dB2;
+        const dA2 = dist2(pc, hypoTrack[k]);
+        if (dA2 < minA2) {
+          minA2 = dA2;
+          tA = times[k];
+        }
+      }
+      rows.push({ name: c.name, noradId: c.noradId, before: Math.sqrt(minB2), after: Math.sqrt(minA2), tcaAfter: tA });
+    }
+
+    const screened = candidates.length;
+    const nearestAfter = rows.reduce((m, r) => Math.min(m, r.after), Infinity);
+    const nearestBefore = rows.reduce((m, r) => Math.min(m, r.before), Infinity);
+    const shown = rows.slice().sort((a, b) => a.after - b.after).slice(0, WI_MAX_SHOWN);
+
+    // Readout
+    setColoredValue($('#wiAfter'), fmtKm(nearestAfter), Number.isFinite(nearestAfter) && nearestAfter < WI_CONJ_KM ? 'alert' : '');
+    setText(app, '#wiBefore', fmtKm(nearestBefore));
+    if (!screened) {
+      setColoredValue($('#wiNet'), 'no objects in shell', '');
+    } else {
+      const delta = nearestAfter - nearestBefore;
+      if (Math.abs(delta) < 0.5) setColoredValue($('#wiNet'), '≈ no change', '');
+      else if (delta > 0) setColoredValue($('#wiNet'), `safer +${fmtKm(delta)} km`, 'ok');
+      else setColoredValue($('#wiNet'), `closer −${fmtKm(-delta)} km`, 'alert');
+    }
+    setText(app, '#wiCount', String(screened));
+
+    if (!screened) {
+      list.innerHTML = `<div class="pass-empty">No catalogued objects share this altitude shell (±${WI_ALT_BAND_KM} km). Nothing to screen — try a different Δv or object.</div>`;
+    } else {
+      list.innerHTML = shown
+        .map(
+          (r, i) => `
+        <div class="pass-row">
+          <span class="pass-row__idx">${String(i + 1).padStart(2, '0')}</span>
+          <span class="pass-row__cell" title="${esc(r.name)}">${esc(r.name)}</span>
+          <span class="pass-row__cell">${fmtKm(r.before)}</span>
+          <span class="pass-row__cell ${r.after < WI_CONJ_KM ? 'val-alert' : ''}">${fmtKm(r.after)}</span>
+          <span class="pass-row__cell">${(r.tcaAfter / 3600).toFixed(2)}</span>
+        </div>`,
+        )
+        .join('');
+    }
+
+    foot.textContent = `${chosen.name} · Δv ${dv.v} m/s → ${Math.round(hypoRange.peri)}×${Math.round(hypoRange.apo)} km (peri×apo) · ${screened} range-overlap · two-body · ${WI_STEP_SEC} s step`;
+    last = { chosen, dv: dv.v, winH: winH.v, peri: hypoRange.peri, apo: hypoRange.apo, screened, shown, nearestAfter, nearestBefore };
+  }
+
+  const deb = debounce(run, 220);
+
+  // Lazy init on first activation of this tab (own listener; the shared tab
+  // handler in mount() is untouched).
+  const whatifTab = app.querySelector('.tools-tab[data-tool="whatif"]');
+  if (whatifTab) whatifTab.addEventListener('click', initCatalog);
+
+  satSel.addEventListener('change', run);
+  dvIn.addEventListener('input', deb);
+  winIn.addEventListener('input', deb);
+
+  wireCopy(/** @type {HTMLElement|null} */ ($('#wiCopy')), () => {
+    if (!last) return '';
+    const rows = last.shown.map(
+      (/** @type {any} */ r, /** @type {number} */ i) =>
+        `#${i + 1}  ${r.name}  BEFORE ${fmtKm(r.before)} km  AFTER ${fmtKm(r.after)} km  TCA ${(r.tcaAfter / 3600).toFixed(2)} h`,
+    );
+    return [
+      'ORBITOPS — WHAT-IF SANDBOX (two-body snapshot · screening only)',
+      `OBJECT   ${last.chosen.name} (NORAD ${last.chosen.noradId})`,
+      `BURN     ${last.dv} m/s along-track → ${Math.round(last.peri)}×${Math.round(last.apo)} km (peri×apo)`,
+      `WINDOW   ${last.winH} h · ${WI_STEP_SEC} s step · ${last.screened} objects in ±${WI_ALT_BAND_KM} km shell`,
+      `NEAREST  before ${fmtKm(last.nearestBefore)} km · after ${fmtKm(last.nearestAfter)} km`,
+      ...(rows.length ? rows : ['NO OBJECTS IN THE ALTITUDE SHELL']),
+      'Two-body Kepler, no drag/J2/covariance/Pc — verify against a real CDM screen.',
+    ].join('\n');
+  });
+}
+
+/* ============================================================
    UTILS
    ============================================================ */
 
@@ -1485,6 +1843,21 @@ function wirePassTool(app) {
 function setText(app, sel, txt) {
   const el = app.querySelector(sel);
   if (el) el.textContent = txt;
+}
+
+/**
+ * Set a readout value plus an optional status color (ok / alert), clearing any
+ * prior status class first.
+ * @param {Element|null} el
+ * @param {string} text
+ * @param {string} kind '' | 'ok' | 'alert'
+ */
+function setColoredValue(el, text, kind) {
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('val-ok', 'val-alert');
+  if (kind === 'ok') el.classList.add('val-ok');
+  else if (kind === 'alert') el.classList.add('val-alert');
 }
 
 /**

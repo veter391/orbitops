@@ -620,6 +620,18 @@
   padding: 9px 14px;
 }
 
+/* What-if board: object name gets the width; three tight numeric columns. */
+.tools-page .pass-board--wi .pass-board__cols,
+.tools-page .pass-board--wi .pass-row {
+  grid-template-columns: 30px 1.9fr 1fr 1fr 0.7fr;
+}
+.tools-page .pass-board--wi .pass-row__cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .tools-page .pass-board__cols {
   font-family: var(--font-mono);
   font-size: 9px;
