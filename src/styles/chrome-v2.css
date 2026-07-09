@@ -497,6 +497,16 @@
   .top-nav__tab-idx { margin-right: 5px; }
 }
 
+/* Between the drawer cutoff (≤880) and the desktop nav (≥1201), the centered
+   7-tab strip was wide enough to run under the brand/logo. Drop the tab icons
+   here (labels stay, fully readable) so the strip clears the logo — the drawer
+   and the ≥1201 desktop nav are untouched. */
+@media (min-width: 881px) and (max-width: 1200px) {
+  .top-nav__tab-icon { display: none; }
+  .top-nav__links { gap: 4px; }
+  .top-nav__links a { padding: 10px 7px !important; }
+}
+
 @media (max-width: 880px) {
   .top-nav {
     display: flex;
