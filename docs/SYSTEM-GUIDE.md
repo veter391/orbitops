@@ -284,27 +284,33 @@ npm test             # run the full node:test suite (in-memory pglite, no extern
 npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 ```
 
-### The 85 tests, grouped by file
+### The 118 tests, grouped by file
 
 | File | What it proves | Tests |
 |---|---|---|
 | `test/agent.test.ts` | Multi-agent graph routing (incl. the memory/RECALL node), approval lifecycle, auth requirement | 10 |
 | `test/agent-evals.test.ts` | Fixture scenarios through the real graph: routing, action type, Pc ranges, determinism, and the always-pending safety invariant (CI-gated) | 9 |
-| `test/conjunction.test.ts` | Probability-of-collision math and risk banding | 4 |
+| `test/conjunction.test.ts` | First-order probability-of-collision math and risk banding | 4 |
+| `test/pc2d.test.ts` | Full-covariance 2D Pc (Foster/CARA) vs the NASA CARA Omitron reference vector, monotonicity, and degenerate/overflow (finite, no-hang) guards | 6 |
+| `test/cdm-pc2d.test.ts` | CDM full state → RTN→ECI covariance rotation → pc2d round-trip driving the decision (E3) | 3 |
 | `test/anomaly.test.ts` | Modified z-score (median/MAD) outlier detection | 5 |
-| `test/maneuver.test.ts` | Avoidance-burn Δv + Tsiolkovsky propellant sizing | 4 |
-| `test/cdm.test.ts` | CDM KVN parsing, unit mapping, one-sided-covariance guard, strict OBJECT routing, `validateCdm`, and the `/v1/conjunctions/cdm` route (incl. 400 on invalid/negative miss) | 12 |
+| `test/maneuver.test.ts` | Avoidance-burn Δv + Tsiolkovsky propellant sizing + ranked alternatives | 6 |
+| `test/cdm.test.ts` | CDM KVN parsing, unit mapping, one-sided-covariance guard, strict OBJECT routing, `validateCdm` (incl. implausible-HBR/covariance ceilings), and the `/v1/conjunctions/cdm` route (incl. 400 on invalid/negative miss) | 13 |
+| `test/decay.test.ts` | Orbital-lifetime (King-Hele first-order) + FCC deorbit-compliance assessment (5-/25-year regime, uncertainty band) validated vs AgentCalc/SpaceAcademy | 7 |
+| `test/escalation.test.ts` | On-call escalation policy (routine→elevated→urgent→critical) from risk band + imminent TCA + compliance flags | 5 |
+| `test/noise.test.ts` | Conjunction noise auto-dismiss (Pc below the 1e-6 floor → `monitor`, routine, still audited) | 3 |
 | `test/audit.test.ts` | Hash-chain integrity, concurrent-append safety, tamper detection, per-tenant chains, export | 6 |
 | `test/proposals.test.ts` | Auth requirement, approve/reject/modify, atomic no-op guards, tenant isolation, 404s, identity-from-auth, validation | 9 |
-| `test/telemetry.test.ts` | Ingest, raw query, bucket downsampling, latest-per-metric, tenant isolation, validation | 6 |
+| `test/telemetry.test.ts` | Ingest, raw query, bucket downsampling, latest-per-metric, tenant isolation, validation | 7 |
 | `test/stream.test.ts` | WebSocket event fan-out, tenant/satellite filtering, ticket auth | 4 |
+| `test/feedback.test.ts` | Public product-feedback capture (POST) and authenticated read (GET) | 5 |
 | `test/security.test.ts` | Helmet/rate-limit headers, body-size limit, OpenAPI spec served, middleware doesn't break auth/validation | 4 |
 | `test/idempotency.test.ts` | Retried POSTs don't duplicate; no key = no dedup | 3 |
 | `test/observability.test.ts` | Request-id correlation, OTel no-op safety, retention purge correctness | 3 |
 | `test/pagination.test.ts` | Cursor pagination covers all rows without overlap | 2 |
 | `test/schema.test.ts` | FK enforcement, cascade delete | 2 |
 | `test/health.test.ts` | Liveness endpoint, migration idempotency | 2 |
-| **Total** | | **85** |
+| **Total** | **22 files** | **118** |
 
 Run serial for a deterministic count: `node --import tsx --test --test-concurrency=1 test/*.test.ts` (parallel pglite instances can cause file-level flakiness that is not a regression). The frontend has its own gates: `npx tsc --noEmit` (the `// @ts-check` modules) and `npx eslint src/`.
 
