@@ -155,6 +155,10 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
             missDistanceKm: worst.signal.missDistanceKm,
             sigmaKm: worst.signal.sigmaKm,
             combinedRadiusKm: worst.signal.combinedRadiusKm,
+            // Time-to-closest-approach travels onto the proposal so the operator
+            // surfaces (triage / conjunction watch) can show "how soon", not just
+            // how close. It also feeds the escalation policy above.
+            timeToTcaSec: worst.signal.timeToTcaSec,
           }
         : {};
 

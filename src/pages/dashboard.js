@@ -329,6 +329,10 @@ export async function mount(app) {
   // return path. Untouched (hidden) in the default simulation.
   if (isConnected()) cleanups.push(mountLiveTelemetry(app));
 
+  // Connected mode: replace the PLANNED conjunction-watch design preview with the
+  // real screened-conjunction queue from the backend. Additive; demo keeps the preview.
+  if (isConnected()) cleanups.push(mountConjunctionWatch(app));
+
   let data;
   try {
     data = await loadConstellation(['starlink', 'oneweb'], { max: 3000 });
@@ -1082,6 +1086,114 @@ function renderDeorbitTracker(tracker, rows, client) {
       }
     });
   }
+}
+
+/** Scientific-notation Pc, e.g. 5.4e-3. @param {number} pc */
+function fmtPcSci(pc) {
+  return typeof pc === 'number' && pc > 0 ? pc.toExponential(1) : '—';
+}
+
+/**
+ * Connected-mode conjunction watch. Replaces the PLANNED "awaiting SSA feed"
+ * design preview with the REAL screened conjunctions from the backend triage
+ * queue (a read-only at-a-glance board; REVIEW opens the Agent page to approve
+ * or dismiss). Additive and fail-safe — demo mode keeps the design preview, and
+ * any backend error leaves it untouched.
+ * @param {HTMLElement} app @returns {() => void} cleanup
+ */
+function mountConjunctionWatch(app) {
+  const panel = /** @type {HTMLElement|null} */ (app.querySelector('.dv2-panel--cw'));
+  if (!panel) return () => {};
+  const client = new BackendClient();
+  let disposed = false;
+
+  (async () => {
+    try {
+      const { proposals } = await client.listProposals({ limit: 30 });
+      if (disposed) return;
+      // Conjunction-driven proposals: a computed Pc / risk band, or an avoidance
+      // maneuver (maneuvers are produced only from the conjunction screener).
+      // Noise-dismissed conjunctions are hidden here — the panel is the "handful
+      // that matters", matching its own "noise auto-dismissed" framing.
+      const conj = (Array.isArray(proposals) ? proposals : []).filter((p) => {
+        const a = p.proposedAction || {};
+        if (a.noise === true) return false;
+        return a.type === 'maneuver' || typeof a.pc === 'number' || Boolean(a.riskBand);
+      });
+      renderConjunctionWatch(panel, conj);
+    } catch {
+      /* backend unreachable — leave the honest PLANNED design preview in place */
+    }
+  })();
+
+  return () => { disposed = true; };
+}
+
+/**
+ * Render real screened conjunctions into the watch panel, replacing the PLANNED
+ * skeleton. @param {HTMLElement} panel @param {any[]} rows
+ */
+function renderConjunctionWatch(panel, rows) {
+  /** @param {string} band severity band OR escalation level */
+  const sevColor = (band) =>
+    band === 'critical' || band === 'urgent'
+      ? 'var(--alert)'
+      : band === 'warning' || band === 'elevated'
+        ? 'var(--warn)'
+        : band === 'watch'
+          ? 'var(--ice, #8fc6ff)'
+          : 'var(--ok)';
+  const head = `
+    <div class="dv2-panel__head">
+      <h3 class="dv2-panel__title">Conjunction watch · live queue</h3>
+      <span class="dv2-hchip dv2-hchip--real">REAL</span>
+    </div>`;
+
+  if (!rows.length) {
+    panel.innerHTML = `${head}
+      <div class="dv2-cw-empty">
+        <div class="dv2-cw-empty__txt">
+          <div class="dv2-cw-empty__title">Connected · no conjunctions in the queue</div>
+          <p>The backend is connected and this board is live. Screened conjunctions
+             rank in here by collision probability as CDMs arrive; ingest one on the
+             Agent page (paste a CDM) and it appears here, noise auto-dismissed,
+             every approve/dismiss written to the hash-chained audit log.</p>
+          <div class="dv2-cw-empty__meta">
+            <span class="dv2-hchip dv2-hchip--real">LIVE</span>
+            <span class="dv2-cw-empty__ready">real backend · zero synthetic values</span>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const body = rows
+    .map((p) => {
+      const a = p.proposedAction || {};
+      const band = a.riskBand || (a.escalation && a.escalation.level) || '—';
+      const tcaH = typeof a.timeToTcaSec === 'number' ? `${(a.timeToTcaSec / 3600).toFixed(1)} h` : '—';
+      const miss = typeof a.missDistanceKm === 'number' ? `${a.missDistanceKm}` : '—';
+      const paging = a.escalation && a.escalation.notify ? ' · PAGE' : '';
+      return `<div class="dv2-cw-row dv2-cw-row--real">
+        <span class="dv2-cw-obj" title="${esc(p.satelliteId || '—')}">${esc(p.satelliteId || '—')}</span>
+        <span>${esc(tcaH)}</span>
+        <span>${esc(miss)}</span>
+        <span>${esc(fmtPcSci(a.pc))}</span>
+        <span class="dv2-cw-sev" style="color: ${sevColor(String(band))};">${esc(String(band))}${esc(paging)}</span>
+        <a href="/agent" data-route="/agent" class="dv2-cw-act">REVIEW</a>
+      </div>`;
+    })
+    .join('');
+
+  panel.innerHTML = `${head}
+    <div class="dv2-cw-scroll">
+      <div class="dv2-cw-cols" aria-hidden="true">
+        <span>OBJECT</span><span>TCA</span><span>MISS KM</span><span>PC</span><span>SEVERITY</span><span>ACTION</span>
+      </div>
+      ${body}
+    </div>
+    <p class="dv2-cw-note">Real screened conjunctions from the connected backend. REVIEW opens the
+      Agent triage to approve or dismiss; every decision is sealed in the hash-chained audit log.</p>`;
 }
 
 /** @param {string} active */

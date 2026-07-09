@@ -327,8 +327,9 @@ export async function mount(app) {
               <div class="gate-step__idx">05</div>
               <div class="gate-step__title">EXPORTABLE EVIDENCE</div>
               <div class="gate-step__body">The full chain exports as JSON — who
-                decided what, when, on which reasoning. Runs in this browser today;
-                insurer/regulator pack formats <span class="planned-chip">PLANNED</span></div>
+                decided what, when, on which reasoning. In connected mode it exports
+                as a tamper-evident evidence pack with a server-side integrity
+                attestation, for insurer / regulator submission.</div>
             </li>
           </ol>
           <p class="gate-flow__note">Steps 02–05 run in this demo on the real in-browser
