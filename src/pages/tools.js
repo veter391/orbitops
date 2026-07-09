@@ -30,6 +30,7 @@
 import { propagate, propagateECI, closestApproach, stateToElements, CONSTANTS } from '../core/orbit-propagator.js';
 import { avoidanceBurn } from '../core/maneuver-planner.js';
 import { SATELLITES } from '../data/satellites.js';
+import { GROUND_STATIONS, DEFAULT_STATION_ID, stationById } from '../data/stations.js';
 import { mountAmbient } from '../ui/ambient.js';
 import { esc } from '../utils.js';
 
@@ -433,10 +434,11 @@ function shellHTML() {
               <h2>Pass predictor</h2>
               <p class="section__lede">
                 When does a real satellite rise over your horizon? Pick a
-                ground site and a catalogued object — the next 24 hours of
-                passes are computed in your browser from the live CelesTrak
-                element set: SGP4 states every 30 s, converted to local
-                look angles.
+                station from a real ground network (KSAT, ESA ESTRACK, NASA
+                NEN, SSC) — each with its own horizon mask — and a catalogued
+                object; the next 24 hours of passes are computed in your
+                browser from the live CelesTrak element set: SGP4 states every
+                30 s, converted to local look angles.
               </p>
 
               <div class="tool-form hover-lift">
@@ -444,10 +446,16 @@ function shellHTML() {
                   <span class="t-field__label">Ground site</span>
                   <span class="t-field__box">
                     <select id="passPreset">
-                      <option value="40.42,-3.70" selected>Madrid — 40.42, −3.70</option>
-                      <option value="51.51,-0.13">London — 51.51, −0.13</option>
-                      <option value="40.71,-74.01">New York — 40.71, −74.01</option>
-                      <option value="-33.87,151.21">Sydney — −33.87, 151.21</option>
+                      ${[...new Set(GROUND_STATIONS.map((s) => s.network))]
+                        .map(
+                          (net) => `<optgroup label="${net}">${GROUND_STATIONS.filter((s) => s.network === net)
+                            .map(
+                              (s) =>
+                                `<option value="${s.id}"${s.id === DEFAULT_STATION_ID ? ' selected' : ''}>${s.name} — ${s.latDeg.toFixed(2)}, ${s.lonDeg.toFixed(2)}</option>`,
+                            )
+                            .join('')}</optgroup>`,
+                        )
+                        .join('')}
                       <option value="custom">Custom coordinates…</option>
                     </select>
                   </span>
@@ -457,14 +465,14 @@ function shellHTML() {
                   <label class="t-field">
                     <span class="t-field__label">Latitude</span>
                     <span class="t-field__box">
-                      <input id="passLat" type="number" inputmode="decimal" min="-90" max="90" step="0.01" value="40.42">
+                      <input id="passLat" type="number" inputmode="decimal" min="-90" max="90" step="0.01" value="78.23">
                       <span class="t-field__unit">DEG</span>
                     </span>
                   </label>
                   <label class="t-field">
                     <span class="t-field__label">Longitude</span>
                     <span class="t-field__box">
-                      <input id="passLon" type="number" inputmode="decimal" min="-180" max="180" step="0.01" value="-3.70">
+                      <input id="passLon" type="number" inputmode="decimal" min="-180" max="180" step="0.01" value="15.39">
                       <span class="t-field__unit">DEG</span>
                     </span>
                   </label>
@@ -480,7 +488,7 @@ function shellHTML() {
                 <label class="t-field">
                   <span class="t-field__label">Horizon elevation mask</span>
                   <span class="t-field__box">
-                    <input id="passMinEl" type="number" inputmode="decimal" min="0" max="85" step="1" value="10">
+                    <input id="passMinEl" type="number" inputmode="decimal" min="0" max="85" step="1" value="5">
                     <span class="t-field__unit">DEG</span>
                   </span>
                 </label>
@@ -1530,9 +1538,11 @@ function wirePassTool(app) {
 
   preset.addEventListener('change', () => {
     if (preset.value === 'custom') return;
-    const [la, lo] = preset.value.split(',').map(Number);
-    latIn.value = String(la);
-    lonIn.value = String(lo);
+    const st = stationById(preset.value);
+    if (!st) return;
+    latIn.value = String(st.latDeg);
+    lonIn.value = String(st.lonDeg);
+    minElIn.value = String(st.minElevationDeg); // each station carries its own horizon mask
     run();
   });
   const onCoordInput = () => { preset.value = 'custom'; deb(); };
