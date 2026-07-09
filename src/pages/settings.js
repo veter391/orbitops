@@ -155,13 +155,15 @@ function setSources(patch) {
 /* Small utilities ------------------------------------------------------- */
 
 /**
- * REAL / PLANNED / CLOUD honest chip.
+ * Honest state chip. Real, working features carry NO badge — a settings control
+ * that just works needs no label. Only not-yet-real states are marked: PLANNED
+ * (designed, backend pending) and CLOUD (hosted OrbitOps, future).
  * @param {string} kind
  */
 function chip(kind) {
+  if (kind === 'real') return '';
   /** @type {Record<string, string[]>} */
   const map = {
-    real: ['REAL', 'today'],
     planned: ['PLANNED', 'backend'],
     cloud: ['CLOUD', 'future'],
   };
@@ -261,7 +263,7 @@ function shellHTML() {
             explicitly configure (OpenRouter, your own APIs).
           </p>
           <div class="set-header__legend">
-            ${chip('real')}<span class="set-legend__t">works today, stored locally</span>
+            <span class="set-legend__t"><strong class="set-legend__real">No badge</strong> — works today, stored locally</span>
             ${chip('planned')}<span class="set-legend__t">designed, backend pending</span>
             ${chip('cloud')}<span class="set-legend__t">hosted OrbitOps, future</span>
           </div>
@@ -418,7 +420,7 @@ function sectionAI() {
     'ai',
     '01',
     'AI &amp; Agents',
-    `${chip('real')}${chip('planned')}`,
+    '',
     `
     ${row(
       'LLM provider',
@@ -663,7 +665,7 @@ function sectionSources() {
     'sources',
     '02',
     'Data Sources',
-    `${chip('real')}${chip('planned')}`,
+    '',
     `
     <p class="set-note set-note--lead">
       Your own APIs override the bundled open feeds. Disable CelesTrak and point
@@ -738,7 +740,7 @@ function sectionSources() {
         </label>
         <button type="button" class="set-btn" id="srcTleClear" ${customTle ? '' : 'disabled'}>Remove</button>
       </div>
-      <p class="set-note">TLE / 3LE parses and stores here now (${chip('real')}). Ephemeris formats (OEM/SP3) parse ${chip('planned')} — a validated parser lands with the backend.</p>`,
+      <p class="set-note">TLE / 3LE parses and stores here now. Ephemeris formats (OEM/SP3) parse ${chip('planned')} — a validated parser lands with the backend.</p>`,
       'Drop in your own element set. We parse and count objects client-side to confirm it, then store it in this browser.',
     )}
   `,
