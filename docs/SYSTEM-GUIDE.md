@@ -299,8 +299,8 @@ npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 | `test/decay.test.ts` | Orbital-lifetime (King-Hele first-order) + FCC deorbit-compliance assessment (5-/25-year regime, uncertainty band) validated vs AgentCalc/SpaceAcademy | 7 |
 | `test/escalation.test.ts` | On-call escalation policy (routine→elevated→urgent→critical) from risk band + imminent TCA + compliance flags | 5 |
 | `test/noise.test.ts` | Conjunction noise auto-dismiss (Pc below the 1e-6 floor → `monitor`, routine, still audited) | 3 |
-| `test/audit.test.ts` | Hash-chain integrity, concurrent-append safety, tamper detection, per-tenant chains, export | 6 |
-| `test/proposals.test.ts` | Auth requirement, approve/reject/modify, atomic no-op guards, tenant isolation, 404s, identity-from-auth, validation | 9 |
+| `test/audit.test.ts` | Hash-chain integrity, concurrent-append safety, tamper detection, per-tenant chains, export, CSV formula-injection guard | 7 |
+| `test/proposals.test.ts` | Auth requirement, approve/reject/modify, four-eyes countersign, gapless compound-cursor pagination, atomic no-op guards, tenant isolation, 404s, identity-from-auth, validation | 14 |
 | `test/telemetry.test.ts` | Ingest, raw query, bucket downsampling, latest-per-metric, tenant isolation, validation | 7 |
 | `test/stream.test.ts` | WebSocket event fan-out, tenant/satellite filtering, ticket auth | 4 |
 | `test/feedback.test.ts` | Public product-feedback capture (POST) and authenticated read (GET) | 5 |
@@ -315,7 +315,12 @@ npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 | `test/semantic-memory.test.ts` | Similarity recall + lexical embedder/cosine (determinism, ranking, tenant scope, candidate cap, graph wiring on/off) | 9 |
 | `test/config-secrets.test.ts` | File-backed secret resolution (`<NAME>_FILE`, file-wins, empty-fail-closed) | 5 |
 | `test/rls.test.ts` | Row-Level Security tenant isolation (cross-tenant reads/inserts blocked, fail-closed, maintenance-scope retention, single-transaction binding) | 9 |
-| **Total** | **27 files** | **155** |
+| **Total** | **27 files** | **161** |
+
+Plus a **frontend** `node:test` suite (`npm test` at the repo root) — 15 tests over the
+pure-math core: `test/omm.test.js` (TLE checksum + OMM→TLE self-consistency),
+`test/orbit-propagator.test.js` (Kepler's-equation identity, orbital-element recovery),
+`test/maneuver-planner.test.js` (Δv + Tsiolkovsky fuel).
 
 Run serial for a deterministic count: `node --import tsx --test --test-concurrency=1 test/*.test.ts` (parallel pglite instances can cause file-level flakiness that is not a regression). The frontend has its own gates: `npx tsc --noEmit` (the `// @ts-check` modules) and `npx eslint src/`.
 
