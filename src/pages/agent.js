@@ -369,33 +369,60 @@ export async function mount(app) {
     updateChainStatus();
   }, 1500);
 
-  // D4 — verifiable audit export. One-click download of the REAL hash-chained
-  // log as JSON (an evidence pack for insurers/regulators/incident records),
-  // plus a live chain verify. Both run entirely client-side; nothing here is
-  // simulated — it's the same tamper-evident chain the cockpit and agent write.
+  // D4 — verifiable audit export + verify. In the default simulation these run
+  // client-side over the browser SHA-256 chain. In CONNECTED mode they run over
+  // the REAL backend HMAC hash chain instead — a one-click, tamper-evident
+  // evidence pack (chain + server-side integrity attestation) for insurers and
+  // regulators. Connected mode is additive; the demo path is untouched.
+  const backendClient = isConnected() ? new BackendClient() : null;
+  if (backendClient) markAuditConnected(app);
+
   const exportBtn = /** @type {HTMLElement|null} */ (app.querySelector('#auditExport'));
-  if (exportBtn) exportBtn.addEventListener('click', () => {
-    const json = audit.export();
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orbitops-audit-${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  if (exportBtn) exportBtn.addEventListener('click', async () => {
+    if (backendClient) {
+      exportBtn.setAttribute('disabled', 'true');
+      try {
+        const pack = await buildEvidencePack(backendClient);
+        downloadText(JSON.stringify(pack, null, 2), `orbitops-evidence-pack-${auditStamp()}.json`, 'application/json');
+        const n = Array.isArray(pack.chain) ? pack.chain.length : (pack.integrity.entries ?? 0);
+        if (pack.integrity.valid) {
+          success(`Evidence pack exported · ${n} entries · backend HMAC chain verified`, { title: 'Evidence pack', durationMs: 4000 });
+        } else {
+          error(`Pack exported but the chain FAILS verification at entry ${pack.integrity.brokenAt} (${pack.integrity.reason})`, { title: 'Evidence pack · tampered', durationMs: 6000 });
+        }
+      } catch (e) {
+        const err = /** @type {{status?: number}} */ (e);
+        error(err.status === 0 ? 'Backend unreachable — could not export the evidence pack' : 'Could not export the evidence pack', { title: 'Evidence pack', durationMs: 5000 });
+      } finally {
+        exportBtn.removeAttribute('disabled');
+      }
+      return;
+    }
+    // Simulation: export the browser SHA-256 chain.
+    downloadText(audit.export(), `orbitops-audit-${auditStamp()}.json`, 'application/json');
     info(`Exported ${audit.entries.length} entries · verifiable JSON`, { title: 'Audit export', durationMs: 3500 });
   });
+
   const verifyBtn = /** @type {HTMLElement|null} */ (app.querySelector('#auditVerify'));
   if (verifyBtn) verifyBtn.addEventListener('click', async () => {
-    const res = await audit.verify();
-    if (res.valid) {
-      success(`Chain intact · ${audit.entries.length} entries verified`, { title: 'Audit verify', durationMs: 3500 });
-    } else {
-      error(`Chain broken at entry ${res.brokenAt} (${res.reason})`, { title: 'Audit verify', durationMs: 5000 });
+    if (backendClient) {
+      verifyBtn.setAttribute('disabled', 'true');
+      try {
+        const res = await backendClient.verifyAudit();
+        if (res.valid) success(`Backend chain intact · ${res.entries} entries verified (HMAC)`, { title: 'Audit verify', durationMs: 3500 });
+        else error(`Backend chain broken at entry ${res.brokenAt} (${res.reason})`, { title: 'Audit verify', durationMs: 5000 });
+      } catch (e) {
+        const err = /** @type {{status?: number}} */ (e);
+        error(err.status === 0 ? 'Backend unreachable — could not verify the chain' : 'Could not verify the backend chain', { title: 'Audit verify', durationMs: 5000 });
+      } finally {
+        verifyBtn.removeAttribute('disabled');
+      }
+      return;
     }
+    // Simulation: verify the browser SHA-256 chain.
+    const res = await audit.verify();
+    if (res.valid) success(`Chain intact · ${audit.entries.length} entries verified`, { title: 'Audit verify', durationMs: 3500 });
+    else error(`Chain broken at entry ${res.brokenAt} (${res.reason})`, { title: 'Audit verify', durationMs: 5000 });
   });
 
   /** @param {{ stage: string }} arg */
@@ -424,6 +451,74 @@ export async function mount(app) {
       if (ambient) { ambient.unmount(); ambient = null; }
     },
   };
+}
+
+/* ============================================================
+   EVIDENCE PACK — real backend HMAC audit chain export/verify
+   ============================================================ */
+
+/** Filesystem-safe UTC timestamp for export filenames. */
+function auditStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+/**
+ * Trigger a client-side download of a text payload.
+ * @param {string} text
+ * @param {string} filename
+ * @param {string} mime
+ */
+function downloadText(text, filename, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Build a tamper-evident evidence pack from the REAL backend audit chain: the
+ * full HMAC hash-chained decision log plus a server-side integrity attestation
+ * captured at export time. Re-derivable offline; for regulator / insurer submission.
+ * @param {BackendClient} client
+ * @returns {Promise<{kind: string, generatedAt: string, source: string, integrity: any, chain: any, note: string}>}
+ */
+async function buildEvidencePack(client) {
+  // Export first, THEN verify. The chain is append-only and verify walks it from
+  // genesis, so an attestation captured after the export provably covers every
+  // exported entry — no read-ordering window can leave a pack entry unattested.
+  const chain = await client.exportAudit();
+  const integrity = await client.verifyAudit();
+  return {
+    kind: 'orbitops-evidence-pack',
+    generatedAt: new Date().toISOString(),
+    source: 'backend-hmac-chain',
+    integrity,
+    chain,
+    note:
+      'Tamper-evident decision log (HMAC-SHA-256 hash chain). Each entry seals the previous one; ' +
+      're-derive HMAC(key, prevHash|seq|ts|actor|action|payload) to verify offline. The integrity ' +
+      'field is a server-side attestation captured immediately after this chain was exported, so it ' +
+      'covers every entry in the pack. For regulator / insurer submission.',
+  };
+}
+
+/**
+ * Note, in connected mode, that export/verify operate on the backend HMAC chain.
+ * @param {HTMLElement} app
+ */
+function markAuditConnected(app) {
+  const note = app.querySelector('.agent-audit__note');
+  if (note && !note.querySelector('.agent-audit__connected')) {
+    const b = document.createElement('span');
+    b.className = 'agent-audit__connected';
+    b.textContent = ' Connected: export & verify run over the backend HMAC chain.';
+    note.appendChild(b);
+  }
 }
 
 /* ============================================================
