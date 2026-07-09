@@ -36,22 +36,19 @@ We publish this table because a demo that blurs the line is a demo you can't tru
 
 ## Quick start
 
-Install and run your own copy — one command, any OS (needs Node.js):
-
-```bash
-npx create-orbitops@latest my-ops && cd my-ops && npm start
-```
-
-Open the URL it prints. That's the whole install — no build, no signup, no keys.
-The npx installer ships with the open-source release.
-
-**Run from source (contributors):**
+Run your own copy — no build, no signup, no keys. It's a static site, so any
+static server works. With Node.js:
 
 ```bash
 git clone https://github.com/veter391/orbitops && cd orbitops && npx serve .
 ```
 
-Open `http://localhost:8080`. No build step, no signup, no environment variables, no API keys required. Optional: add a model-provider key in Settings (OpenRouter, OpenAI, xAI/Grok, or your own OpenAI-compatible endpoint) to switch the reasoning console from simulated to live LLM output.
+Open the URL it prints (usually `http://localhost:3000`). Prefer Python? From the
+same folder run `python3 -m http.server 8080` and open `http://localhost:8080`.
+
+No environment variables, no API keys required. Optional: add a model-provider key
+in Settings (OpenRouter, OpenAI, xAI/Grok, or your own OpenAI-compatible endpoint)
+to switch the reasoning console from simulated to live LLM output.
 
 ---
 
