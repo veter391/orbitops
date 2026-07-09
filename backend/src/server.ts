@@ -14,6 +14,7 @@ import { Feedback } from './feedback/index.js';
 import { EventBus } from './events/index.js';
 import { Agent } from './agent/index.js';
 import { AgentMemory } from './agents/memory.js';
+import { LexicalEmbedder } from './agents/embedder.js';
 import { registerAuth } from './auth/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
@@ -121,7 +122,10 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   app.decorate('proposals', proposals);
   const telemetry = new Telemetry(database, bus);
   app.decorate('telemetry', telemetry);
-  app.decorate('agent', new Agent(proposals, telemetry, new AgentMemory(database)));
+  // Similarity memory is opt-in (config): inject the offline lexical embedder so
+  // AgentMemory activates recallSimilar/remember. Off → structured recall only.
+  const memory = new AgentMemory(database, config.AGENT_SEMANTIC_MEMORY ? new LexicalEmbedder() : undefined);
+  app.decorate('agent', new Agent(proposals, telemetry, memory));
   app.decorate('feedback', new Feedback(database));
 
   registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key

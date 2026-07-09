@@ -37,6 +37,23 @@ export interface ChainStep {
   text: string;
 }
 
+/**
+ * Deterministic one-line description of the situation a run observed — the
+ * signals and their salient numbers. Used as the key for similarity recall
+ * (memory.recallSimilar / memory.remember). Stable input → stable string.
+ */
+function buildSituation(satelliteId: string, signals: Signal[]): string {
+  const parts = signals.map((s) => {
+    const bits = [s.kind];
+    if (s.metric) bits.push(s.metric);
+    if (typeof s.pc === 'number') bits.push(`pc=${s.pc.toExponential(1)}`);
+    if (typeof s.value === 'number') bits.push(`value=${s.value}`);
+    if (typeof s.missDistanceKm === 'number') bits.push(`miss=${s.missDistanceKm}km`);
+    return bits.join(' ');
+  });
+  return `${satelliteId}: ${parts.join('; ') || 'no signals'}`;
+}
+
 export interface AgentResult {
   proposal: Proposal;
   chain: ChainStep[];
@@ -99,11 +116,23 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
     const summary = memory
       ? memory.summarize(state.satelliteId, prior)
       : `No memory service bound; running without recall.`;
-    return {
-      priorDecisions: prior,
-      path: ['memory'],
-      chain: [{ phase: 'RECALL' as const, agent: 'memory', text: `Recall: ${summary}` }],
-    };
+    const chain: ChainStep[] = [{ phase: 'RECALL', agent: 'memory', text: `Recall: ${summary}` }];
+
+    // Similarity layer (only when an embedder is configured): surface past
+    // situations close to this one, even on other satellites — additive context,
+    // never a decision input. Best-effort: a recall failure must not fail the run.
+    if (memory?.semanticEnabled) {
+      try {
+        const similar = await memory.recallSimilar(state.customerId, buildSituation(state.satelliteId, state.signals), {
+          k: 3,
+        });
+        chain.push({ phase: 'RECALL', agent: 'memory', text: `Similarity: ${memory.summarizeSimilar(similar)}` });
+      } catch {
+        // Non-fatal: fall through with structured recall only.
+      }
+    }
+
+    return { priorDecisions: prior, path: ['memory'], chain };
   };
 
   /**
@@ -427,6 +456,21 @@ export function buildAgentGraph(proposals: Proposals, telemetry?: Telemetry, mem
       reasoningChain: state.chain,
       proposedAction: state.plan,
     });
+    // Remember this situation for future similarity recall (only when an embedder
+    // is configured). Best-effort: a memory-write failure must never fail the
+    // proposal — the operator's proposal is already created and audited.
+    if (memory?.semanticEnabled) {
+      try {
+        await memory.remember({
+          proposalId: proposal.id,
+          customerId: state.customerId,
+          satelliteId: state.satelliteId,
+          situation: buildSituation(state.satelliteId, state.signals),
+        });
+      } catch {
+        // Non-fatal: the proposal stands; only its similarity index entry is missing.
+      }
+    }
     return { proposal, path: ['persist'] };
   };
 

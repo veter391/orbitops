@@ -31,6 +31,16 @@ const EnvSchema = z.object({
 
   /** Nominal delta-v envelope (m/s); the compliance critic flags burns above it. */
   AGENT_MAX_DELTA_V_MS: z.coerce.number().positive().default(5),
+  /**
+   * Enable the similarity (semantic) memory layer: embed each proposal's
+   * situation and surface similar past situations on new runs. Off by default —
+   * on, it uses the offline deterministic lexical embedder (no API key, no cost).
+   * See src/agents/embedder.ts for swapping in a model-backed embedder.
+   */
+  AGENT_SEMANTIC_MEMORY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
 
