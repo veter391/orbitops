@@ -357,7 +357,7 @@ export async function mount(app) {
     return { ...s, ...me, geo, lit };
   });
 
-  const src = (/** @type {Record<string, string>} */ ({ live: 'Live · CelesTrak', cache: 'Cached · CelesTrak', snapshot: 'Snapshot · CelesTrak' }))[data.source];
+  const src = (/** @type {Record<string, string>} */ ({ live: 'Live · CelesTrak', cache: 'Cached · CelesTrak', snapshot: 'Snapshot · CelesTrak', custom: 'Live · Custom feed' }))[data.source];
   (/** @type {HTMLElement} */ (app.querySelector('#dashSource'))).textContent = src;
   (/** @type {HTMLElement} */ (app.querySelector('#dashClock'))).textContent = now.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   (/** @type {HTMLElement} */ (app.querySelector('#dashSub'))).textContent =

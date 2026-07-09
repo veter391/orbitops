@@ -1440,11 +1440,15 @@ function wirePassTool(app) {
       cat = [...st.sats, ...leo.sats];
       if (!cat.length) throw new Error('empty catalog');
 
+      // Report the least-fresh source across the two loads (custom/live freshest;
+      // an unknown source is treated as least-fresh so we never over-claim).
       /** @type {Record<string, number>} */
-      const worst = { live: 0, cache: 1, snapshot: 2 };
-      const srcName = worst[st.source] >= worst[leo.source] ? st.source : leo.source;
+      const worst = { custom: 0, live: 0, cache: 1, snapshot: 2 };
+      /** @param {string} s */
+      const rank = (s) => worst[s] ?? 2;
+      const srcName = rank(st.source) >= rank(leo.source) ? st.source : leo.source;
       /** @type {Record<string, string>} */
-      const srcLabels = { live: 'LIVE', cache: 'CACHED', snapshot: 'SNAPSHOT' };
+      const srcLabels = { live: 'LIVE', cache: 'CACHED', snapshot: 'SNAPSHOT', custom: 'CUSTOM' };
       srcOut.textContent = srcLabels[srcName] || '';
 
       /** @param {SatObject} s */
@@ -1659,7 +1663,7 @@ function wireWhatifTool(app) {
       }
       if (!cat.length) throw new Error('no propagable objects');
       /** @type {Record<string, string>} */
-      const srcLabels = { live: 'LIVE', cache: 'CACHED', snapshot: 'SNAPSHOT' };
+      const srcLabels = { live: 'LIVE', cache: 'CACHED', snapshot: 'SNAPSHOT', custom: 'CUSTOM' };
       srcOut.textContent = srcLabels[res.source] || '';
       satSel.innerHTML = cat
         .map((c) => `<option value="${c.noradId}">${esc(c.name)} · ${Math.round(c.altKm)} km</option>`)

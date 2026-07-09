@@ -41,6 +41,7 @@ const SOURCE_LABEL = {
   live: 'LIVE · CELESTRAK',
   cache: 'CACHED · CELESTRAK',
   snapshot: 'SNAPSHOT · CELESTRAK',
+  custom: 'LIVE · CUSTOM FEED',
 };
 
 // ECI (km) -> scene coords. ECI z (spin axis) maps to scene +Y (up).
