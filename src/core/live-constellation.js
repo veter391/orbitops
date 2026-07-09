@@ -21,6 +21,22 @@
 'use strict';
 
 import { parseTle, makeSat } from './sgp4.js';
+import { parseOmm, isOmm } from './omm.js';
+
+/**
+ * Parse a catalog feed body into TLE records, accepting either raw TLE or CCSDS
+ * OMM (JSON / KVN — the modern standard CelesTrak and Space-Track also serve).
+ * @param {string} text
+ * @returns {Array<{name: string, line1: string, line2: string, noradId: number}>}
+ */
+function parseCatalog(text) {
+  return isOmm(text) ? parseOmm(text) : parseTle(text);
+}
+
+/** A feed body is usable if it looks like TLE (`\n1 `) or is recognizable OMM. @param {string} text */
+function looksLikeCatalog(text) {
+  return text.includes('\n1 ') || isOmm(text);
+}
 
 /** @param {string} g */
 const GROUP_URL = (g) => `https://celestrak.org/NORAD/elements/gp.php?GROUP=${g}&FORMAT=tle`;
@@ -102,7 +118,7 @@ async function loadGroupText(group) {
       const res = await fetch(customUrl, { mode: 'cors' });
       if (res.ok) {
         const text = await res.text();
-        if (text.includes('\n1 ')) {
+        if (looksLikeCatalog(text)) {
           writeCache(`orbitops:tle:custom:${customUrl}`, text);
           return { text, source: 'custom' };
         }
@@ -120,7 +136,7 @@ async function loadGroupText(group) {
       const res = await fetch(GROUP_URL(group), { mode: 'cors' });
       if (res.ok) {
         const text = await res.text();
-        if (text.includes('\n1 ')) {
+        if (looksLikeCatalog(text)) {
           writeCache(CACHE_KEY(group), text);
           return { text, source: 'live' };
         }
@@ -172,7 +188,7 @@ export async function loadConstellation(groups = ['starlink', 'oneweb'], { max =
   for (const g of groups) {
     const { text, source: s } = await loadGroupText(g);
     if (source === null || SEVERITY[s] > SEVERITY[source]) source = s;
-    const recs = parseTle(text);
+    const recs = parseCatalog(text);
     byGroup[g] = recs.length;
     for (const r of recs) {
       const sat = makeSat(r);
