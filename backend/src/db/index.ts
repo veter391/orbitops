@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { config } from '../config.js';
 import { createPgDb } from './pg.js';
+import { rlsScopedDb } from './rls.js';
 
 /**
  * Minimal database surface the rest of the app depends on. Keeping this narrow
@@ -33,8 +34,13 @@ let singleton: Db | null = null;
 export async function getDb(): Promise<Db> {
   if (singleton) return singleton;
 
+  // When DB_RLS is on, wrap the base adapter so per-request queries run with the
+  // tenant session variable set (see rls.ts). No-op passthrough when off, so the
+  // default path keeps the base adapter's exact behavior and cost.
+  const scope = (base: Db): Db => (config.DB_RLS ? rlsScopedDb(base) : base);
+
   if (config.DATABASE_URL) {
-    singleton = createPgDb(config.DATABASE_URL);
+    singleton = scope(createPgDb(config.DATABASE_URL));
     return singleton;
   }
 
@@ -42,7 +48,7 @@ export async function getDb(): Promise<Db> {
   mkdirSync(config.DATA_DIR, { recursive: true });
   pglite = new PGlite(config.DATA_DIR);
   const client = pglite;
-  singleton = {
+  const base: Db = {
     async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []) {
       return (await client.query<T>(sql, params)).rows;
     },
@@ -64,5 +70,6 @@ export async function getDb(): Promise<Db> {
       singleton = null;
     },
   };
+  singleton = scope(base);
   return singleton;
 }

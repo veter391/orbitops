@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/index.js';
 import { verifyTicket } from './ticket.js';
+import { enterTenant, clearTenant } from '../db/tenant-context.js';
 
 export interface Principal {
   operatorId: string;
@@ -52,6 +53,12 @@ export function registerAuth(app: FastifyInstance): void {
   app.decorateRequest('operatorId', '');
   app.decorateRequest('operatorName', '');
   app.addHook('onRequest', async (req, reply) => {
+    // FIRST, unconditionally: every request starts with NO tenant, so a request
+    // that never authenticates (public route, 401) can never inherit a previous
+    // request's tenant off a reused async continuation. Authenticated branches
+    // below overwrite it with the resolved customer.
+    clearTenant();
+
     const path = req.url.split('?')[0] ?? req.url;
     if (!path.startsWith('/v1/')) return;
 
@@ -65,6 +72,7 @@ export function registerAuth(app: FastifyInstance): void {
       const customerId = ticket ? verifyTicket(ticket) : null;
       if (!customerId) return reply.code(401).send({ error: 'invalid or missing ticket' });
       req.customerId = customerId;
+      enterTenant(customerId); // bind DB tenant context for RLS (no-op when DB_RLS off)
       req.log = req.log.child({ customerId });
       return;
     }
@@ -78,6 +86,7 @@ export function registerAuth(app: FastifyInstance): void {
     req.customerId = principal.customerId;
     req.operatorId = principal.operatorId;
     req.operatorName = principal.operatorName;
+    enterTenant(principal.customerId); // bind DB tenant context for RLS (no-op when DB_RLS off)
     // Tenant/operator correlation in every subsequent log line for this request.
     req.log = req.log.child({ customerId: principal.customerId, operatorId: principal.operatorId });
   });

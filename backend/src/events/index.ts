@@ -33,6 +33,12 @@ export class EventBus {
   }
 
   emit<K extends keyof BusEvents>(key: K, payload: BusEvents[K]): void {
+    // NOTE: listeners run synchronously in the EMITTER's async context. If a
+    // listener ever issues a tenant-scoped DB query (rlsScopedDb), it would pick
+    // up the emitter's tenant, not its own — so a listener that needs to query
+    // must establish its own tenant context (runWithTenant) first. Current
+    // listeners (routes/stream.ts) only read a pre-captured customerId, so this
+    // is a guard-rail for future ones, not a present bug.
     this.#em.emit(key, payload);
   }
 

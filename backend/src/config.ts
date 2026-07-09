@@ -37,6 +37,16 @@ const EnvSchema = z.object({
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().positive().max(65535).default(8790),
   DATA_DIR: z.string().default('./.data/pgdata'),
+  /**
+   * Enforce Row-Level Security (DB-layer tenant isolation) on top of the
+   * application's own customer_id scoping. Off by default. ON requires the app
+   * to connect as a NON-superuser Postgres role (superusers bypass RLS) — see
+   * src/db/rls.ts and docs/INFRA.md. Dev/pglite runs as superuser, so leave off.
+   */
+  DB_RLS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** When set, use a managed Postgres (prod) instead of local pglite (dev). */
   DATABASE_URL: z.string().optional(),
   LOG_LEVEL: z

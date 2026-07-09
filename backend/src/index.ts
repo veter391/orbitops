@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { migrate } from './db/migrate.js';
+import { enableRls } from './db/rls.js';
 import { buildServer } from './server.js';
 import { initTracing, shutdownTracing } from './observability.js';
 
@@ -8,7 +9,13 @@ const tracing = await initTracing();
 
 const applied = await migrate();
 const app = await buildServer();
-app.log.info({ applied, tracing }, 'migrations up to date');
+// Turn on Row-Level Security AFTER the schema exists (idempotent). Only takes
+// effect when the app connects as a non-superuser role — see src/db/rls.ts.
+if (config.DB_RLS) {
+  await enableRls(app.db);
+  app.log.info('row-level security enabled');
+}
+app.log.info({ applied, tracing, rls: config.DB_RLS }, 'migrations up to date');
 
 // Telemetry retention: purge on boot, then hourly. Disabled at 0 (keep forever);
 // a TimescaleDB deployment replaces this with add_retention_policy().
