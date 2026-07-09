@@ -22,6 +22,7 @@ import { loadConstellation } from '../core/live-constellation.js';
 import { meanElements, propagateEci, geodetic, parseTle } from '../core/sgp4.js';
 import { sunEciDirection } from '../core/sun.js';
 import { mountAmbient } from '../ui/ambient.js';
+import { success, error } from '../ui/toast.js';
 
 /**
  * @typedef {Object} EnrichedSat
@@ -980,7 +981,7 @@ function mountDeorbitCompliance(app, enriched) {
         })),
       );
       if (disposed) return;
-      renderDeorbitTracker(tracker, rows);
+      renderDeorbitTracker(tracker, rows, client);
     } catch {
       /* backend unreachable — leave the honest PLANNED skeleton in place */
     }
@@ -991,10 +992,13 @@ function mountDeorbitCompliance(app, enriched) {
 
 /**
  * Render real deorbit verdicts into the tracker, replacing the PLANNED skeleton.
+ * In connected mode a RECORD button seals the screening into the tamper-evident
+ * audit chain, so it becomes part of the exportable compliance evidence pack.
  * @param {HTMLElement} tracker
- * @param {Array<{e: EnrichedSat, a: {lifetimeYears: number, lifetimeBandYears: [number, number], disposalWindowYears: number, compliantPassively: boolean, borderline: boolean}}>} rows
+ * @param {Array<{e: EnrichedSat, a: {lifetimeYears: number, lifetimeBandYears: [number, number], regime: string, disposalWindowYears: number, compliantPassively: boolean, borderline: boolean, requiresActiveDisposal: boolean}}>} rows
+ * @param {BackendClient} client
  */
-function renderDeorbitTracker(tracker, rows) {
+function renderDeorbitTracker(tracker, rows, client) {
   /** @param {{compliantPassively: boolean, borderline: boolean}} a */
   const verdict = (a) =>
     a.compliantPassively && !a.borderline
@@ -1017,7 +1021,10 @@ function renderDeorbitTracker(tracker, rows) {
   tracker.innerHTML = `
     <div class="dv2-deo-tracker__head">
       <span>NATURAL-DECAY SCREENING · analysed set</span>
-      <span class="dv2-hchip dv2-hchip--real">REAL</span>
+      <span class="dv2-deo-head-actions">
+        <button type="button" class="dv2-deo-record" id="deoRecord" title="Seal this screening into the tamper-evident audit chain — it becomes part of the exportable compliance evidence pack">RECORD TO AUDIT</button>
+        <span class="dv2-hchip dv2-hchip--real">REAL</span>
+      </span>
     </div>
     <div class="dv2-cw-scroll">
       <div class="dv2-deo-tracker__cols" aria-hidden="true">
@@ -1028,9 +1035,53 @@ function renderDeorbitTracker(tracker, rows) {
     <p class="dv2-deo-tracker__note">
       Real first-order natural-decay lifetimes from the backend engine (King-Hele,
       default ballistic coefficient) for the highest-altitude objects in the analysed
-      set — order-of-magnitude, the uncertainty band dominates. Per-license EOM
-      deadlines and hash-chained evidence export remain PLANNED.
+      set — order-of-magnitude, the uncertainty band dominates. RECORD seals this
+      screening into the hash-chained audit log, exportable as a compliance evidence
+      pack (Agent → EXPORT). Per-license EOM deadlines remain PLANNED.
     </p>`;
+
+  const recordBtn = /** @type {HTMLButtonElement|null} */ (tracker.querySelector('#deoRecord'));
+  if (recordBtn) {
+    recordBtn.addEventListener('click', async () => {
+      recordBtn.setAttribute('disabled', 'true');
+      try {
+        // Read requiresActiveDisposal from the engine's own response — this is
+        // compliance evidence, so the recorded verdict must not fork from the
+        // rule that produced it (backend decay.ts owns the definition).
+        const payload = {
+          kind: 'deorbit-screening',
+          regime: rows[0]?.a.regime ?? '5-year',
+          requiresActiveDisposal: rows.filter(({ a }) => a.requiresActiveDisposal).length,
+          objects: rows.map(({ e, a }) => ({
+            object: e.name,
+            noradId: e.noradId,
+            altitudeKm: Math.round(e.altKm),
+            lifetimeYears: a.lifetimeYears,
+            lifetimeBandYears: a.lifetimeBandYears,
+            regime: a.regime,
+            compliantPassively: a.compliantPassively,
+            borderline: a.borderline,
+            requiresActiveDisposal: a.requiresActiveDisposal,
+          })),
+        };
+        const { entry } = await client.appendAudit('compliance.deorbit.screening', payload);
+        if (!recordBtn.isConnected) return; // dashboard unmounted mid-request — drop stale effects
+        recordBtn.textContent = `RECORDED · seq ${entry.seq}`;
+        success(`Deorbit screening sealed into the audit chain (seq ${entry.seq}) — now in the evidence pack`, {
+          title: 'Compliance recorded',
+          durationMs: 4000,
+        });
+      } catch (e) {
+        if (!recordBtn.isConnected) return; // unmounted — don't toast after navigation
+        recordBtn.removeAttribute('disabled');
+        const err = /** @type {{status?: number}} */ (e);
+        error(err.status === 0 ? 'Backend unreachable — could not record the screening' : 'Could not record to the audit chain', {
+          title: 'Compliance record',
+          durationMs: 5000,
+        });
+      }
+    });
+  }
 }
 
 /** @param {string} active */

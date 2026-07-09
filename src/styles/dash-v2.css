@@ -1201,6 +1201,34 @@
   color: #9BA3AD;
 }
 
+/* Connected-mode "record screening to audit" action in the tracker head. */
+.dv2-deo-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dv2-deo-record {
+  font-family: var(--dv2-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--v2-cyan, #8fc6ff);
+  background: rgba(143, 198, 255, 0.08);
+  border: 1px solid rgba(143, 198, 255, 0.4);
+  border-radius: 3px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.dv2-deo-record:hover:not([disabled]) {
+  background: rgba(143, 198, 255, 0.16);
+  border-color: rgba(143, 198, 255, 0.7);
+}
+.dv2-deo-record[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .dv2-deo-tracker__cols,
 .dv2-deo-tracker__row {
   display: grid;

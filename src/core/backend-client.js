@@ -243,6 +243,17 @@ export class BackendClient {
     return this.request(`/v1/audit${qs ? `?${qs}` : ''}`);
   }
 
+  /**
+   * POST /v1/audit — append a tamper-evident entry to the hash chain. The actor
+   * is derived server-side from the authenticated operator (never the body), so
+   * this records a real, attributable event (e.g. a compliance screening).
+   * @param {string} action @param {Record<string, unknown>} [payload]
+   * @returns {Promise<{entry: any}>}
+   */
+  appendAudit(action, payload = {}) {
+    return this.request('/v1/audit', { method: 'POST', body: { action, payload } });
+  }
+
   /** GET /v1/audit/verify — server-side hash-chain integrity check. */
   verifyAudit() {
     return this.request('/v1/audit/verify');
