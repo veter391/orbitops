@@ -1514,6 +1514,60 @@
 .lt-band--watch { color: var(--v3-ice); border-color: rgba(143, 198, 255, 0.35); }
 .lt-band--clear { color: var(--v3-ok); border-color: rgba(62, 207, 116, 0.35); }
 
+/* On-call escalation — routine → elevated → urgent → critical (backend policy). */
+.lt-esc {
+  font-family: var(--v3-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.08rem 0.4rem;
+  border-radius: 2px;
+  color: var(--v3-text-2);
+  border: 1px solid var(--v3-hairline);
+}
+.lt-esc--routine { color: var(--v3-mute); border-color: var(--v3-hairline); }
+.lt-esc--elevated { color: var(--v3-ice); border-color: rgba(143, 198, 255, 0.35); }
+.lt-esc--urgent { color: var(--v3-warn); border-color: rgba(224, 181, 104, 0.45); }
+.lt-esc--critical {
+  color: var(--v3-alert);
+  border-color: rgba(224, 96, 110, 0.5);
+  background: rgba(224, 96, 110, 0.08);
+}
+
+/* Rows that page on-call get a left accent so they stand out in the queue. */
+.lt-row--notify { border-left: 2px solid var(--v3-alert); }
+
+.lt-esc-block {
+  margin: 0.6rem 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--v3-hairline);
+  border-left: 2px solid var(--v3-hairline-2);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.lt-esc-block--urgent { border-left-color: var(--v3-warn); }
+.lt-esc-block--critical { border-left-color: var(--v3-alert); }
+.lt-esc-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.lt-esc-block__label {
+  font-family: var(--v3-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v3-mute);
+}
+.lt-esc-block__reasons {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.72rem;
+  color: var(--v3-text-2);
+  line-height: 1.5;
+}
+
 .lt-detail__head {
   display: flex;
   align-items: center;

@@ -530,6 +530,37 @@ function fmtPc(pc) {
   return pc > 0 ? pc.toExponential(1) : '0';
 }
 
+/**
+ * Compact on-call escalation badge for a triage row (level + a page-on-call flag).
+ * The escalation is computed by the backend's deterministic policy and attached
+ * to `proposedAction`; here it is only surfaced. @param {any} a proposedAction
+ * @returns {string} HTML, or '' when no escalation is present.
+ */
+function escBadge(a) {
+  const e = a && a.escalation;
+  if (!e || !e.level) return '';
+  const lvl = String(e.level);
+  return `<span class="lt-esc lt-esc--${esc(lvl)}" title="on-call escalation level">${esc(lvl)}${e.notify ? ' · PAGE' : ''}</span>`;
+}
+
+/**
+ * Full escalation block for the detail panel: level, page-on-call flag, and the
+ * policy's reasons. @param {any} a proposedAction @returns {string} HTML or ''.
+ */
+function escDetailBlock(a) {
+  const e = a && a.escalation;
+  if (!e || !e.level) return '';
+  const lvl = String(e.level);
+  const reasons = Array.isArray(e.reasons) ? e.reasons : [];
+  return `<div class="lt-esc-block lt-esc-block--${esc(lvl)}">
+    <div class="lt-esc-block__head">
+      <span class="lt-esc-block__label">On-call escalation</span>
+      <span class="lt-esc lt-esc--${esc(lvl)}">${esc(lvl)}${e.notify ? ' · PAGE ON-CALL' : ''}</span>
+    </div>
+    ${reasons.length ? `<ul class="lt-esc-block__reasons">${reasons.map((/** @type {unknown} */ r) => `<li>${esc(String(r))}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
 /** UTC HH:MM:SS from an ISO timestamp. @param {string} ts */
 function fmtTs(ts) {
   const d = new Date(ts);
@@ -645,13 +676,15 @@ function mountLiveTriage(app) {
       .map((p) => {
         const a = p.proposedAction || {};
         const band = a.riskBand || a.type || '—';
-        return `<button class="lt-row ${p.id === selectedId ? 'is-active' : ''}" data-id="${esc(p.id)}" type="button">
+        const notify = !!(a.escalation && a.escalation.notify);
+        return `<button class="lt-row ${p.id === selectedId ? 'is-active' : ''}${notify ? ' lt-row--notify' : ''}" data-id="${esc(p.id)}" type="button">
           <div class="lt-row__top">
             <span class="lt-sat">${esc(p.satelliteId || '—')}</span>
             <span class="lt-status lt-status--${esc(p.status)}">${esc(p.status)}</span>
           </div>
           <div class="lt-row__meta">
             <span class="lt-band lt-band--${esc(a.riskBand || 'none')}">${esc(band)}</span>
+            ${escBadge(a)}
             ${typeof a.pc === 'number' ? `<span class="lt-pc">Pc ${fmtPc(a.pc)}</span>` : ''}
             <span class="lt-ts">${fmtTs(p.ts)}</span>
           </div>
@@ -716,6 +749,7 @@ function mountLiveTriage(app) {
           )
           .join('')}
       </div>
+      ${escDetailBlock(a)}
       <div class="lt-chain">
         <div class="lt-chain__label">Reasoning chain · ${chain.length} steps</div>
         ${chain
