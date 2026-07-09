@@ -4,9 +4,12 @@ import type { Db } from '../db/index.js';
 import { verifyTicket } from './ticket.js';
 import { enterTenant, clearTenant } from '../db/tenant-context.js';
 
+export type OperatorRole = 'operator' | 'admin';
+
 export interface Principal {
   operatorId: string;
   operatorName: string;
+  operatorRole: OperatorRole;
   customerId: string;
 }
 
@@ -18,6 +21,8 @@ declare module 'fastify' {
     operatorId: string;
     /** Human-readable operator name, for display/audit context. */
     operatorName: string;
+    /** Operator role for RBAC ('operator' by default; '' on the WS ticket path). */
+    operatorRole: OperatorRole | '';
   }
 }
 
@@ -28,12 +33,14 @@ export function hashApiKey(key: string): string {
 
 /** Resolve an API key to its operator (and the customer that operator belongs to). */
 export async function principalByApiKey(db: Db, key: string): Promise<Principal | null> {
-  const rows = await db.query<{ id: string; name: string; customer_id: string }>(
-    'SELECT id, name, customer_id FROM operators WHERE api_key_hash = $1',
+  const rows = await db.query<{ id: string; name: string; role: OperatorRole; customer_id: string }>(
+    'SELECT id, name, role, customer_id FROM operators WHERE api_key_hash = $1',
     [hashApiKey(key)],
   );
   const row = rows[0];
-  return row ? { operatorId: row.id, operatorName: row.name, customerId: row.customer_id } : null;
+  return row
+    ? { operatorId: row.id, operatorName: row.name, operatorRole: row.role, customerId: row.customer_id }
+    : null;
 }
 
 /**
@@ -52,6 +59,7 @@ export function registerAuth(app: FastifyInstance): void {
   app.decorateRequest('customerId', '');
   app.decorateRequest('operatorId', '');
   app.decorateRequest('operatorName', '');
+  app.decorateRequest('operatorRole', '');
   app.addHook('onRequest', async (req, reply) => {
     // FIRST, unconditionally: every request starts with NO tenant, so a request
     // that never authenticates (public route, 401) can never inherit a previous
@@ -86,8 +94,22 @@ export function registerAuth(app: FastifyInstance): void {
     req.customerId = principal.customerId;
     req.operatorId = principal.operatorId;
     req.operatorName = principal.operatorName;
+    req.operatorRole = principal.operatorRole;
     enterTenant(principal.customerId); // bind DB tenant context for RLS (no-op when DB_RLS off)
     // Tenant/operator correlation in every subsequent log line for this request.
     req.log = req.log.child({ customerId: principal.customerId, operatorId: principal.operatorId });
   });
+}
+
+/**
+ * A per-route preHandler that requires the authenticated operator to hold `role`.
+ * Runs after the onRequest auth hook (so req.operatorRole is set); replies 403 if
+ * the operator lacks the role. Use for owner/admin-only surfaces.
+ */
+export function requireRole(role: OperatorRole) {
+  return async (req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) => {
+    if (req.operatorRole !== role) {
+      return reply.code(403).send({ error: `requires the '${role}' role` });
+    }
+  };
 }

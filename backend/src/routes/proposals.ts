@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { NotFoundError } from '../proposals/index.js';
 import { idempotent, idempotencyKey } from '../idempotency.js';
+import { startConfirmation, resumeConfirmation } from '../agents/interruptible.js';
 
 const CreateBody = z.object({
   satelliteId: z.string().max(200).nullish(),
@@ -26,6 +27,7 @@ const IdParams = z.object({ id: z.string().uuid() });
 const ApproveBody = z.object({});
 const RejectBody = z.object({ reason: z.string().max(2000).default('') });
 const ModifyBody = z.object({ modifications: z.record(z.string(), z.unknown()) });
+const CountersignBody = z.object({ approve: z.boolean(), note: z.string().max(2000).optional() });
 
 export async function registerProposalRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/proposals', async (req, reply) => {
@@ -111,4 +113,57 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
       app.proposals.modify(cid, id, op, b['modifications'] as Record<string, unknown>),
     ModifyBody,
   );
+
+  // Four-eyes dual-authorization: a SECOND operator countersigns an already-
+  // approved proposal. Runs the durable Track-H confirmation graph (tenant-owned
+  // thread, replay-safe) and records the sign-off in the tamper-evident audit
+  // chain. Nothing auto-executes — this is an auditable second authorization.
+  app.post('/v1/proposals/:id/countersign', async (req, reply) => {
+    const params = IdParams.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid id' });
+    const body = CountersignBody.safeParse(req.body ?? {});
+    if (!body.success) return reply.code(400).send({ error: 'invalid body', detail: body.error.issues });
+
+    const p = await app.proposals.get(req.customerId, params.data.id);
+    if (!p) return reply.code(404).send({ error: 'not found' });
+    if (p.status !== 'approved') {
+      return reply.code(409).send({ error: 'only an approved proposal can be countersigned' });
+    }
+    if (p.approvedBy === req.operatorId) {
+      return reply.code(409).send({ error: 'four-eyes: the approver cannot countersign their own approval' });
+    }
+
+    // start suspends at the human gate; resume supplies this operator's decision.
+    const started = await startConfirmation(app.confirmationGraph, req.customerId, {
+      proposalId: p.id,
+      satelliteId: p.satelliteId ?? '',
+      action: p.proposedAction,
+      requestedBy: p.approvedBy ?? '',
+    });
+    if (started.status !== 'pending') {
+      return reply.code(500).send({ error: 'confirmation did not reach the gate' });
+    }
+    const result = await resumeConfirmation(app.confirmationGraph, req.customerId, started.threadId, {
+      approve: body.data.approve,
+      operatorId: req.operatorId,
+      ...(body.data.note ? { note: body.data.note } : {}),
+    });
+
+    await app.audit.append(
+      req.customerId,
+      `user:${req.operatorId}`,
+      result.status === 'confirmed' ? 'proposal.countersigned' : 'proposal.countersign-declined',
+      {
+        proposalId: p.id,
+        approvedBy: p.approvedBy,
+        ...(result.status === 'rejected' && 'reason' in result && result.reason ? { reason: result.reason } : {}),
+        ...(body.data.note ? { note: body.data.note } : {}),
+      },
+    );
+
+    return reply.code(200).send({
+      countersign: { status: result.status, ...('reason' in result && result.reason ? { reason: result.reason } : {}) },
+      proposal: p,
+    });
+  });
 }

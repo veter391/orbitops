@@ -4,6 +4,22 @@ import type { FastifyInstance } from 'fastify';
 import type { Db } from '../src/db/index.js';
 import { buildServer } from '../src/server.js';
 import { freshDb, createCustomer, demoOperatorId, DEMO_ID, DEMO_KEY } from './helpers.js';
+import { hashApiKey } from '../src/auth/index.js';
+
+/** Add a second operator to the demo tenant (four-eyes needs two operators). */
+async function addDemoOperator(key: string): Promise<{ 'x-api-key': string }> {
+  await db.query('INSERT INTO operators (customer_id, name, api_key_hash) VALUES ($1, $2, $3)', [
+    DEMO_ID,
+    `op-${key}`,
+    hashApiKey(key),
+  ]);
+  return { 'x-api-key': key };
+}
+
+async function approve(id: string, headers = AUTH): Promise<void> {
+  const res = await app.inject({ method: 'POST', url: `/v1/proposals/${id}/approve`, headers });
+  assert.equal(res.statusCode, 200);
+}
 
 let app: FastifyInstance;
 let db: Db;
@@ -34,6 +50,62 @@ async function createProposal(headers = AUTH): Promise<string> {
 test('requests without an API key are rejected 401', async () => {
   const res = await app.inject({ method: 'GET', url: '/v1/proposals' });
   assert.equal(res.statusCode, 401);
+});
+
+test('countersign: a second operator four-eyes an approved proposal, audited', async () => {
+  const op2 = await addDemoOperator('demo-key-cs1');
+  const id = await createProposal(); // approved by the demo operator (AUTH)
+  await approve(id);
+  const res = await app.inject({
+    method: 'POST',
+    url: `/v1/proposals/${id}/countersign`,
+    headers: op2,
+    payload: { approve: true, note: 'geometry re-checked' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal((res.json() as { countersign: { status: string } }).countersign.status, 'confirmed');
+  // Recorded in the tamper-evident audit chain.
+  const audit = await app.inject({ method: 'GET', url: '/v1/audit', headers: AUTH });
+  const actions = (audit.json() as { entries: { action: string }[] }).entries.map((e) => e.action);
+  assert.ok(actions.includes('proposal.countersigned'));
+});
+
+test('countersign: the approver cannot countersign their own approval (four-eyes)', async () => {
+  const id = await createProposal();
+  await approve(id); // approved by the demo operator
+  const res = await app.inject({
+    method: 'POST',
+    url: `/v1/proposals/${id}/countersign`,
+    headers: AUTH, // same operator
+    payload: { approve: true },
+  });
+  assert.equal(res.statusCode, 409);
+});
+
+test('countersign: only an approved proposal can be countersigned', async () => {
+  const op2 = await addDemoOperator('demo-key-cs2');
+  const id = await createProposal(); // still pending
+  const res = await app.inject({
+    method: 'POST',
+    url: `/v1/proposals/${id}/countersign`,
+    headers: op2,
+    payload: { approve: true },
+  });
+  assert.equal(res.statusCode, 409);
+});
+
+test('countersign: a declined countersign is recorded as declined', async () => {
+  const op2 = await addDemoOperator('demo-key-cs3');
+  const id = await createProposal();
+  await approve(id);
+  const res = await app.inject({
+    method: 'POST',
+    url: `/v1/proposals/${id}/countersign`,
+    headers: op2,
+    payload: { approve: false, note: 'wait for next CDM' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal((res.json() as { countersign: { status: string } }).countersign.status, 'rejected');
 });
 
 test('list pagination is gapless even when proposals share an exact timestamp', async () => {

@@ -15,6 +15,8 @@ import { EventBus } from './events/index.js';
 import { Agent } from './agent/index.js';
 import { AgentMemory } from './agents/memory.js';
 import { LexicalEmbedder } from './agents/embedder.js';
+import { buildConfirmationGraph, type CompiledConfirmationGraph } from './agents/interruptible.js';
+import { DbCheckpointSaver } from './agents/checkpointer.js';
 import { registerAuth } from './auth/index.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
@@ -35,6 +37,7 @@ declare module 'fastify' {
     bus: EventBus;
     agent: Agent;
     feedback: Feedback;
+    confirmationGraph: CompiledConfirmationGraph;
   }
 }
 
@@ -127,6 +130,8 @@ export async function buildServer(db?: Db): Promise<FastifyInstance> {
   const memory = new AgentMemory(database, config.AGENT_SEMANTIC_MEMORY ? new LexicalEmbedder() : undefined);
   app.decorate('agent', new Agent(proposals, telemetry, memory, app.log));
   app.decorate('feedback', new Feedback(database));
+  // Durable four-eyes confirmation graph (Track H) — backs POST /v1/proposals/:id/countersign.
+  app.decorate('confirmationGraph', buildConfirmationGraph(new DbCheckpointSaver(database)));
 
   registerAuth(app); // pins req.customerId on every /v1 route; 401 without a valid key
   await registerHealthRoutes(app);

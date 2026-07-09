@@ -14,8 +14,9 @@
 // run's raw config, so the saver cannot self-enforce the customer boundary.
 // Enforcement lives at the caller: mint ids with `mintThreadId(customerId)` and
 // gate every resume with `assertThreadOwnership(customerId, threadId)` (both in
-// interruptible.ts). Any future route that drives this saver MUST do the same.
-// See migration 008_checkpoints.sql.
+// interruptible.ts). The live consumer is POST /v1/proposals/:id/countersign
+// (four-eyes dual-authorization); any other route that drives this saver MUST do
+// the same. See migration 008_checkpoints.sql.
 
 import {
   BaseCheckpointSaver,

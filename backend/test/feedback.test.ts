@@ -2,18 +2,22 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
-import { freshDb, DEMO_KEY } from './helpers.js';
+import { freshDb, createCustomer, DEMO_KEY } from './helpers.js';
+import type { Db } from '../src/db/index.js';
 
 /**
  * Feedback capture: the pricing "should we build this?" brief. The POST is
- * public (a prospect has no operator account); the GET is authenticated so only
- * the owner reads what came in.
+ * public (a prospect has no operator account); the GET is admin-only — the demo
+ * operator is seeded as admin, a regular operator is forbidden.
  */
 let app: FastifyInstance;
-const AUTH = { 'x-api-key': DEMO_KEY };
+let db: Db;
+const AUTH = { 'x-api-key': DEMO_KEY }; // demo operator = admin
 
 before(async () => {
-  app = await buildServer(await freshDb());
+  db = await freshDb();
+  await createCustomer(db, 'regular-co', 'regular-key'); // default role 'operator'
+  app = await buildServer(db);
 });
 after(async () => {
   await app.close();
@@ -38,9 +42,13 @@ test('POST /v1/feedback is public (no API key) and stores the submission', async
   assert.ok(typeof body.id === 'string' && body.id.length > 0);
 });
 
-test('GET /v1/feedback requires auth and returns what was submitted', async () => {
+test('GET /v1/feedback requires the admin role; a regular operator is forbidden', async () => {
   const unauth = await app.inject({ method: 'GET', url: '/v1/feedback' });
   assert.equal(unauth.statusCode, 401);
+
+  // Authenticated but non-admin operator → 403.
+  const regular = await app.inject({ method: 'GET', url: '/v1/feedback', headers: { 'x-api-key': 'regular-key' } });
+  assert.equal(regular.statusCode, 403);
 
   const res = await app.inject({ method: 'GET', url: '/v1/feedback', headers: AUTH });
   assert.equal(res.statusCode, 200);
