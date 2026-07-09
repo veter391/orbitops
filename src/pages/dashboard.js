@@ -523,6 +523,11 @@ export async function mount(app) {
   // ---- W4-C · D2 — deorbit strip: REAL band counts (mean altitude) ----
   renderDeorbitStats(app, alts);
 
+  // Connected mode: replace the PLANNED per-license tracker skeleton with REAL
+  // natural-decay verdicts from the backend engine for the highest-altitude
+  // objects in the analysed set. Additive; demo mode keeps the skeleton.
+  if (isConnected()) cleanups.push(mountDeorbitCompliance(app, enriched));
+
   // ---- Satellite table (real, first 80) ----
   (/** @type {HTMLElement} */ (app.querySelector('#tableTitle'))).textContent = `Satellite status · ${enriched.length.toLocaleString()} analysed`;
   (/** @type {HTMLElement} */ (app.querySelector('#satTable'))).innerHTML = `
@@ -929,6 +934,103 @@ function renderDeorbitStats(app, alts) {
   highEl.textContent = high.toLocaleString();
   lowEl.title = `${low.toLocaleString()} of ${alts.length.toLocaleString()} analysed objects have mean altitude below 400 km`;
   highEl.title = `${high.toLocaleString()} of ${alts.length.toLocaleString()} analysed objects have mean altitude above 1200 km`;
+}
+
+/**
+ * Format a natural-decay lifetime (years) with a compact uncertainty band.
+ * @param {number} years @param {[number, number]} [band]
+ */
+function fmtLifetime(years, band) {
+  const f = (/** @type {number} */ y) =>
+    !Number.isFinite(y) ? '—' : y >= 100 ? `${Math.round(y)}` : y >= 10 ? y.toFixed(0) : y >= 1 ? y.toFixed(1) : y.toFixed(2);
+  return band && Number.isFinite(band[0]) && Number.isFinite(band[1])
+    ? `~${f(years)} yr (${f(band[0])}–${f(band[1])})`
+    : `~${f(years)} yr`;
+}
+
+/**
+ * Connected-mode deorbit compliance. Screens the highest-altitude objects in the
+ * analysed set through the REAL backend engine (POST /v1/compliance/deorbit) and
+ * replaces the PLANNED tracker skeleton with honest natural-decay verdicts.
+ * Additive and fail-safe — demo mode keeps the skeleton, and any backend error
+ * leaves it untouched (never a fabricated verdict).
+ * @param {HTMLElement} app @param {EnrichedSat[]} enriched @returns {() => void} cleanup
+ */
+function mountDeorbitCompliance(app, enriched) {
+  const tracker = /** @type {HTMLElement|null} */ (app.querySelector('.dv2-deo-tracker'));
+  if (!tracker) return () => {};
+  const client = new BackendClient();
+  let disposed = false;
+
+  // Objects most likely to breach the 5-year rule have the longest natural
+  // lifetime → highest altitude. Screen a bounded top set (one real request each).
+  const CAP = 10;
+  const candidates = enriched
+    .filter((e) => e.geo && Number.isFinite(e.altKm) && e.altKm > 0 && e.altKm < 2000)
+    .sort((a, b) => b.altKm - a.altKm)
+    .slice(0, CAP);
+  if (!candidates.length) return () => {}; // nothing in the LEO window — keep skeleton
+
+  (async () => {
+    try {
+      const rows = await Promise.all(
+        candidates.map(async (e) => ({
+          e,
+          a: await client.deorbitCompliance({ altitudeKm: e.altKm, appliesFiveYearRule: true }),
+        })),
+      );
+      if (disposed) return;
+      renderDeorbitTracker(tracker, rows);
+    } catch {
+      /* backend unreachable — leave the honest PLANNED skeleton in place */
+    }
+  })();
+
+  return () => { disposed = true; };
+}
+
+/**
+ * Render real deorbit verdicts into the tracker, replacing the PLANNED skeleton.
+ * @param {HTMLElement} tracker
+ * @param {Array<{e: EnrichedSat, a: {lifetimeYears: number, lifetimeBandYears: [number, number], disposalWindowYears: number, compliantPassively: boolean, borderline: boolean}}>} rows
+ */
+function renderDeorbitTracker(tracker, rows) {
+  /** @param {{compliantPassively: boolean, borderline: boolean}} a */
+  const verdict = (a) =>
+    a.compliantPassively && !a.borderline
+      ? { label: 'PASSIVE OK', color: 'var(--ok)' }
+      : a.borderline
+        ? { label: 'BORDERLINE', color: 'var(--warn)' }
+        : { label: 'ACTIVE DISPOSAL', color: 'var(--alert)' };
+  const body = rows
+    .map(({ e, a }) => {
+      const v = verdict(a);
+      return `<div class="dv2-deo-tracker__row dv2-deo-tracker__row--real">
+        <span class="dv2-deo-obj" title="${esc(e.name)}">${esc(e.name)}</span>
+        <span>${Math.round(e.altKm).toLocaleString()}</span>
+        <span>${esc(fmtLifetime(a.lifetimeYears, a.lifetimeBandYears))}</span>
+        <span>${Number.isFinite(a.disposalWindowYears) ? a.disposalWindowYears : '—'} yr</span>
+        <span class="dv2-deo-verdict" style="color: ${v.color};">${v.label}</span>
+      </div>`;
+    })
+    .join('');
+  tracker.innerHTML = `
+    <div class="dv2-deo-tracker__head">
+      <span>NATURAL-DECAY SCREENING · analysed set</span>
+      <span class="dv2-hchip dv2-hchip--real">REAL</span>
+    </div>
+    <div class="dv2-cw-scroll">
+      <div class="dv2-deo-tracker__cols" aria-hidden="true">
+        <span>OBJECT</span><span>ALT KM</span><span>DECAY EST</span><span>WINDOW</span><span>VERDICT</span>
+      </div>
+      ${body}
+    </div>
+    <p class="dv2-deo-tracker__note">
+      Real first-order natural-decay lifetimes from the backend engine (King-Hele,
+      default ballistic coefficient) for the highest-altitude objects in the analysed
+      set — order-of-magnitude, the uncertainty band dominates. Per-license EOM
+      deadlines and hash-chained evidence export remain PLANNED.
+    </p>`;
 }
 
 /** @param {string} active */

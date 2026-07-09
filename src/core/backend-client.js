@@ -280,6 +280,18 @@ export class BackendClient {
     return this.request(`/v1/telemetry${qs ? `?${qs}` : ''}`);
   }
 
+  // ── Compliance ──────────────────────────────────────────────────────────────
+  /**
+   * POST /v1/compliance/deorbit — first-order natural-decay lifetime vs the
+   * applicable post-mission disposal window (FCC 22-74 5-year rule, else the
+   * 25-year legacy guideline). Deterministic backend engine; no LLM.
+   * @param {{altitudeKm: number, ballisticKgM2?: number, massKg?: number, areaM2?: number, cd?: number, appliesFiveYearRule?: boolean}} input
+   * @returns {Promise<{lifetimeYears: number, lifetimeBandYears: [number, number], regime: string, disposalWindowYears: number, compliantPassively: boolean, borderline: boolean, requiresActiveDisposal: boolean, note: string}>}
+   */
+  deorbitCompliance(input) {
+    return this.request('/v1/compliance/deorbit', { method: 'POST', body: input });
+  }
+
   // ── Feedback (public) ───────────────────────────────────────────────────────
   /**
    * POST /v1/feedback — public product feedback (no auth). Used by the pricing

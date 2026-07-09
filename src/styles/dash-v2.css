@@ -1246,6 +1246,25 @@
   color: #5A6169;
 }
 
+/* Connected-mode real verdict rows (replace the PLANNED skeleton). */
+.dv2-deo-tracker__row--real {
+  font-family: var(--dv2-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #AEB6BF;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.dv2-deo-obj {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #E6EAEF;
+}
+.dv2-deo-verdict {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 /* --- responsive + reduced motion (appended block only) --------------------- */
 
 @media (max-width: 720px) {
