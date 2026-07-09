@@ -4,10 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
 import { withSpan } from '../src/observability.js';
 import { Telemetry } from '../src/telemetry/index.js';
-import { freshDb, DEMO_ID, DEMO_KEY } from './helpers.js';
+import { freshDb, DEMO_ID } from './helpers.js';
 
 let app: FastifyInstance;
-const AUTH = { 'x-api-key': DEMO_KEY };
 
 before(async () => {
   app = await buildServer(await freshDb());

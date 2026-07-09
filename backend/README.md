@@ -51,7 +51,14 @@ curl -H "x-api-key: demo-key" http://127.0.0.1:8790/v1/proposals
 
 ## Configuration
 
-Environment variables (all optional; sane local defaults in `src/config.ts`) —
-see [.env.example](.env.example). Notable: `AUDIT_HMAC_KEY` signs the audit
-chain (change outside local), and `OPENROUTER_API_KEY` optionally enables LLM
-augmentation of the agent (unset = fully deterministic, offline).
+Environment variables (all optional; sane local defaults in `src/config.ts`).
+Notable: `AUDIT_HMAC_KEY` signs the audit chain (change outside local), and
+`OPENROUTER_API_KEY` optionally enables LLM augmentation of the agent (unset =
+fully deterministic, offline). Similarity memory is off unless `AGENT_SEMANTIC_MEMORY=true`.
+
+**Secrets via files.** For orchestrators that mount secrets as files (Docker
+`--secret`, Kubernetes `Secret` volumes, Cloudflare), set `<NAME>_FILE` to the
+path instead of putting the value in an env string that leaks into process
+listings and `docker inspect`. Supported for `AUDIT_HMAC_KEY`, `OPENROUTER_API_KEY`,
+and `DATABASE_URL` — e.g. `AUDIT_HMAC_KEY_FILE=/run/secrets/audit_hmac_key`. The
+file wins over the inline var; an empty file is refused (fail closed).

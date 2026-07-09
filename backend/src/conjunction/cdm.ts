@@ -171,9 +171,6 @@ export function cdmToEncounter(cdm: CdmMessage, referenceIso?: string): Encounte
 
 const M2_PER_KM2 = 1e6; // 1 km² = 1e6 m²
 
-function v3sub(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
 function v3cross(a: Vec3, b: Vec3): Vec3 {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }

@@ -1,9 +1,37 @@
+import { readFileSync } from 'node:fs';
 import { z } from 'zod';
+
+/**
+ * Secrets that support the `<NAME>_FILE` convention: if `<NAME>_FILE` is set, the
+ * secret is read from that file path (trimmed) instead of the inline env var.
+ * This is how Docker/Kubernetes/Cloudflare mount secrets (a file, not an env
+ * string that leaks into `docker inspect` / process listings). The inline var
+ * still works for local dev; the file wins when both are present.
+ */
+const FILE_BACKED_SECRETS = ['AUDIT_HMAC_KEY', 'OPENROUTER_API_KEY', 'DATABASE_URL'] as const;
+
+/** Resolve `<NAME>_FILE` secrets into `<NAME>` on a copy of the given env. Pure. */
+export function resolveSecretsFromFiles(
+  env: NodeJS.ProcessEnv,
+  read: (path: string) => string = (p) => readFileSync(p, 'utf8'),
+): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...env };
+  for (const name of FILE_BACKED_SECRETS) {
+    const filePath = out[`${name}_FILE`];
+    if (filePath && filePath.trim()) {
+      const value = read(filePath.trim()).trim();
+      if (!value) throw new Error(`${name}_FILE (${filePath}) is empty — refusing to boot with a blank secret.`);
+      out[name] = value;
+    }
+  }
+  return out;
+}
 
 /**
  * All runtime configuration comes from the environment, validated once at boot.
  * Sane local defaults keep `git clone && npm i && npm run dev` working with no
- * setup; every value is overridable via a gitignored `.env` (see .env.example).
+ * setup; every value is overridable via a gitignored `.env` (see .env.example)
+ * or, for secrets, via a mounted `<NAME>_FILE` (see resolveSecretsFromFiles).
  */
 const EnvSchema = z.object({
   HOST: z.string().default('127.0.0.1'),
@@ -56,7 +84,7 @@ const EnvSchema = z.object({
 
 export type Config = z.infer<typeof EnvSchema>;
 
-export const config: Config = EnvSchema.parse(process.env);
+export const config: Config = EnvSchema.parse(resolveSecretsFromFiles(process.env));
 
 const DEV_HMAC_KEY = 'dev-insecure-key-change-me';
 

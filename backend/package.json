@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/db/migrate.ts",
     "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts",
-    "evals": "node --import tsx --test test/agent-evals.test.ts"
+    "evals": "node --import tsx --test test/agent-evals.test.ts",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\""
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -32,11 +33,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
+    "eslint": "^9.39.4",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0",
     "ws": "^8.21.0"
   }
 }

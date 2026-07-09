@@ -20,5 +20,9 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+        # Agent-quality gate: the eval suite must pass on every PR too, not just
+        # the unit tests, so a regression in proposal/routing quality blocks merge.
+      - run: npm run evals
