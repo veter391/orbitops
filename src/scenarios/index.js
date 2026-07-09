@@ -29,8 +29,7 @@
 
 import { SATELLITES, SATELLITE_BY_ID } from '../data/satellites.js';
 import { closestApproach } from '../core/orbit-propagator.js';
-import { detect } from '../core/anomaly-detector.js';
-import { avoidanceBurn, planAvoidance, findBurnWindows } from '../core/maneuver-planner.js';
+import { avoidanceBurn } from '../core/maneuver-planner.js';
 import { audit } from '../core/audit-log.js';
 import { Emitter } from '../utils.js';
 import { runLiveAgentPipeline } from '../core/llm-agents.js';

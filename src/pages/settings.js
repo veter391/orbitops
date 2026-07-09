@@ -71,6 +71,7 @@ import {
   BackendClient,
   DEFAULT_BACKEND_URL,
 } from '../core/backend-client.js';
+import { esc } from '../utils.js';
 
 /* ============================================================
    Persistence helpers — namespaced, storage-safe (never throw)
@@ -152,12 +153,6 @@ function setSources(patch) {
 }
 
 /* Small utilities ------------------------------------------------------- */
-
-/** @param {unknown} s */
-const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) =>
-    (/** @type {Record<string, string>} */ ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]),
-  );
 
 /**
  * REAL / PLANNED / CLOUD honest chip.

@@ -8,7 +8,7 @@ import { z } from 'zod';
  * string that leaks into `docker inspect` / process listings). The inline var
  * still works for local dev; the file wins when both are present.
  */
-const FILE_BACKED_SECRETS = ['AUDIT_HMAC_KEY', 'OPENROUTER_API_KEY', 'DATABASE_URL'] as const;
+const FILE_BACKED_SECRETS = ['AUDIT_HMAC_KEY', 'WS_TICKET_HMAC_KEY', 'OPENROUTER_API_KEY', 'DATABASE_URL'] as const;
 
 /** Resolve `<NAME>_FILE` secrets into `<NAME>` on a copy of the given env. Pure. */
 export function resolveSecretsFromFiles(
@@ -81,6 +81,13 @@ const EnvSchema = z.object({
     .transform((v) => v === 'true'),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
+  /**
+   * Keys the short-lived WebSocket auth tickets. Separate from AUDIT_HMAC_KEY so
+   * the two blast radii are independent (an audit-key leak must not also let an
+   * attacker forge stream tickets). Falls back to AUDIT_HMAC_KEY when unset for
+   * zero-friction dev; set a distinct value in production.
+   */
+  WS_TICKET_HMAC_KEY: z.string().optional(),
 
   /**
    * Optional LLM augmentation for the agent's "think" step. With no key the

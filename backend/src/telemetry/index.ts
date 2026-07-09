@@ -90,14 +90,16 @@ export class Telemetry {
   /** Emit one telemetry event per distinct satellite in the batch. */
   #publish(customerId: string, readings: Reading[]): void {
     if (!this.bus) return;
-    const bySat = new Map<string, Set<string>>();
+    // One pass: per satellite, its metric set AND its reading count (O(n), not
+    // a re-scan of the whole batch per distinct satellite).
+    const bySat = new Map<string, { metrics: Set<string>; count: number }>();
     for (const r of readings) {
-      const set = bySat.get(r.satelliteId) ?? new Set<string>();
-      set.add(r.metric);
-      bySat.set(r.satelliteId, set);
+      const agg = bySat.get(r.satelliteId) ?? { metrics: new Set<string>(), count: 0 };
+      agg.metrics.add(r.metric);
+      agg.count += 1;
+      bySat.set(r.satelliteId, agg);
     }
-    for (const [satelliteId, metrics] of bySat) {
-      const count = readings.reduce((n, r) => n + (r.satelliteId === satelliteId ? 1 : 0), 0);
+    for (const [satelliteId, { metrics, count }] of bySat) {
       this.bus.emit('telemetry', { customerId, satelliteId, count, metrics: [...metrics] });
     }
   }

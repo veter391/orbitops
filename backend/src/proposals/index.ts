@@ -80,17 +80,25 @@ export class Proposals {
     return rows[0] ? toProposal(rows[0]) : null;
   }
 
-  /** A tenant's proposals, newest first. Seek-paginated by `beforeTs` (ISO). */
-  async list(customerId: string, limit = 50, beforeTs?: string): Promise<Proposal[]> {
+  /**
+   * A tenant's proposals, newest first. Seek-paginated by a COMPOUND cursor
+   * `(ts, id)`: `ts` alone is not unique (proposals created back-to-back share
+   * `now()`), so a `ts <`-only seek would silently skip every tie at a page
+   * boundary. Ordering and the predicate both tie-break on the unique `id`, so
+   * pagination is gapless (cf. the audit chain, which seeks on its monotonic seq).
+   */
+  async list(customerId: string, limit = 50, before?: { ts: string; id: string }): Promise<Proposal[]> {
     const rows =
-      beforeTs === undefined
+      before === undefined
         ? await this.db.query<ProposalRow>(
-            'SELECT * FROM proposals WHERE customer_id = $1 ORDER BY ts DESC LIMIT $2',
+            'SELECT * FROM proposals WHERE customer_id = $1 ORDER BY ts DESC, id DESC LIMIT $2',
             [customerId, limit],
           )
         : await this.db.query<ProposalRow>(
-            'SELECT * FROM proposals WHERE customer_id = $1 AND ts < $2 ORDER BY ts DESC LIMIT $3',
-            [customerId, beforeTs, limit],
+            `SELECT * FROM proposals
+             WHERE customer_id = $1 AND (ts < $2 OR (ts = $2 AND id < $3))
+             ORDER BY ts DESC, id DESC LIMIT $4`,
+            [customerId, before.ts, before.id, limit],
           );
     return rows.map(toProposal);
   }

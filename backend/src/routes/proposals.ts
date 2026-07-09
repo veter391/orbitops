@@ -11,7 +11,12 @@ const CreateBody = z.object({
 
 const ListQuery = z.object({
   limit: z.coerce.number().int().positive().max(500).default(50),
-  cursor: z.string().datetime().optional(), // ts to page before
+  // Compound seek cursor `<iso-ts>|<uuid>` (see Proposals.list). Opaque to
+  // clients — they just echo back `nextCursor`.
+  cursor: z
+    .string()
+    .regex(/^.+\|[0-9a-f-]{36}$/i)
+    .optional(),
 });
 
 const IdParams = z.object({ id: z.string().uuid() });
@@ -45,8 +50,14 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.get('/v1/proposals', async (req, reply) => {
     const q = ListQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid query', detail: q.error.issues });
-    const proposals = await app.proposals.list(req.customerId, q.data.limit, q.data.cursor);
-    const nextCursor = proposals.length === q.data.limit ? proposals[proposals.length - 1]!.ts : null;
+    let before: { ts: string; id: string } | undefined;
+    if (q.data.cursor) {
+      const i = q.data.cursor.lastIndexOf('|');
+      before = { ts: q.data.cursor.slice(0, i), id: q.data.cursor.slice(i + 1) };
+    }
+    const proposals = await app.proposals.list(req.customerId, q.data.limit, before);
+    const last = proposals[proposals.length - 1];
+    const nextCursor = proposals.length === q.data.limit && last ? `${last.ts}|${last.id}` : null;
     return { proposals, nextCursor };
   });
 

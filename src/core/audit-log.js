@@ -113,17 +113,6 @@ export class AuditLog {
   }
 
   /**
-   * @param {string} actor
-   * @param {string} action
-   * @param {Record<string, unknown>} [payload]
-   * @returns {Promise<AuditEntry>}
-   */
-  async appendSync(actor, action, payload = {}) {
-    // For testing: pre-compute hash synchronously with fallback
-    return this.append(actor, action, payload);
-  }
-
-  /**
    * Subscribe to new entries.
    * @param {(e: AuditEntry) => void} fn
    * @returns {() => boolean}

@@ -36,6 +36,33 @@ test('requests without an API key are rejected 401', async () => {
   assert.equal(res.statusCode, 401);
 });
 
+test('list pagination is gapless even when proposals share an exact timestamp', async () => {
+  // Isolated tenant so only these rows exist. Create 5, then force them all to
+  // the SAME ts to reproduce the timestamp-tie that a ts-only cursor would skip.
+  await createCustomer(db, 'pgpage', 'pgpage-key');
+  const H = { 'x-api-key': 'pgpage-key' };
+  const ids: string[] = [];
+  for (let i = 0; i < 5; i += 1) ids.push(await createProposal(H));
+  await db.query(`UPDATE proposals SET ts = '2020-01-01T00:00:00Z' WHERE id = ANY($1)`, [ids]);
+
+  // Page through with limit=2, following the opaque cursor.
+  const seen: string[] = [];
+  let cursor: string | null = null;
+  for (let guard = 0; guard < 10; guard += 1) {
+    const url: string = `/v1/proposals?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const res = await app.inject({ method: 'GET', url, headers: H });
+    assert.equal(res.statusCode, 200);
+    const body = res.json() as { proposals: { id: string }[]; nextCursor: string | null };
+    seen.push(...body.proposals.map((p) => p.id));
+    cursor = body.nextCursor;
+    if (!cursor) break;
+  }
+  const unique = new Set(seen);
+  assert.equal(seen.length, unique.size, 'no duplicate rows across pages');
+  for (const id of ids) assert.ok(unique.has(id), `proposal ${id} was skipped by pagination`);
+  assert.equal(unique.size, 5, 'all five tied-timestamp proposals paged through exactly once');
+});
+
 test('create → approve → attributed to the authenticated operator, audited', async () => {
   const id = await createProposal();
   const res = await app.inject({ method: 'POST', url: `/v1/proposals/${id}/approve`, headers: AUTH });

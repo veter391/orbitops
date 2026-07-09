@@ -254,8 +254,8 @@ function renderStepData(step) {
             ${d.alternatives.map((/** @type {any} */ alt) => `
               <tr class="${alt.kind === 'Recommended' ? 'is-recommended' : ''}">
                 <td>
-                  <span class="data-table__kind">${alt.kind}</span>
-                  <span class="data-table__label">${alt.label}</span>
+                  <span class="data-table__kind">${esc(alt.kind)}</span>
+                  <span class="data-table__label">${esc(alt.label)}</span>
                   ${alt.kind === 'Recommended' ? '<span class="data-table__badge">Winner</span>' : ''}
                 </td>
                 <td>${alt.dv.toFixed(2)} <span class="data-table__unit">m/s</span></td>
@@ -301,9 +301,9 @@ function renderStepData(step) {
             <div class="data-list__row ${o.id === d.winner ? 'is-recommended' : ''}">
               <span class="data-list__label">
                 ${o.id === d.winner ? '<span class="data-table__badge">Recommended</span>' : ''}
-                ${o.label}
+                ${esc(o.label)}
               </span>
-              <span class="data-list__val">${typeof o.weeksGained === 'number' ? `+${o.weeksGained} weeks` : o.weeksGained} · ${o.impact}</span>
+              <span class="data-list__val">${typeof o.weeksGained === 'number' ? `+${o.weeksGained} weeks` : esc(o.weeksGained)} · ${esc(o.impact)}</span>
             </div>
           `).join('')}
         </div>
@@ -327,7 +327,7 @@ function renderStepData(step) {
           </div>
           <div class="data-grid__item">
             <div class="data-grid__label">Strategy</div>
-            <div class="data-grid__val" style="font-size: 12px;">${d.strategy}</div>
+            <div class="data-grid__val" style="font-size: 12px;">${esc(d.strategy)}</div>
           </div>
         </div>
       </div>
@@ -393,7 +393,7 @@ function renderConsiderations(proposal) {
       ${proposal.considerations.map((/** @type {any} */ c) => `
         <div class="considerations__item">
           <div class="considerations__bullet">→</div>
-          <div class="considerations__text">${c}</div>
+          <div class="considerations__text">${esc(c)}</div>
         </div>
       `).join('')}
     </div>

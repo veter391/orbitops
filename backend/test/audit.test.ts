@@ -108,3 +108,16 @@ test('export produces JSON and CSV', async () => {
   assert.equal(lines.length, 3);
   await db.close();
 });
+
+test('CSV export neutralizes spreadsheet formula injection in the operator-controlled action column', async () => {
+  const db = await freshDb();
+  const audit = new AuditLog(db);
+  // `action` on POST /v1/audit is operator-controlled free text and becomes its
+  // OWN csv column (unlike `reason`, which is nested in the JSON-wrapped payload
+  // cell and so already starts with `{`). A leading '=' would execute in Excel.
+  await audit.append(DEMO_ID, 'user:op1', '=HYPERLINK("http://evil","click")', { note: 'x' });
+  const csv = await audit.exportCsv(DEMO_ID);
+  assert.ok(csv.includes(`"'=HYPERLINK`), 'leading = in the action column is quote-prefixed');
+  assert.ok(!/,=HYPERLINK/.test(csv), 'no raw =formula cell survives');
+  await db.close();
+});

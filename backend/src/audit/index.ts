@@ -215,8 +215,15 @@ function toEntry(r: AuditRow): AuditEntry {
   };
 }
 
-/** RFC-4180-ish CSV escaping. */
+/**
+ * RFC-4180-ish CSV escaping, plus formula-injection neutralization: a cell whose
+ * value starts with `= + - @` (or a tab/CR) is prefixed with a single quote so a
+ * spreadsheet app (Excel/Sheets) treats it as text, not a formula. Without this,
+ * an operator-controlled field (e.g. a reject reason `=HYPERLINK(...)`) would
+ * execute when a compliance officer opens the exported audit log (CWE-1236).
+ */
 function csvCell(v: unknown): string {
-  const s = String(v);
+  let s = String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }

@@ -42,25 +42,48 @@ const BROWSER_GLOBALS = {
   THREE: 'readonly',
 };
 
+// Cloudflare Workers runtime globals (service-worker style + fetch/Web APIs).
+const WORKER_GLOBALS = {
+  addEventListener: 'readonly',
+  Response: 'readonly',
+  Request: 'readonly',
+  Headers: 'readonly',
+  URL: 'readonly',
+  fetch: 'readonly',
+  console: 'readonly',
+  crypto: 'readonly',
+  TextEncoder: 'readonly',
+  TextDecoder: 'readonly',
+  AbortController: 'readonly',
+  AbortSignal: 'readonly',
+  setTimeout: 'readonly',
+  clearTimeout: 'readonly',
+};
+
+const SHARED_RULES = {
+  'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
+  'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+  'no-var': 'error',
+  'prefer-const': 'warn',
+  // Strict equality everywhere, except the idiomatic `x != null` / `x == null`
+  // check (matches both null and undefined) — the standard, safe exception.
+  eqeqeq: ['error', 'always', { null: 'ignore' }],
+  'no-eval': 'error',
+  'no-implied-eval': 'error',
+  'no-new-func': 'error',
+};
+
 export default [
   {
     files: ['src/**/*.js'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: BROWSER_GLOBALS,
-    },
-    rules: {
-      'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      'no-var': 'error',
-      'prefer-const': 'warn',
-      // Strict equality everywhere, except the idiomatic `x != null` / `x == null`
-      // check (matches both null and undefined) — the standard, safe exception.
-      eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-eval': 'error',
-      'no-implied-eval': 'error',
-      'no-new-func': 'error',
-    },
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: BROWSER_GLOBALS },
+    rules: SHARED_RULES,
+  },
+  {
+    // The one real trust-boundary file (holds the OpenRouter key, rate-limits,
+    // validates untrusted request bodies) — it must get the same static checks.
+    files: ['worker.js'],
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: WORKER_GLOBALS },
+    rules: SHARED_RULES,
   },
 ];

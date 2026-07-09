@@ -23,6 +23,7 @@ import { meanElements, propagateEci, geodetic, parseTle } from '../core/sgp4.js'
 import { sunEciDirection } from '../core/sun.js';
 import { mountAmbient } from '../ui/ambient.js';
 import { success, error } from '../ui/toast.js';
+import { esc } from '../utils.js';
 
 /**
  * @typedef {Object} EnrichedSat
@@ -65,8 +66,6 @@ const RE = 6371;
 // Shared histogram geometry — the draw code and the hover hit-test must agree.
 const HIST = { padL: 46, padR: 14, padT: 26, padB: 30, lo: 300, hi: 1400, band: 50 };
 
-/** @param {*} s */
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (/** @type {Record<string, string>} */ ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]));
 const prefersReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** @param {number} t */
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);

@@ -60,10 +60,8 @@ class Router extends Emitter {
   async navigate(path) {
     if (this.transitioning) return;
     if (this.current === path) return;
-    if (this.current) {
-      window.location.hash = path;
-      return;
-    }
+    // The hashchange handler drives the actual route resolve() for both first
+    // navigation and subsequent ones, so a single assignment is all that's needed.
     window.location.hash = path;
   }
 

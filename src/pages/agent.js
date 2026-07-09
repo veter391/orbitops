@@ -138,8 +138,8 @@ export async function mount(app) {
           </div>
           <h1 class="page-header__title">The AI agent.</h1>
           <p class="page-header__sub">
-            Real Kepler physics. Anomaly detection running on simulated telemetry, clearly labelled.
-            Real audit chain. The agent proposes — the operator decides. Always.
+            Real Kepler physics on live conjunction geometry. Scripted flight-ops scenarios,
+            clearly labelled as demo. Real audit chain. The agent proposes — the operator decides. Always.
           </p>
         </div>
       </header>

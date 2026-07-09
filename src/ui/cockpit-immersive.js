@@ -385,11 +385,16 @@ export async function mountCockpit(host, THREE) {
     return [-R * Math.cos(la) * Math.cos(lo), R * Math.sin(la), R * Math.cos(la) * Math.sin(lo)];
   };
 
+  // Set true on unmount; the async loaders below check it so a fetch/decode that
+  // resolves AFTER teardown does not attach geometry to a detached scene.
+  let disposed = false;
+
   // Continents from particles: sample the NASA raster on a hidden 2D canvas,
   // keep only land pixels, place one particle per land cell on the sphere.
   (() => {
     const img = new Image();
     img.onload = () => {
+      if (disposed) return;
       try {
         const W = 640, H = 320;
         const cv = document.createElement('canvas');
@@ -439,6 +444,7 @@ export async function mountCockpit(host, THREE) {
     try {
       const res = await fetch('/public/data/world-borders.json');
       const geo = await res.json();
+      if (disposed) return; // torn down while the fetch was in flight
       const R = EARTH_RADIUS * SCENE_SCALE * 1.006;
       /** @type {number[]} */
       const pos = [];
@@ -1038,6 +1044,7 @@ export async function mountCockpit(host, THREE) {
 
   return {
     unmount() {
+      disposed = true;
       liveTlm?.dispose();
       cancelAnimationFrame(rafId);
       cancelAnimationFrame(uiId);
@@ -1050,6 +1057,18 @@ export async function mountCockpit(host, THREE) {
       window.removeEventListener('resize', resize);
       window.removeEventListener('mouseup', onDragEnd);
       window.removeEventListener('mousemove', onDragMove);
+      // Free every GPU buffer in the scene graph — renderer.dispose() alone does
+      // NOT walk the scene, so geometries/materials/textures would leak on each
+      // repeat visit to /cockpit (this is the heaviest 3D view in the app).
+      scene.traverse((/** @type {any} */ obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((/** @type {any} */ m) => {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        }
+      });
       renderer.dispose();
     },
   };

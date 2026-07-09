@@ -9,8 +9,11 @@ import { config } from '../config.js';
  */
 const TTL_MS = 60_000;
 
+// Dedicated ticket key (own blast radius); dev falls back to AUDIT_HMAC_KEY.
+const TICKET_KEY = config.WS_TICKET_HMAC_KEY ?? config.AUDIT_HMAC_KEY;
+
 function sign(payload: string): string {
-  return createHmac('sha256', config.AUDIT_HMAC_KEY).update('ws-ticket:' + payload).digest('base64url');
+  return createHmac('sha256', TICKET_KEY).update('ws-ticket:' + payload).digest('base64url');
 }
 
 export function issueTicket(customerId: string): { ticket: string; expiresInMs: number } {
