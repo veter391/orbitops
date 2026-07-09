@@ -542,6 +542,9 @@
 .set-inline .set-select {
   flex: 1 1 200px;
   width: auto;
+  /* Allow the select to shrink below its longest option's intrinsic width so a
+     long backend-mode label can't overflow the row on a narrow screen. */
+  min-width: 0;
 }
 
 .set-hint {
