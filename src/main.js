@@ -19,6 +19,7 @@ import { info } from './ui/toast.js';
 import { mountCursorSat } from './ui/cursor-sat.js';
 import { isAppMode, hiddenInApp, resolveInitialRoute } from './core/app-config.js';
 import { maybeShowOnboarding } from './ui/onboarding.js';
+import { getBackendConfig, setBackendConfig } from './core/backend-client.js';
 import { esc } from './utils.js';
 
 const boot = document.getElementById('boot');
@@ -491,6 +492,14 @@ async function main() {
 
     if (app) router.init(app);
 
+    // Public-demo live backend: if a same-origin backend answers /health and the
+    // operator hasn't chosen a mode, switch to connected mode (demo tenant) so the
+    // live panels (compliance, conjunctions, telemetry) populate with real backend
+    // output instead of connect-prompts. No-op in app/self-host mode (that build
+    // configures its own backend) and on a plain static host (probe fails → stays
+    // simulated, fail-safe). Runs in the background and re-renders on success.
+    autoConnectDemoBackend();
+
     // Hide boot
     hideBoot();
 
@@ -519,6 +528,36 @@ async function main() {
   } catch (err) {
     const emsg = err instanceof Error ? err.message : 'unknown error';
     fatalBoot('Boot failed', elapsed() + ' · ' + emsg, err);
+  }
+}
+
+/**
+ * Public-demo live backend auto-connect. Probes a same-origin `/health`; if it
+ * answers, switches to connected mode with the seeded demo tenant so the live
+ * panels populate with real backend output. No-op in app/self-host mode, when
+ * the operator already picked a mode, or when no same-origin backend exists
+ * (plain static host) — all fail-safe. Re-renders the current route on success.
+ * @returns {Promise<void>}
+ */
+async function autoConnectDemoBackend() {
+  try {
+    if (isAppMode()) return;
+    if (getBackendConfig().mode === 'connected') return;
+    // Respect an explicit operator choice (Settings persists the mode key).
+    try {
+      if (localStorage.getItem('orbitops:backend:mode')) return;
+    } catch {
+      /* storage blocked — proceed with the probe */
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch('/health', { signal: ctrl.signal }).catch(() => null);
+    clearTimeout(timer);
+    if (!res || !res.ok) return;
+    setBackendConfig({ mode: 'connected', url: window.location.origin, key: 'demo-key' });
+    router.resolve();
+  } catch {
+    /* stay in simulation — fail-safe */
   }
 }
 
