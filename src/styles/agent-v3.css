@@ -111,6 +111,23 @@
   color: var(--v3-text);
 }
 
+/* Keyless "deterministic engine only" state — a small amber signal that the
+   optional live-model layer is off (the math still runs). Mirrors the first-run
+   wizard's MATH ONLY badge. Live state gets a quiet nominal-green tint. */
+.agent-page .ai-settings-btn.is-sim {
+  color: var(--warn);
+  border-color: var(--warn-soft);
+  background: var(--warn-soft);
+}
+.agent-page .ai-settings-btn.is-sim:hover {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.agent-page .ai-settings-btn.is-live {
+  color: var(--ok);
+  border-color: var(--ok-soft);
+}
+
 /* --------------------------------------------------------------------------
    Live demo console — premium flight-ops log
    -------------------------------------------------------------------------- */

@@ -1063,7 +1063,14 @@ function mountDepthGrid(grid) {
 /** @param {HTMLElement} app */
 function updateAILabel(app) {
   const label = app.querySelector('#aiSettingsLabel');
-  if (label) label.textContent = hasLiveAI() ? 'AI: LIVE (OpenRouter)' : 'AI: SIMULATED';
+  const btn = app.querySelector('#aiSettingsBtn');
+  const live = hasLiveAI();
+  // Provider-agnostic now (any OpenAI-compatible endpoint), so no vendor name.
+  if (label) label.textContent = live ? 'AI: LIVE' : 'AI: SIMULATED';
+  if (btn) {
+    btn.classList.toggle('is-live', live);
+    btn.classList.toggle('is-sim', !live);
+  }
 }
 
 /** @param {HTMLElement} app */
