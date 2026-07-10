@@ -43,3 +43,6 @@ internal/
 
 # Local database (pglite) and scratch
 **/.data/
+
+# npm auth token for local publish (never commit)
+.npmrc
