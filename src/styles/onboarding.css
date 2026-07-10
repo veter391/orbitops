@@ -1,0 +1,265 @@
+/* ============================================================
+   ORBIT OPS — FIRST-RUN WIZARD (app / self-host mode only)
+   Mounted by src/ui/onboarding.js. Uses the shared design tokens; no
+   new palette. Deliberately quiet: a focused setup card over a dimmed
+   mission-control backdrop, not a splashy takeover.
+   ============================================================ */
+
+.ob-scrim {
+  position: fixed;
+  inset: 0;
+  /* Above everything, including the transient route loader (--z-boot 9999):
+     the first-run wizard is the topmost surface until the operator dismisses it. */
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: rgba(5, 7, 12, 0.72);
+  backdrop-filter: blur(6px) saturate(0.9);
+  -webkit-backdrop-filter: blur(6px) saturate(0.9);
+  animation: ob-fade var(--dur-base) var(--ease-out);
+}
+.ob-scrim.is-closing {
+  animation: ob-fade var(--dur-base) var(--ease-out) reverse forwards;
+}
+@keyframes ob-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ob {
+  width: min(560px, 100%);
+  max-height: calc(100vh - var(--space-8));
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--ink-card), var(--ink-raised));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  animation: ob-rise var(--dur-slow) var(--ease-out);
+}
+@keyframes ob-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-scrim, .ob { animation: none; }
+}
+
+/* Header ---------------------------------------------------------------- */
+.ob__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--line);
+}
+.ob__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--accent);
+}
+.ob__logo { width: 22px; height: 22px; }
+.ob__brand-txt {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.22em;
+  color: var(--text-secondary);
+}
+.ob__dots { display: inline-flex; gap: 7px; }
+.ob__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-3);
+  transition: background var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.ob__dot.is-on { background: var(--accent); transform: scale(1.15); }
+.ob__dot.is-done { background: var(--accent-press); }
+
+/* Body ------------------------------------------------------------------ */
+.ob__body {
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+.ob__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--space-3);
+}
+.ob__title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+.ob__lede {
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  max-width: 46ch;
+}
+
+/* Choice cards ---------------------------------------------------------- */
+.ob__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.ob__cards--col { grid-template-columns: 1fr; }
+
+.ob-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+  padding: var(--space-4);
+  background: var(--ink-input);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.ob-card:hover { border-color: var(--line-3); transform: translateY(-1px); }
+.ob-card.is-sel {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ob-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ob-card__k {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ob-card__d {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.ob-card__d code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+}
+.ob-card__badge {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xs);
+  padding: 2px 6px;
+}
+.ob-card__badge--ok { color: var(--ok); border-color: var(--ok-soft); background: var(--ok-soft); }
+.ob-card__badge--warn { color: var(--warn); border-color: var(--warn-soft); background: var(--warn-soft); }
+
+/* Revealed inputs ------------------------------------------------------- */
+.ob__reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out), margin-top var(--dur-base) var(--ease-out);
+  margin-top: 0;
+}
+.ob__reveal.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: var(--space-4);
+}
+.ob__reveal > * { min-height: 0; overflow: hidden; }
+.ob__reveal.is-open > * { overflow: visible; }
+
+.ob__label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.ob__opt { color: var(--text-mute); }
+.ob__input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--ink-void);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.ob__input::placeholder { color: var(--text-faint); }
+.ob__input:focus { outline: none; border-color: var(--accent); }
+.ob__input.is-error { border-color: var(--alert); background: var(--alert-soft); }
+.ob__hint {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-mute);
+  line-height: 1.5;
+}
+.ob__hint a { color: var(--accent); }
+.ob__hint a:hover { text-decoration: underline; }
+
+/* Done ------------------------------------------------------------------ */
+.ob__step--done { text-align: center; padding: var(--space-4) 0; }
+.ob__done-mark {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  margin: 0 auto var(--space-4);
+}
+.ob__done-mark .ob__logo { width: 44px; height: 44px; }
+.ob__step--done .ob__lede { margin-inline: auto; }
+
+/* Footer ---------------------------------------------------------------- */
+.ob__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--line);
+}
+.ob-btn {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.ob-btn:disabled { opacity: 0.6; cursor: default; }
+.ob-btn--ghost { color: var(--text-secondary); border-color: var(--line-2); background: transparent; }
+.ob-btn--ghost:hover { color: var(--text-primary); border-color: var(--line-3); }
+.ob-btn--primary { color: var(--ink-void); background: var(--accent); }
+.ob-btn--primary:hover:not(:disabled) { background: var(--accent-press); }
+.ob-btn--wide { margin-left: auto; }
+
+/* Phone ----------------------------------------------------------------- */
+@media (max-width: 520px) {
+  .ob__cards { grid-template-columns: 1fr; }
+  .ob__body { padding: var(--space-5); }
+  .ob__head, .ob__foot { padding: var(--space-4) var(--space-5); }
+  .ob__title { font-size: var(--text-xl); }
+}

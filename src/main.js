@@ -18,6 +18,7 @@ import { router } from './router.js';
 import { info } from './ui/toast.js';
 import { mountCursorSat } from './ui/cursor-sat.js';
 import { isAppMode, hiddenInApp, resolveInitialRoute } from './core/app-config.js';
+import { maybeShowOnboarding } from './ui/onboarding.js';
 import { esc } from './utils.js';
 
 const boot = document.getElementById('boot');
@@ -496,6 +497,10 @@ async function main() {
     // Year in footer
     const yearEl = document.getElementById('year');
     if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+    // First-run setup wizard — app (self-host) mode only, once per install.
+    // No-op in the public site demo and after the operator has onboarded.
+    maybeShowOnboarding();
 
     // Welcome toast — shown only once per session
     if (!sessionStorage.getItem('orbitops-welcomed')) {
