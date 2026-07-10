@@ -2,15 +2,20 @@
 
 Thanks for your interest in making OrbitOps better. 🛰️
 
-## Quick rules
-
-1. **No build step** — everything is hand-written JS / CSS. Don't introduce a
-   bundler, framework, or package that requires building. PRs that add
-   `webpack`, `vite`, `react`, `next`, `vue`, etc. will be closed.
-2. **No runtime dependencies** — `package.json` is for dev tooling only.
-3. **Match the style** — `npm run lint` runs ESLint. `npm run format` runs
-   Prettier. Both must pass before review.
-4. **Read the philosophy** — [docs/PHILOSOPHY.md](../docs/PHILOSOPHY.md) is binding.
+1. **No fake numbers.** The project's credibility is its honesty: no invented
+   metrics, everything unshipped is labelled `PLANNED`, real math or a clearly
+   marked demo, humans always approve. See [docs/PHILOSOPHY.md](../docs/PHILOSOPHY.md)
+   — it is binding.
+2. **No build step (frontend)** — `index.html` + `src/` is hand-written JS / CSS.
+   Don't introduce a bundler, framework, or package that requires building. PRs
+   that add `webpack`, `vite`, `react`, `next`, `vue`, etc. will be closed. The
+   frontend also carries **no runtime dependencies** (its `package.json` is dev
+   tooling only; Three.js is vendored).
+3. **Backend (`backend/`)** — Node 22 + TypeScript (Fastify). It *does* have real
+   runtime deps and its own scripts. Boots on local pglite with no keys:
+   `cd backend && cp .env.example .env && npm install && npm run migrate && npm run dev`.
+4. **Match the style** — `npm run lint` (ESLint) and `npm run format` (Prettier)
+   must pass, and `npm test` (node:test) must stay green, for whatever you touch.
 
 ## How to contribute code
 

@@ -30,6 +30,14 @@ class Router extends Emitter {
     this.nav = null;
     /** @type {HTMLElement|null} */
     this._loader = null;
+    /**
+     * Optional route guard. Given the requested path it returns the path that
+     * should actually render — identity by default. Used by app (self-host) mode
+     * to redirect marketing routes to the dashboard on every navigation, not just
+     * the initial boot (e.g. a brand-logo click mid-session).
+     * @type {((path: string) => string)|null}
+     */
+    this.guard = null;
   }
 
   /** Register a route. @param {string} path @param {(app: HTMLElement) => any} handler */
@@ -70,7 +78,16 @@ class Router extends Emitter {
     if (this.transitioning) return;
     const app = this.app;
     if (!app) return;
-    const path = window.location.hash.slice(1) || '/';
+    const rawPath = window.location.hash.slice(1) || '/';
+    // Apply the route guard (app-mode marketing→dashboard redirect). If it
+    // rewrites the path, bounce the hash and let the resulting hashchange
+    // re-drive resolve() with the corrected route — no partial mount of the
+    // route we're redirecting away from.
+    const path = this.guard ? this.guard(rawPath) : rawPath;
+    if (path !== rawPath) {
+      window.location.hash = path;
+      return;
+    }
     const handler = this.routes.get(path) || this.routes.get('/');
     if (!handler) return;
 

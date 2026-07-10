@@ -65,6 +65,16 @@ export const SITE_ONLY_ROUTES = Object.freeze(['/', '/pricing']);
 export const APP_HOME_ROUTE = '/dashboard';
 
 /**
+ * Where an app-mode (self-host) build sends users who want the hosted,
+ * multi-tenant OrbitOps and its pricing — the marketing surfaces that are
+ * intentionally hidden from the self-host nav. Rendered as one small link in
+ * Settings › About (app mode only). Defaults to the public repository so it is
+ * always valid; repoint to the live Cloudflare demo domain at deploy (Phase 5).
+ * @type {string}
+ */
+export const HOSTED_DEMO_URL = 'https://github.com/veter391/orbitops#hosted-demo';
+
+/**
  * Read the persisted app-mode flag from localStorage, tolerating private-mode
  * / disabled storage (returns null, never throws).
  * @returns {boolean|null} true/false if explicitly set, else null (unset).

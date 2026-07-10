@@ -64,7 +64,7 @@ import {
 import { PROVIDERS, getLlmConfig, setLlmConfig } from '../core/llm-provider.js';
 import { MODEL_ROUTING, modelsFor } from '../core/model-routing.js';
 import { audit } from '../core/audit-log.js';
-import { isAppMode } from '../core/app-config.js';
+import { isAppMode, HOSTED_DEMO_URL } from '../core/app-config.js';
 import {
   getBackendConfig,
   setBackendConfig,
@@ -1563,6 +1563,7 @@ function sectionAbout() {
 
       <div class="set-about__links">
         ${linkRow('https://github.com/veter391/orbitops', 'GitHub repository', 'source, issues, roadmap')}
+        ${isAppMode() ? linkRow(HOSTED_DEMO_URL, 'Pricing & hosted demo', 'managed multi-tenant OrbitOps — hidden in self-host') : ''}
         ${linkRow('#/docs/data', 'Data sources & accuracy', 'CelesTrak cadence, SGP4 drift honesty', false)}
         ${linkRow('#/docs/terms', 'Terms & legal', 'usage, warranty, data handling', false)}
         ${linkRow('https://github.com/veter391/orbitops/blob/main/LICENSE', 'MIT License', 'the core is free forever')}

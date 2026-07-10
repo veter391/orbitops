@@ -480,16 +480,13 @@ async function main() {
       }
     });
 
-    // APP_MODE boot target (see core/app-config.js): in app mode a request for
-    // the empty root or a marketing route resolves to /dashboard instead of /.
-    // Site mode (default) is untouched — resolveInitialRoute() returns the
-    // requested path verbatim. Set the hash before init so the router's own
-    // resolve() picks it up on first paint (no double-mount).
-    const requestedRoute = window.location.hash.slice(1).split('?')[0] || '/';
-    const initialRoute = resolveInitialRoute(requestedRoute);
-    if (initialRoute !== requestedRoute) {
-      window.location.hash = initialRoute;
-    }
+    // APP_MODE routing (see core/app-config.js): in app mode a request for the
+    // empty root or a marketing route resolves to /dashboard instead of /. Wire
+    // resolveInitialRoute as the router guard so this holds on EVERY navigation
+    // (boot, deep link, and mid-session brand-logo clicks) — not just first
+    // paint. Site mode (default) is untouched: the guard returns the requested
+    // path verbatim.
+    router.guard = resolveInitialRoute;
 
     if (app) router.init(app);
 
