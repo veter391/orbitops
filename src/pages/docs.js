@@ -169,7 +169,7 @@ export async function mount(app) {
     '/docs/data': 'datapolicy',
     '/docs/going-live': 'going-live',
   };
-  openDoc(LEGAL_ROUTE_DOC[window.location.hash.slice(1)] || 'quickstart', { scroll: false });
+  openDoc(LEGAL_ROUTE_DOC[window.location.pathname] || 'quickstart', { scroll: false });
 
   docLinks.forEach((l) => {
     l.addEventListener('click', () => {

@@ -19,6 +19,11 @@ compatibility_date = "2025-05-01"
 [assets]
 directory = "."
 binding = "ASSETS"
+# Clean URLs: serve index.html for any non-file path so history-API routes
+# (/cockpit, /docs/going-live) resolve on deep-link and refresh. The API/health
+# paths must reach the Worker (→ container) FIRST, before this SPA fallback.
+not_found_handling = "single-page-application"
+run_worker_first = ["/v1/*", "/health", "/api/ai"]
 
 # LIVE BACKEND — the Node backend (backend/Dockerfile) runs in a Cloudflare
 # Container fronted by this Worker; worker.js routes /v1/* + /health to it. The

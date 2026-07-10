@@ -49,7 +49,10 @@ class Router extends Emitter {
   init(appEl, navEl) {
     this.app = appEl;
     this.nav = navEl || null;
-    window.addEventListener('hashchange', () => this.resolve());
+    // Clean URLs via the History API (no `#`). Back/forward fire popstate; the
+    // click interceptor below pushState-navigates internal links. Deep links and
+    // refreshes are served index.html by the host (Cloudflare SPA fallback / a
+    // dev server with a catch-all) so the router resolves the real pathname.
     window.addEventListener('popstate', () => this.resolve());
     // Intercept clicks on internal links
     document.addEventListener('click', (e) => {
@@ -68,9 +71,9 @@ class Router extends Emitter {
   async navigate(path) {
     if (this.transitioning) return;
     if (this.current === path) return;
-    // The hashchange handler drives the actual route resolve() for both first
-    // navigation and subsequent ones, so a single assignment is all that's needed.
-    window.location.hash = path;
+    // pushState doesn't emit popstate, so drive resolve() directly.
+    window.history.pushState({}, '', path);
+    this.resolve();
   }
 
   /** Resolve current route. */
@@ -78,14 +81,14 @@ class Router extends Emitter {
     if (this.transitioning) return;
     const app = this.app;
     if (!app) return;
-    const rawPath = window.location.hash.slice(1) || '/';
+    const rawPath = window.location.pathname || '/';
     // Apply the route guard (app-mode marketing→dashboard redirect). If it
-    // rewrites the path, bounce the hash and let the resulting hashchange
-    // re-drive resolve() with the corrected route — no partial mount of the
-    // route we're redirecting away from.
+    // rewrites the path, replace the URL and re-resolve with the corrected route
+    // — no partial mount of the route we're redirecting away from.
     const path = this.guard ? this.guard(rawPath) : rawPath;
     if (path !== rawPath) {
-      window.location.hash = path;
+      window.history.replaceState({}, '', path);
+      this.resolve();
       return;
     }
     const handler = this.routes.get(path) || this.routes.get('/');
@@ -152,7 +155,7 @@ class Router extends Emitter {
     // and view desynced (and one-shot chrome like the cursor-sat gets stuck on
     // the wrong route). resolve() is idempotent and terminates once the hash
     // settles, so this can't loop.
-    const latest = window.location.hash.slice(1) || '/';
+    const latest = window.location.pathname || '/';
     if (latest !== this.current) this.resolve();
   }
 
