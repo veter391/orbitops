@@ -61,7 +61,7 @@ repository. This document explains how the pieces fit together.
 
 ## Components
 
-### 1. Marketing site (`src/ui/landing.js`)
+### 1. Marketing site (`src/pages/home.js`, `src/pages/pricing.js`)
 
 A single-page marketing site with embedded product demo. Vanilla JS + CSS, no
 framework, no build step. Loads in <1 second on a cold cache. Hosts the same
@@ -78,7 +78,7 @@ Sections:
 8. Roadmap — 12 months
 9. Investors — CTA + one-pager download
 
-### 2. Cockpit (`src/ui/cockpit.js`)
+### 2. Cockpit (`src/ui/cockpit-immersive.js`)
 
 The operator's primary interface. Three.js scene with:
 - Realistic Earth (procedural + optional imagery)

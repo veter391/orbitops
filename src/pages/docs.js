@@ -317,8 +317,11 @@ cd my-ops &amp;&amp; npm start</code></pre>
     <h2>Deploy anywhere</h2>
     <p>The result is a static bundle — host it on Cloudflare Pages, Netlify,
        Vercel, GitHub Pages, or any static file server. No server-side runtime
-       is required for the open-source app; the Go backend (for hosted,
-       multi-tenant features) is separate and <strong>planned</strong>.</p>
+       is required to run the app. The <strong>Node + TypeScript backend</strong>
+       (<code>backend/</code>) is optional and additive: connect it in
+       Settings → Connected Backend for live telemetry, the multi-agent copilot,
+       and the tamper-evident audit chain. Hosted multi-tenant SSO/RBAC remains
+       <strong>planned</strong>.</p>
 
     <h2>Run from source <span class="doc-chip">for contributors</span></h2>
     <p>Hacking on OrbitOps? Clone the repo and serve the folder — same code, no
@@ -434,9 +437,15 @@ npx serve .          # or any static file server</code></pre>
       <li><strong>Audit log</strong> — SHA-256 hash-chained, append-only, runs in the browser (<code>src/core/audit-log.js</code>)</li>
       <li><strong>AI agent</strong> — deterministic reasoning chains (<code>src/scenarios/index.js</code>), optionally augmented by live LLM calls via OpenRouter</li>
     </ul>
-    <h2>Backend <span class="planned-chip">PLANNED</span></h2>
-    <p>There is no backend today — everything runs client-side. A backend in Go
-       is planned for telemetry ingestion and multi-user deployments. See
+    <h2>Backend <span class="doc-chip doc-chip--real">REAL · optional</span></h2>
+    <p>The app runs fully client-side, and there is also a real
+       <strong>Node&nbsp;+&nbsp;TypeScript backend</strong> (<code>backend/</code>,
+       Fastify + pglite/Postgres): authenticated REST + WebSocket, real telemetry
+       ingest, a LangGraph multi-agent copilot, and an HMAC-signed tamper-evident
+       audit chain. It is optional and additive — connect it in
+       <strong>Settings → Connected Backend</strong> (URL + key), or run it locally
+       with <code>cd backend &amp;&amp; npm i &amp;&amp; npm run dev</code>. Hosted
+       multi-tenant SSO/RBAC is <span class="planned-chip">PLANNED</span>. See
        <a href="#" data-doc="planned">Planned services</a>.</p>`,
 
   propagator: `<h1>Orbit propagator</h1>
