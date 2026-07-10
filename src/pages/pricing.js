@@ -382,8 +382,8 @@ function openBuildFeedback(tierName) {
         <textarea id="askNote" class="ask-input ask-textarea" rows="3" placeholder="What would make this a yes for you?"></textarea>
       </div>
       <div class="ask-actions">
-        <button class="btn btn--primary" id="askSubmit" type="button">Open a GitHub issue →</button>
-        <span class="ask-note">A pre-filled issue opens in a new tab — edit before you post.</span>
+        <button class="btn btn--primary" id="askSubmit" type="button">${getBackendConfig().url ? 'Send feedback' : 'Open a GitHub issue →'}</button>
+        <span class="ask-note">${getBackendConfig().url ? 'Logged to the backend roadmap table — nothing leaves this tab otherwise.' : 'A pre-filled issue opens in a new tab — edit before you post.'}</span>
       </div>
     </div>
   `;

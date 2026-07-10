@@ -641,6 +641,36 @@
   line-height: 1.02;
 }
 
+/* ---------- open source / contribute ---------- */
+.hv3-oss {
+  padding-block: clamp(80px, 12vh, 140px);
+  border-top: 1px solid var(--v3-hairline);
+  text-align: center;
+}
+.hv3-oss__title {
+  margin: 18px auto 20px;
+  max-width: 20ch;
+  font-family: var(--v3-font-display);
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+.hv3-oss__lede {
+  margin: 0 auto 34px;
+  max-width: 56ch;
+  color: var(--v3-text-2);
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
+  line-height: 1.6;
+}
+.hv3-oss__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
 /* ---------- scroll reveals (IO-driven; enabled only when JS adds .hv3-js) ---------- */
 
 .hv3.hv3-js [data-hv3-reveal] {

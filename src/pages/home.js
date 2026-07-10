@@ -662,6 +662,25 @@ function renderTemplate() {
         </div>
       </section>
 
+      <!-- ============== 5.5 · OPEN SOURCE / CONTRIBUTE ============== -->
+      <section class="hv3-oss">
+        <div class="hv3-container" data-hv3-reveal>
+          <p class="hv3-eyebrow">Open source · MIT</p>
+          <h2 class="hv3-oss__title">Built in the open. Build it with us.</h2>
+          <p class="hv3-oss__lede">
+            Every layer is MIT and lives in one repository — the orbital math, the
+            multi-agent copilot, the tamper-evident audit chain, the backend. Fork
+            it, self-host it, or help push it forward. Flight-dynamics, frontend,
+            security, docs — contributions welcome.
+          </p>
+          <div class="hv3-oss__actions">
+            <a href="https://github.com/veter391/orbitops" target="_blank" rel="noreferrer" class="hv3-btn hv3-btn--primary">Star on GitHub ★</a>
+            <a href="https://github.com/veter391/orbitops/blob/main/.github/CONTRIBUTING.md" target="_blank" rel="noreferrer" class="hv3-btn hv3-btn--ghost">Contributing guide</a>
+            <a href="https://github.com/veter391/orbitops/issues" target="_blank" rel="noreferrer" class="hv3-btn hv3-btn--ghost">Open an issue →</a>
+          </div>
+        </div>
+      </section>
+
       <!-- ============== 6 · FINAL CTA ============== -->
       <section class="hv3-final">
         <div class="hv3-container" data-hv3-reveal>
