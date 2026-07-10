@@ -73,7 +73,7 @@ to switch the reasoning console from simulated to live LLM output.
 ```
                         browser (everything runs here)
  ┌──────────────────────────────────────────────────────────────────┐
- │  index.html → src/main.js → src/router.js (hash SPA)             │
+ │  index.html → src/main.js → src/router.js (History API)          │
  │                                                                  │
  │  pages/            core/                       data sources      │
  │  ├─ home           ├─ sgp4.js ──────────────── CelesTrak TLEs    │
