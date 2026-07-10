@@ -4,6 +4,13 @@
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![No build step](https://img.shields.io/badge/build-none-blue.svg)](#quick-start)
+[![npm](https://img.shields.io/badge/npm-create--orbitops-red.svg)](https://www.npmjs.com/package/create-orbitops)
+
+### 🛰️ [**Try the live demo → orbitops.veter391.workers.dev**](https://orbitops.veter391.workers.dev)
+
+The public demo runs the whole thing — the static app **and** the Node backend —
+on a single Cloudflare deployment, so the conjunction watch, deorbit compliance
+and AI triage show real backend output live.
 
 OrbitOps is a vanilla-JS, zero-build web app: a 3D cockpit over a real satellite catalog, a human-in-the-loop AI reasoning console, a hash-chained audit log, and a set of live flight tools. Everything below is labelled by what it actually is — real math, real data, or a clearly marked demo.
 
@@ -36,15 +43,24 @@ We publish this table because a demo that blurs the line is a demo you can't tru
 
 ## Quick start
 
-Run your own copy — no build, no signup, no keys. It's a static site, so any
-static server works. With Node.js:
+**Scaffold your own copy in one command** — no build, no signup, no keys:
+
+```bash
+npm create orbitops@latest my-ops
+# or: npx create-orbitops my-ops
+cd my-ops && npm run dev          # static app on http://localhost:8080
+```
+
+This drops a self-host build (operator mode: boots straight to the dashboard,
+marketing hidden). Prefer to clone the repo directly? It's a static site, so any
+server works:
 
 ```bash
 git clone https://github.com/veter391/orbitops && cd orbitops && npx serve .
 ```
 
-Open the URL it prints (usually `http://localhost:3000`). Prefer Python? From the
-same folder run `python3 -m http.server 8080` and open `http://localhost:8080`.
+Open the URL it prints. Prefer Python? From the same folder run
+`python3 -m http.server 8080` and open `http://localhost:8080`.
 
 No environment variables, no API keys required. Optional: add a model-provider key
 in Settings (OpenRouter, OpenAI, xAI/Grok, or your own OpenAI-compatible endpoint)
