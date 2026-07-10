@@ -24,10 +24,13 @@ binding = "ASSETS"
 # Container fronted by this Worker; worker.js routes /v1/* + /health to it. The
 # container is a Durable Object (required) using a SQLite class + migration.
 # pglite reseeds on boot (ephemeral) — correct for a public demo.
+# Single instance: the demo backend keeps state in the container's own ephemeral
+# pglite DB (reseeded on boot), so all requests must hit ONE instance for a
+# consistent view. A managed external DB would be needed to scale past one.
 [[containers]]
 class_name = "Backend"
 image = "./backend/Dockerfile"
-max_instances = 3
+max_instances = 1
 instance_type = "basic"
 name = "orbitops-backend"
 
