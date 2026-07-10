@@ -6,7 +6,7 @@
 [![No build step](https://img.shields.io/badge/build-none-blue.svg)](#quick-start)
 [![npm](https://img.shields.io/badge/npm-create--orbitops-red.svg)](https://www.npmjs.com/package/create-orbitops)
 
-### 🛰️ [**Try the live demo → orbitops.veter391.workers.dev**](https://orbitops.veter391.workers.dev)
+### 🛰️ [**Try the live demo**](https://orbitops.veter391.workers.dev)
 
 The public demo runs the whole thing — the static app **and** the Node backend —
 on a single Cloudflare deployment, so the conjunction watch, deorbit compliance
