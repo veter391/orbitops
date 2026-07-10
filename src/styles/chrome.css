@@ -584,6 +584,16 @@
   box-shadow: var(--shadow-xl);
 }
 
+/* Phone: tighten the backdrop, let the card use the full width, and stack the
+   action buttons so they're thumb-sized instead of cramped side-by-side.
+   Covers every generic .modal (proposal, AI-key, reject). */
+@media (max-width: 560px) {
+  .modal-backdrop { padding: var(--space-3); align-items: flex-end; }
+  .modal { max-width: 100%; max-height: 92vh; border-radius: var(--r-xl); }
+  .modal__actions { flex-direction: column-reverse; }
+  .modal__actions .btn { width: 100%; }
+}
+
 /* ============================================================
    PAGE ERROR
    ============================================================ */

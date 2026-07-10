@@ -1994,6 +1994,9 @@
   border-radius: 6px;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
 }
+@media (max-width: 560px) {
+  .ask-modal__panel { padding: 22px 18px 18px; }
+}
 .ask-modal__close {
   position: absolute;
   top: 16px;
