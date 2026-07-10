@@ -19,6 +19,7 @@ import { audit } from '../core/audit-log.js';
 import { info, success, error } from '../ui/toast.js';
 import { getStoredKey, setStoredKey, hasLiveAI } from '../core/openrouter-client.js';
 import { mountAmbient } from '../ui/ambient.js';
+import { hint } from '../ui/hint.js';
 import { esc } from '../utils.js';
 import { isConnected, BackendClient } from '../core/backend-client.js';
 
@@ -300,7 +301,11 @@ export async function mount(app) {
               <div class="gate-step__title">ALERT RECEIVED</div>
               <div class="gate-step__body">A conjunction or anomaly trips the watchline.
                 In this demo, alerts come from the five scripted scenarios above.
-                <span class="planned-chip planned-chip--connect" title="The live SSA/CDM triage queue is real — connect a backend (Settings → Connected Backend) or self-host to feed it.">CONNECT FOR LIVE FEED</span></div>
+                ${hint(
+                  '<span class="planned-chip planned-chip--connect">CONNECT FOR LIVE FEED</span>',
+                  'The live SSA/CDM triage queue is real — connect a backend (or self-host) to feed it.',
+                  { docRoute: '/docs/going-live', place: 'up', align: 'start' },
+                )}</div>
             </li>
             <li class="gate-step">
               <div class="gate-step__idx">02</div>

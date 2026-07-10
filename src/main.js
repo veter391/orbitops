@@ -430,6 +430,7 @@ async function main() {
     router.register('/docs/terms', lazy(pageLoaders['/docs']));
     router.register('/docs/privacy', lazy(pageLoaders['/docs']));
     router.register('/docs/data', lazy(pageLoaders['/docs']));
+    router.register('/docs/going-live', lazy(pageLoaders['/docs']));
 
     // Prewarm-on-intent — hovering a tab imports that page's module (and, for
     // 3D routes, three.js) before the click, so navigation feels instant. The

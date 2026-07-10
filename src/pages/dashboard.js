@@ -23,6 +23,7 @@ import { meanElements, propagateEci, geodetic, parseTle } from '../core/sgp4.js'
 import { sunEciDirection } from '../core/sun.js';
 import { mountAmbient } from '../ui/ambient.js';
 import { success, error } from '../ui/toast.js';
+import { hint } from '../ui/hint.js';
 import { esc } from '../utils.js';
 
 /**
@@ -171,7 +172,11 @@ export async function mount(app) {
               </div>
               <div class="dv2-note">
                 <p><span class="dv2-note__k dv2-note__k--real">Real</span>orbital elements, positions, altitude, inclination, period and launch years — from the CelesTrak catalog, propagated with SGP4.</p>
-                <p><span class="dv2-note__k dv2-note__k--sim">Simulated</span>per-satellite health telemetry and fuel — no public feed exists, so these are modelled and labelled as such wherever shown.</p>
+                <p>${hint(
+                  '<span class="dv2-note__k dv2-note__k--connect">Connect feed</span>',
+                  "No public feed exists for a satellite's internal health — connect your fleet's telemetry to stream it live. Modelled and labelled until then.",
+                  { docRoute: '/docs/going-live', place: 'down', align: 'start' },
+                )}per-satellite health telemetry and fuel — modelled from public orbital data until you connect a live feed.</p>
               </div>
             </div>
           </div>
@@ -190,7 +195,11 @@ export async function mount(app) {
           <div class="dv2-panel dv2-panel--cw hover-lift">
             <div class="dv2-panel__head">
               <h3 class="dv2-panel__title">Conjunction watch · awaiting SSA feed</h3>
-              <span class="dv2-hchip dv2-hchip--connect" title="This panel is real. Connect a backend (Settings → Connected Backend) or self-host to screen live conjunctions here.">CONNECT FOR LIVE</span>
+              ${hint(
+                '<span class="dv2-hchip dv2-hchip--connect">CONNECT FOR LIVE</span>',
+                'This panel is real. Connect a backend (or self-host) and screened conjunctions rank into this queue live.',
+                { docRoute: '/docs/going-live', place: 'down', align: 'end' },
+              )}
             </div>
 
             <div class="dv2-cw-scroll">
@@ -270,7 +279,11 @@ export async function mount(app) {
             <div class="dv2-deo-tracker">
               <div class="dv2-deo-tracker__head">
                 <span>PER-LICENSE COMPLIANCE TRACKER</span>
-                <span class="dv2-hchip dv2-hchip--connect" title="Connect a backend for real King-Hele natural-decay verdicts on your fleet. Per-license EOM deadline mapping is still planned.">CONNECT FOR LIVE</span>
+                ${hint(
+                  '<span class="dv2-hchip dv2-hchip--connect">CONNECT FOR LIVE</span>',
+                  'Connect a backend for real King-Hele natural-decay verdicts on your fleet. Per-license EOM deadline mapping is still planned.',
+                  { docRoute: '/docs/going-live', place: 'down', align: 'end' },
+                )}
               </div>
               <div class="dv2-cw-scroll">
                 <div class="dv2-deo-tracker__cols" aria-hidden="true">

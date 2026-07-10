@@ -51,6 +51,7 @@ export async function mount(app) {
               </div>
               ${sidebarGroupHtml('getting-started', 'Getting started', [
                 ['quickstart', 'Quick start'],
+                ['going-live', 'Going live · connect'],
                 ['arch', 'Architecture'],
                 ['accuracy', 'Data sources & accuracy'],
               ], 0)}
@@ -166,6 +167,7 @@ export async function mount(app) {
     '/docs/terms': 'terms',
     '/docs/privacy': 'privacy',
     '/docs/data': 'datapolicy',
+    '/docs/going-live': 'going-live',
   };
   openDoc(LEGAL_ROUTE_DOC[window.location.hash.slice(1)] || 'quickstart', { scroll: false });
 
@@ -378,6 +380,56 @@ npx serve .          # or any static file server</code></pre>
     </ul>
     <p>Open an issue or PR on
        <a href="${GITHUB_URL}" target="_blank" rel="noreferrer">GitHub</a>.</p>`,
+
+  'going-live': `<h1>Going live · connect a backend</h1>
+    <p>OrbitOps runs a lot for real with <strong>zero setup</strong>: the live
+       catalog, SGP4 propagation, conjunction &amp; Pc math, ground tracks, the
+       manoeuvre tools, the deorbit bands and the in-browser audit chain are all
+       real, computed on your machine. A few panels are marked
+       <span class="doc-chip doc-chip--connect">CONNECT FOR LIVE</span> — they are
+       real too, they just need a data source. Here is how to switch each on.</p>
+
+    <h2>1 · Connect a backend <span class="doc-chip doc-chip--connect">CONNECT FOR LIVE</span></h2>
+    <p>The open-source Node backend (<code>backend/</code>) powers the live
+       conjunction triage queue, per-license deorbit compliance verdicts, real
+       telemetry, and the tamper-evident HMAC audit chain. Run it locally with no
+       external database:</p>
+    <pre class="code"><code>cd backend
+cp .env.example .env
+npm install
+npm run migrate
+npm run dev            # API on http://localhost:8790</code></pre>
+    <p>Then open <strong>Settings → Connected Backend</strong>, set the URL
+       (<code>http://localhost:8790</code>), paste your API key, switch the mode to
+       <em>Connected</em>, and hit test. The dashboard's Conjunction Watch and
+       Compliance Tracker, and the Agent's live triage queue, immediately fill with
+       real backend output. Nothing about the offline demo changes — connected mode
+       is purely additive.</p>
+
+    <h2>2 · Stream your fleet's telemetry <span class="doc-chip doc-chip--connect">CONNECT FEED</span></h2>
+    <p>No public feed exists for a satellite's internal health (battery, thermal,
+       comms) — that data belongs to whoever operates the spacecraft. In the demo
+       those readings are modelled and labelled. To see <em>live</em> readings in
+       the cockpit, push your own fleet's telemetry to the connected backend:</p>
+    <pre class="code"><code>POST /v1/telemetry
+{ "satelliteId": "&lt;your-id&gt;", "ts": "&lt;iso&gt;", "metrics": { "batteryV": 27.4, ... } }</code></pre>
+    <p>When the backend reports readings for the selected object (matched by NORAD
+       id or name), the cockpit footer switches from the amber connect chip to a
+       green <strong>LIVE</strong> readout.</p>
+
+    <h2>3 · Turn on the AI advisory layer <span class="doc-chip doc-chip--connect">ADD A MODEL KEY</span></h2>
+    <p>The agent's reasoning is deterministic and runs with no key
+       (<strong>AI: MATH-ONLY</strong>). Add a model to layer an advisory note on
+       top — it never changes a computed decision. Open the Agent page's AI button
+       (or Settings → AI) and paste a key for any OpenAI-compatible provider:
+       OpenRouter, OpenAI, xAI (Grok), Groq, or your own endpoint. Free tiers work.
+       The key stays only in this browser and goes straight to your provider.</p>
+
+    <h2>Prefer the full stack?</h2>
+    <p>Self-host the whole thing — <code>npx create-orbitops@latest my-ops</code> —
+       and everything above is wired locally out of the box. See
+       <a href="#" data-doc="quickstart">Quick start</a> and
+       <a href="#" data-doc="contributing">Contributing</a>.</p>`,
 
   accuracy: `<h1>Data sources &amp; accuracy</h1>
     <p>OrbitOps shows real orbital data wherever a public source exists, and

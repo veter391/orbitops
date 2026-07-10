@@ -326,3 +326,92 @@ input[type="checkbox"]:focus-visible {
 .divider--grad {
   background: linear-gradient(90deg, transparent, var(--line-2) 50%, transparent);
 }
+
+/* ============================================================
+   HINT — styled, accessible tooltip (see src/ui/hint.js)
+   A hoverable/focusable label with a popover that explains the
+   state and links to the relevant docs. Replaces raw title="".
+   ============================================================ */
+.hint {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+  outline: none;
+}
+.hint__pop {
+  position: absolute;
+  width: max-content;
+  max-width: 260px;
+  padding: 10px 12px;
+  background: var(--ink-card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  z-index: var(--z-tooltip);
+}
+/* vertical side */
+.hint--up .hint__pop { bottom: calc(100% + 9px); }
+.hint--down .hint__pop { top: calc(100% + 9px); }
+/* horizontal anchor — keeps the popover on-screen for edge-aligned labels */
+.hint--center .hint__pop { left: 50%; transform: translateX(-50%) translateY(4px); }
+.hint--start .hint__pop { left: 0; }
+.hint--end .hint__pop { right: 0; }
+/* invisible bridge so the pointer can travel into the popover to click the link */
+.hint--up .hint__pop::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 10px; }
+.hint--down .hint__pop::after { content: ''; position: absolute; bottom: 100%; left: 0; right: 0; height: 10px; }
+/* arrow (points at the label) */
+.hint__pop::before {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: var(--ink-card);
+  border: 1px solid var(--line-2);
+  transform: rotate(45deg);
+}
+.hint--center .hint__pop::before { left: 50%; margin-left: -4.5px; }
+.hint--start .hint__pop::before { left: 16px; }
+.hint--end .hint__pop::before { right: 16px; }
+.hint--up .hint__pop::before { bottom: -5px; border-top: none; border-left: none; }
+.hint--down .hint__pop::before { top: -5px; border-bottom: none; border-right: none; }
+/* reveal */
+.hint:hover .hint__pop,
+.hint:focus .hint__pop,
+.hint:focus-within .hint__pop {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.hint--center:hover .hint__pop,
+.hint--center:focus .hint__pop,
+.hint--center:focus-within .hint__pop {
+  transform: translateX(-50%) translateY(0);
+}
+.hint__text { display: block; }
+.hint__link {
+  display: inline-block;
+  margin-top: 7px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+}
+.hint__link:hover { text-decoration: underline; }
+
+@media (max-width: 560px) {
+  .hint__pop { max-width: 220px; }
+}

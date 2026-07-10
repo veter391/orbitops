@@ -1912,6 +1912,7 @@
 }
 .docs-page .doc-chip--real { border-color: rgba(62,207,116,0.5); color: #3ECF74; }
 .docs-page .doc-chip--planned { border-color: rgba(224,181,104,0.5); color: #E0B568; }
+.docs-page .doc-chip--connect { border-color: rgba(240,184,96,0.5); color: #F0B860; background: rgba(240,184,96,0.10); }
 
 /* --------------------------------------------------------------------------
    PRICING — demand-validation state: "?" instead of a price + build-vote CTA

@@ -22,6 +22,7 @@ import { error as toastError } from './toast.js';
 import { loadConstellation } from '../core/live-constellation.js';
 import { propagateEci, geodetic, speedKms } from '../core/sgp4.js';
 import { sunEciDirection } from '../core/sun.js';
+import { hint } from './hint.js';
 import { esc } from '../utils.js';
 
 const EARTH_RADIUS = 6371; // km
@@ -892,7 +893,14 @@ export async function mountCockpit(host, THREE) {
       if (livePts) return liveTelemetryHtml(selected, livePts);
     }
     const seed = selected.noradId;
-    let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span><span class="cockpit-tlm__sub" title="No public per-satellite health feed exists — these values are modelled. Connect your fleet's telemetry (Settings → Connected Backend) or self-host to stream live readings here.">CONNECT FEED FOR LIVE</span></div><div class="cockpit-tlm__grid">`;
+    let html =
+      `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span>` +
+      hint(
+        '<span class="cockpit-tlm__sub">CONNECT FEED FOR LIVE</span>',
+        "No public per-satellite health feed exists — these values are modelled. Connect your fleet's telemetry to stream live readings here.",
+        { docRoute: '/docs/going-live', place: 'up', align: 'end' },
+      ) +
+      `</div><div class="cockpit-tlm__grid">`;
     for (const [label, metrics] of SUBSYS) {
       html += `<div class="cockpit-tlm__cell"><div class="cockpit-tlm__cell-head">${label}</div>`;
       metrics.forEach(([name, base, amp, unit], i) => {

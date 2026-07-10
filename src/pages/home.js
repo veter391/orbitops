@@ -35,6 +35,7 @@
 
 import { audit } from '../core/audit-log.js';
 import { mountAmbient } from '../ui/ambient.js';
+import { hint } from '../ui/hint.js';
 
 const CSS_ID = 'home-v3';
 const CSS_HREF = '/src/styles/home-v3.css';
@@ -629,15 +630,15 @@ function renderTemplate() {
         <div class="hv3-container">
           <header class="hv3-sectionhead" data-hv3-reveal>
             <p class="hv3-eyebrow">Full disclosure</p>
-            <h2 class="hv3-sectionhead__title">What's real.<br>What's simulated.</h2>
+            <h2 class="hv3-sectionhead__title">What's real.<br>What connects live.</h2>
             <p class="hv3-sectionhead__lede">
-              Most demos blur the line between data and decoration.
-              We draw it — in the product and on this page.
+              Most demos blur the line between data and decoration. We draw it —
+              and show you exactly how to switch the rest on.
             </p>
           </header>
           <div class="hv3-honesty__grid">
             <div class="hv3-honesty__col" data-hv3-reveal>
-              <span class="hv3-chip hv3-chip--real">Real</span>
+              <span class="hv3-chip hv3-chip--real">Real now</span>
               <ul>
                 <li>11,000+ tracked objects, pulled from the public CelesTrak catalog</li>
                 <li>SGP4 orbital propagation — the same standard the industry runs on</li>
@@ -646,11 +647,15 @@ function renderTemplate() {
               </ul>
             </div>
             <div class="hv3-honesty__col" data-hv3-reveal>
-              <span class="hv3-chip hv3-chip--sim">Simulated</span>
+              ${hint(
+                '<span class="hv3-chip hv3-chip--sim">Connect for live</span>',
+                'These are real features that light up when you connect a backend, bring a telemetry feed, or add a model key.',
+                { docRoute: '/docs/going-live', place: 'down', align: 'start' },
+              )}
               <ul>
-                <li>Per-satellite telemetry — fuel, power, thermal — is generated for the demo</li>
-                <li>AI agent scenarios are scripted demonstrations, labelled in-product</li>
-                <li>Approvals here command software, not hardware</li>
+                <li>Per-satellite telemetry — no public feed exists; connect your fleet to stream it live</li>
+                <li>The AI agent runs deterministic math now; add a model key for live LLM reasoning</li>
+                <li>Approvals here command the demo, not hardware — the real ops loop, in your browser</li>
               </ul>
             </div>
           </div>
