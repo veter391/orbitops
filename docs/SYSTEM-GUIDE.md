@@ -452,7 +452,8 @@ static assets. `wrangler.toml` declares the container + its Durable Object bindi
 `new_sqlite_classes` migration, `not_found_handling = "single-page-application"` (clean URLs)
 and `run_worker_first` for the API/health paths so they reach the container before the SPA
 fallback. The container's `AUDIT_HMAC_KEY` is a Cloudflare secret passed through the Backend
-class `envVars` (never in source). Live: **https://orbitops.veter391.workers.dev**.
+class `envVars` (never in source). Live: **https://orbitops.shypot.com** (custom domain;
+`orbitops.<sub>.workers.dev` stays up as a fallback URL).
 
 **The tradeoff to explain:** `max_instances = 1` + the container's embedded **pglite** DB is
 ephemeral (reseeded on cold boot), so the demo's data isn't durable — a deliberate choice to

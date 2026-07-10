@@ -13,8 +13,16 @@ main = "worker.js"
 # 2025+ compat date for the Containers runtime + the `cloudflare:workers` env import.
 compatibility_date = "2025-05-01"
 
-# Serve the repository as the static site. The SPA is hash-routed (#/route), so
-# every route resolves to index.html client-side — no SPA fallback rule needed.
+# Custom domain: serve the demo at orbitops.shypot.com (the owner's portfolio
+# zone). Cloudflare creates the DNS record + auto-provisions TLS. workers_dev is
+# kept enabled as a fallback URL (orbitops.<sub>.workers.dev).
+workers_dev = true
+routes = [
+  { pattern = "orbitops.shypot.com", custom_domain = true }
+]
+
+# Serve the repository as the static site. Routing is History-API based (clean
+# URLs, no #), so `not_found_handling` below resolves every deep path to the SPA.
 # `.assetsignore` keeps non-served files (backend, docs, tooling) out of the upload.
 [assets]
 directory = "."

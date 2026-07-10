@@ -256,7 +256,7 @@ async function handleAIProxy(request, env, ctx) {
         headers: {
           Authorization: `Bearer ${env.OPENROUTER_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://orbitops.workers.dev',
+          'HTTP-Referer': 'https://orbitops.shypot.com',
           'X-Title': 'OrbitOps (shared)',
         },
         body: JSON.stringify({
