@@ -304,7 +304,7 @@ export async function mount(app) {
                 ${hint(
                   '<span class="planned-chip planned-chip--connect">CONNECT FOR LIVE FEED</span>',
                   'The live SSA/CDM triage queue is real — connect a backend (or self-host) to feed it.',
-                  { docRoute: '/docs/going-live', place: 'up', align: 'start' },
+                  { docRoute: '/docs/going-live', place: 'up' },
                 )}</div>
             </li>
             <li class="gate-step">

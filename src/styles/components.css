@@ -329,19 +329,25 @@ input[type="checkbox"]:focus-visible {
 
 /* ============================================================
    HINT — styled, accessible tooltip (see src/ui/hint.js)
-   A hoverable/focusable label with a popover that explains the
-   state and links to the relevant docs. Replaces raw title="".
+   The trigger is inline; the popover is a PORTAL (position: fixed
+   on <body>, positioned by JS) so it never clips against a panel's
+   overflow or stacking context. Replaces raw title="".
    ============================================================ */
 .hint {
-  position: relative;
   display: inline-flex;
   cursor: help;
   outline: none;
 }
-.hint__pop {
-  position: absolute;
-  width: max-content;
-  max-width: 260px;
+.hint:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.hint-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  max-width: 264px;
   padding: 10px 12px;
   background: var(--ink-card);
   border: 1px solid var(--line-2);
@@ -359,59 +365,26 @@ input[type="checkbox"]:focus-visible {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(4px);
+  transform: translateY(3px);
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   z-index: var(--z-tooltip);
 }
-/* vertical side */
-.hint--up .hint__pop { bottom: calc(100% + 9px); }
-.hint--down .hint__pop { top: calc(100% + 9px); }
-/* horizontal anchor — keeps the popover on-screen for edge-aligned labels */
-.hint--center .hint__pop { left: 50%; transform: translateX(-50%) translateY(4px); }
-.hint--start .hint__pop { left: 0; }
-.hint--end .hint__pop { right: 0; }
-/* invisible bridge so the pointer can travel into the popover to click the link */
-.hint--up .hint__pop::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 10px; }
-.hint--down .hint__pop::after { content: ''; position: absolute; bottom: 100%; left: 0; right: 0; height: 10px; }
-/* arrow (points at the label) */
-.hint__pop::before {
-  content: '';
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  background: var(--ink-card);
-  border: 1px solid var(--line-2);
-  transform: rotate(45deg);
-}
-.hint--center .hint__pop::before { left: 50%; margin-left: -4.5px; }
-.hint--start .hint__pop::before { left: 16px; }
-.hint--end .hint__pop::before { right: 16px; }
-.hint--up .hint__pop::before { bottom: -5px; border-top: none; border-left: none; }
-.hint--down .hint__pop::before { top: -5px; border-bottom: none; border-right: none; }
-/* reveal */
-.hint:hover .hint__pop,
-.hint:focus .hint__pop,
-.hint:focus-within .hint__pop {
+.hint-pop.is-shown {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transform: translateY(0);
 }
-.hint--center:hover .hint__pop,
-.hint--center:focus .hint__pop,
-.hint--center:focus-within .hint__pop {
-  transform: translateX(-50%) translateY(0);
-}
-.hint__text { display: block; }
-.hint__link {
+.hint-pop__text { display: block; }
+.hint-pop__link {
   display: inline-block;
   margin-top: 7px;
   color: var(--accent);
   font-weight: 600;
   font-size: 12px;
 }
-.hint__link:hover { text-decoration: underline; }
+.hint-pop__link:hover { text-decoration: underline; }
 
 @media (max-width: 560px) {
-  .hint__pop { max-width: 220px; }
+  .hint-pop { max-width: 220px; }
 }

@@ -175,7 +175,7 @@ export async function mount(app) {
                 <p>${hint(
                   '<span class="dv2-note__k dv2-note__k--connect">Connect feed</span>',
                   "No public feed exists for a satellite's internal health — connect your fleet's telemetry to stream it live. Modelled and labelled until then.",
-                  { docRoute: '/docs/going-live', place: 'down', align: 'start' },
+                  { docRoute: '/docs/going-live', place: 'down' },
                 )}per-satellite health telemetry and fuel — modelled from public orbital data until you connect a live feed.</p>
               </div>
             </div>
@@ -198,7 +198,7 @@ export async function mount(app) {
               ${hint(
                 '<span class="dv2-hchip dv2-hchip--connect">CONNECT FOR LIVE</span>',
                 'This panel is real. Connect a backend (or self-host) and screened conjunctions rank into this queue live.',
-                { docRoute: '/docs/going-live', place: 'down', align: 'end' },
+                { docRoute: '/docs/going-live', place: 'down' },
               )}
             </div>
 
@@ -282,7 +282,7 @@ export async function mount(app) {
                 ${hint(
                   '<span class="dv2-hchip dv2-hchip--connect">CONNECT FOR LIVE</span>',
                   'Connect a backend for real King-Hele natural-decay verdicts on your fleet. Per-license EOM deadline mapping is still planned.',
-                  { docRoute: '/docs/going-live', place: 'down', align: 'end' },
+                  { docRoute: '/docs/going-live', place: 'down' },
                 )}
               </div>
               <div class="dv2-cw-scroll">

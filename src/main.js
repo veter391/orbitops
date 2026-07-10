@@ -19,6 +19,7 @@ import { info } from './ui/toast.js';
 import { mountCursorSat } from './ui/cursor-sat.js';
 import { isAppMode, hiddenInApp, resolveInitialRoute } from './core/app-config.js';
 import { maybeShowOnboarding } from './ui/onboarding.js';
+import { initHints } from './ui/hint.js';
 import { getBackendConfig, setBackendConfig } from './core/backend-client.js';
 import { esc } from './utils.js';
 
@@ -492,6 +493,9 @@ async function main() {
     router.guard = resolveInitialRoute;
 
     if (app) router.init(app);
+
+    // Portal tooltips (see ui/hint.js) — one global controller for every .hint.
+    initHints();
 
     // Public-demo live backend: if a same-origin backend answers /health and the
     // operator hasn't chosen a mode, switch to connected mode (demo tenant) so the

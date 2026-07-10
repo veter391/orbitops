@@ -898,7 +898,7 @@ export async function mountCockpit(host, THREE) {
       hint(
         '<span class="cockpit-tlm__sub">CONNECT FEED FOR LIVE</span>',
         "No public per-satellite health feed exists — these values are modelled. Connect your fleet's telemetry to stream live readings here.",
-        { docRoute: '/docs/going-live', place: 'up', align: 'end' },
+        { docRoute: '/docs/going-live', place: 'up' },
       ) +
       `</div><div class="cockpit-tlm__grid">`;
     for (const [label, metrics] of SUBSYS) {

@@ -650,7 +650,7 @@ function renderTemplate() {
               ${hint(
                 '<span class="hv3-chip hv3-chip--sim">Connect for live</span>',
                 'These are real features that light up when you connect a backend, bring a telemetry feed, or add a model key.',
-                { docRoute: '/docs/going-live', place: 'down', align: 'start' },
+                { docRoute: '/docs/going-live', place: 'down' },
               )}
               <ul>
                 <li>Per-satellite telemetry — no public feed exists; connect your fleet to stream it live</li>
