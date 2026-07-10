@@ -24,8 +24,31 @@
  * ranks free text models, and falls back through three layers if that fetch
  * itself fails -- see the docstring on pickFreeModels for the exact order.
  *
+ * LIVE BACKEND (Cloudflare Containers): the open-source Node backend runs in a
+ * container fronted by this same Worker. Requests to `/v1/*` and `/health` (incl.
+ * WebSocket upgrades) are forwarded to the container; the container reseeds its
+ * embedded pglite DB on boot (ephemeral, correct for a public demo). The
+ * container's AUDIT_HMAC_KEY is a Worker secret forwarded via the class `envVars`.
+ *
  * @module worker
  */
+
+import { Container, getContainer } from '@cloudflare/containers';
+import { env } from 'cloudflare:workers';
+
+/**
+ * The OrbitOps backend container. Fastify listens on 0.0.0.0:8790 inside the
+ * image (see backend/Dockerfile). Scales to zero after 10m idle. The audit-chain
+ * secret is passed into the container's process env (config refuses a weak/dev
+ * key in production).
+ */
+export class Backend extends Container {
+  defaultPort = 8790;
+  sleepAfter = '10m';
+  envVars = {
+    AUDIT_HMAC_KEY: env.AUDIT_HMAC_KEY,
+  };
+}
 
 // General instruct models tried FIRST (in this order) when still free. The
 // agent pipeline asks each model for a small, strict JSON object (an
@@ -76,6 +99,14 @@ export default {
 
     if (url.pathname === '/api/ai' && request.method === 'POST') {
       return handleAIProxy(request, env, ctx);
+    }
+
+    // Live backend: forward the API + health + WebSocket upgrades to the
+    // container. getContainer(...).fetch() proxies to Fastify (WS included).
+    // Only present when the container binding is configured (live demo build);
+    // a plain static deploy without the binding falls through to assets.
+    if ((url.pathname.startsWith('/v1/') || url.pathname === '/health') && env.BACKEND) {
+      return getContainer(env.BACKEND).fetch(request);
     }
 
     // Everything else: serve the static site as normal.

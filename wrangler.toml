@@ -10,7 +10,8 @@
 
 name = "orbitops"
 main = "worker.js"
-compatibility_date = "2024-11-01"
+# 2025+ compat date for the Containers runtime + the `cloudflare:workers` env import.
+compatibility_date = "2025-05-01"
 
 # Serve the repository as the static site. The SPA is hash-routed (#/route), so
 # every route resolves to index.html client-side — no SPA fallback rule needed.
@@ -18,6 +19,25 @@ compatibility_date = "2024-11-01"
 [assets]
 directory = "."
 binding = "ASSETS"
+
+# LIVE BACKEND — the Node backend (backend/Dockerfile) runs in a Cloudflare
+# Container fronted by this Worker; worker.js routes /v1/* + /health to it. The
+# container is a Durable Object (required) using a SQLite class + migration.
+# pglite reseeds on boot (ephemeral) — correct for a public demo.
+[[containers]]
+class_name = "Backend"
+image = "./backend/Dockerfile"
+max_instances = 3
+instance_type = "basic"
+name = "orbitops-backend"
+
+[[durable_objects.bindings]]
+name = "BACKEND"
+class_name = "Backend"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Backend"]
 
 # Optional: a per-IP rate limit on the shared /api/ai proxy so the free key can't
 # be drained. The worker degrades gracefully if this binding is absent, so it is
