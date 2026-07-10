@@ -1,0 +1,37 @@
+{
+  "name": "create-orbitops",
+  "version": "0.1.0",
+  "description": "Scaffold a self-hosted OrbitOps — the open-source, human-in-the-loop mission-control cockpit for satellite constellations.",
+  "type": "module",
+  "bin": {
+    "create-orbitops": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": [
+    "orbitops",
+    "satellite",
+    "constellation",
+    "mission-control",
+    "scaffold",
+    "create",
+    "sgp4",
+    "space"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veter391/orbitops.git",
+    "directory": "create-orbitops"
+  },
+  "homepage": "https://github.com/veter391/orbitops#readme",
+  "bugs": {
+    "url": "https://github.com/veter391/orbitops/issues"
+  },
+  "author": "OrbitOps contributors"
+}

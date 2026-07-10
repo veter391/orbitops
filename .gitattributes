@@ -1,0 +1,3 @@
+# Keep the create-orbitops CLI as LF so its `#!/usr/bin/env node` shebang works
+# after a clone on Unix, regardless of the committer's platform / autocrlf.
+create-orbitops/index.js text eol=lf
