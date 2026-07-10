@@ -284,7 +284,7 @@ npm test             # run the full node:test suite (in-memory pglite, no extern
 npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 ```
 
-### The 155 tests, grouped by file
+### The 161 tests, grouped by file
 
 | File | What it proves | Tests |
 |---|---|---|
@@ -418,15 +418,91 @@ The CI workflow (`.github/workflows/backend-ci.yml`) runs `npm ci`, `npm run typ
 
 ---
 
-## 10. What's next
+## 10. What's shipped (was "what's next" — now largely done)
 
-**Done so far:** Track A (hardening), Track B (the full multi-agent core — B1 graph, B2 real Pc + MAD anomaly math, B3 burn sizing + generator-critic, B4 agent memory, B5 evals + CI gate), Track C (CDM ingestion), and Track D (connected mode: browser client, settings, live triage, WebSocket streaming). A team code + security review of Tracks C–D found and fixed the confirmed issues; the security review found no vulnerabilities.
+**Done + tested:** Track A (hardening), Track B (multi-agent core — graph, real Pc + MAD
+anomaly, burn sizing + generator-critic, agent memory, evals + CI gate), Track C (CDM
+ingestion), Track D (connected mode), **Track E** (flagship full-covariance Pc validated
+vs NASA CARA + ranked avoidance burns + CDM RTN→ECI covariance), **Track H** (durable
+LangGraph checkpointer + native HITL `interrupt`/resume across a simulated restart +
+four-eyes countersign + portable similarity memory), **Track I** (Postgres RLS, file-backed
+secrets, ESLint+CI), plus the FCC 5-year deorbit engine, on-call escalation, conjunction
+noise auto-dismiss, OMM ingest, live telemetry in the cockpit, the CDM-upload UI and the
+modify-proposal HITL flow. Team code+security reviews on each batch; findings fixed.
 
-Remaining path toward a production deployment:
+The items that section 10 used to list as "next" (HITL interrupt, checkpointer, live
+telemetry, deployment) are now built — see section 11.
 
-- **HITL `interrupt` in the graph** — a native LangGraph pause/resume (with the durable Postgres checkpointer) so the graph genuinely suspends mid-run awaiting approval, instead of finishing and waiting for a separate approve call. Requires the checkpointer that was deliberately deferred (section 4.1).
-- **pgvector semantic memory (B4b)** — an env-gated vector-search layer so recall is semantic, not just structured over recent rows.
-- **Live telemetry in the browser** — extend connected mode's WebSocket subscription to stream telemetry into the cockpit/dashboard (the client and the `telemetry` stream event already exist; this wires them to those screens).
-- **Real TLE/ephemeris feeds** — wire the settings "Data Sources" section (CelesTrak is real; Space-Track/N2YO proxies are planned) to feed the live catalog.
-- **Deployment & scale** — Cloudflare/edge or container deploy with managed Postgres (TimescaleDB hypertable for telemetry), a shared event bus/rate-limit store (Redis) if multi-instance, secrets management for `AUDIT_HMAC_KEY`, and CI wired to run `npm test` + `npm run evals` + `tsc` + `eslint` on every PR.
-- **Operator UX polish** — CDM upload UI (paste/drag a `.cdm`), modify-proposal flow in the live triage panel, and an audit-export UX in connected mode.
+---
+
+## 11. Shipping: one-Cloudflare deployment + open-source release (2026-07)
+
+This is the last-mile work that turned the tested foundation into a **live, deployed,
+one-command-installable** product. (This is exactly the part that wasn't yet written into
+sections 1-10.)
+
+### 11.1 One Cloudflare deployment (static app + Node backend together)
+The whole system runs as a **single Cloudflare deployment** — no second vendor, no external
+database for the demo. A single **Cloudflare Worker** (`worker.js`) serves the static app
+via **Workers Static Assets** and fronts the Node backend running in a **Cloudflare
+Container** (`backend/Dockerfile`, Durable-Object-backed): it routes `/v1/*`, `/health`, and
+WebSocket upgrades to the container (`getContainer(env.BACKEND).fetch(request)`), proxies
+`/api/ai` to OpenRouter with a server-only key, and lets everything else fall through to
+static assets. `wrangler.toml` declares the container + its Durable Object binding + a
+`new_sqlite_classes` migration, `not_found_handling = "single-page-application"` (clean URLs)
+and `run_worker_first` for the API/health paths so they reach the container before the SPA
+fallback. The container's `AUDIT_HMAC_KEY` is a Cloudflare secret passed through the Backend
+class `envVars` (never in source). Live: **https://orbitops.veter391.workers.dev**.
+
+**The tradeoff to explain:** `max_instances = 1` + the container's embedded **pglite** DB is
+ephemeral (reseeded on cold boot), so the demo's data isn't durable — a deliberate choice to
+keep it one-Cloudflare. A real deployment points `DATABASE_URL` at managed Postgres (the `Db`
+interface already switches to `pg.Pool`), where data persists and it scales past one instance
+(a shared event bus/rate-limit store — Redis — would follow, as section 3.7 notes).
+
+### 11.2 Clean URLs (History API + SPA fallback)
+The hash router (`#/route`) was migrated to the **History API**: `navigate()` pushState +
+resolve, `resolve()` reads `location.pathname`, back/forward via `popstate`, the route guard
+uses `replaceState`. Deep links and refreshes work because Cloudflare serves `index.html`
+for any non-file path (`not_found_handling: single-page-application`), while `run_worker_first`
+keeps `/v1/*` + `/health` hitting the container, not the SPA fallback.
+
+### 11.3 Auto-connected live demo + flag-gated seed
+So the public demo shows real backend output (not empty panels), the frontend
+(`autoConnectDemoBackend` in `main.js`) probes same-origin `/health` on load and, if a backend
+answers, switches to connected mode with the seeded demo tenant. A flag-gated
+`DEMO_SEED` (`backend/src/demo-seed.ts`, off by default, on only via the container's `envVars`)
+runs the **real agent** on a few plausible close approaches at boot, so the Conjunction Watch
+shows genuine Pc-screened proposals and the Compliance tracker shows real King-Hele verdicts.
+Self-host/prod never seeds. No-op in app/self-host mode and on a plain static host (fail-safe).
+
+### 11.4 `create-orbitops` — one-command self-host (published to npm)
+A zero-dependency npm scaffolder (`npm create orbitops@latest my-ops` / `npx create-orbitops`):
+`git clone --depth 1` of the public repo, then flip the compile-time `APP_MODE` to a self-host
+build and strip `.git`/`internal`. **Published to npm** and verified end-to-end via
+`npx create-orbitops@latest`. Open-core split lives in one repo behind an `APP_MODE` runtime
+flag: SITE mode = the public marketing demo (landing + pricing visible); APP mode (self-host)
+hides marketing and boots straight to the dashboard.
+
+### 11.5 Honesty/UX pass (owner review)
+The demo's "not-fully-real" states were relabelled from "SIMULATED"/"PLANNED"-as-fake to
+honest amber **"CONNECT FOR LIVE"** states, each with a **portal tooltip** (`src/ui/hint.js`
+— a `position: fixed` popover on `<body>`, so it never clips inside a panel's overflow) that
+explains the state and links to a new docs article, `#/docs/going-live` (how to connect a
+backend, stream a telemetry feed, add a model key). Genuinely-unbuilt features keep "PLANNED".
+The landing "What's real / What connects live" section, an open-source contributor CTA, "?"
+help tooltips on technical settings, mobile-responsive modals, and a corrected docs claim
+(the backend is real Node/TS, not "planned/Go") all landed in this pass.
+
+### 11.6 Security fix from this pass
+The adversarial audit caught a real **high**: the public demo auto-ships `demo-key` to every
+browser, and migration 011 had seeded the demo tenant as `admin`, so any visitor could read
+the product-feedback table (`GET /v1/feedback`, admin-gated). Migration `012_demo_operator_role.sql`
+downgrades the demo operator to `operator`; verified the endpoint now returns 403.
+
+### 11.7 What genuinely remains (Horizon 2 — hosted SaaS, mostly business/vendor)
+Managed Postgres/TimescaleDB for durable multi-tenant data · Redis-backed event bus/rate-limit
+for multi-instance · SSO/RBAC for a cloud tier · SOC 2 (process) · real paid SSA feeds
+(Space-Track / LeoLabs / 18 SDS) · ground-contact/pass scheduling · a pilot customer. The
+code seams (flags, the `Db` interface, the transport-agnostic event bus, the auth choke point)
+are already in place — see `docs/INFRA.md`.
