@@ -1267,6 +1267,13 @@
   vertical-align: middle;
 }
 
+/* Actionable amber variant — the feature is real and lights up on connect. */
+.agent-page .planned-chip--connect {
+  color: var(--warn);
+  border-color: var(--warn-soft);
+  background: var(--warn-soft);
+}
+
 .agent-page .gate-flow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

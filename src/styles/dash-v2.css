@@ -970,6 +970,15 @@
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Actionable amber — this panel is REAL and lights up the moment a backend is
+   connected (Settings → Connected Backend) or you self-host. Distinct from
+   --planned (not-yet-built): filled tint reads as "do this to activate". */
+.dv2-hchip--connect {
+  color: #F0B860;
+  border-color: rgba(240, 184, 96, 0.5);
+  background: rgba(240, 184, 96, 0.10);
+}
+
 /* --- D1 · conjunction watch ------------------------------------------------ */
 
 .dv2-cw-scroll { overflow-x: auto; }

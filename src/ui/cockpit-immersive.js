@@ -313,7 +313,7 @@ export async function mountCockpit(host, THREE) {
 
         <aside class="cockpit-side cockpit-side--right">
           <div class="cockpit-side__head">
-            <span class="cockpit-side__label">AI AGENT · DEMO</span>
+            <span class="cockpit-side__label" title="Scripted flight-ops scenarios over real orbital math. Connect a backend (Settings) for the live triage queue on the Agent page.">AI AGENT · SCENARIOS</span>
             <span class="cockpit-side__value">${SCENARIOS.length} scenarios</span>
           </div>
           <div class="cockpit-scenarios" id="cockpitScenarios"></div>
@@ -892,7 +892,7 @@ export async function mountCockpit(host, THREE) {
       if (livePts) return liveTelemetryHtml(selected, livePts);
     }
     const seed = selected.noradId;
-    let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span><span class="cockpit-tlm__sub" title="No public per-satellite telemetry feed exists; these values are modelled.">SIMULATED TELEMETRY</span></div><div class="cockpit-tlm__grid">`;
+    let html = `<div class="cockpit-tlm__head"><span class="cockpit-tlm__sat">${esc(selected.name)}</span><span class="cockpit-tlm__sub" title="No public per-satellite health feed exists — these values are modelled. Connect your fleet's telemetry (Settings → Connected Backend) or self-host to stream live readings here.">CONNECT FEED FOR LIVE</span></div><div class="cockpit-tlm__grid">`;
     for (const [label, metrics] of SUBSYS) {
       html += `<div class="cockpit-tlm__cell"><div class="cockpit-tlm__cell-head">${label}</div>`;
       metrics.forEach(([name, base, amp, unit], i) => {

@@ -133,7 +133,7 @@ export async function mount(app) {
             </span>
             <button class="agent-status-pill ai-settings-btn" id="aiSettingsBtn" title="Configure live AI (OpenRouter)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              <span id="aiSettingsLabel">AI: SIMULATED</span>
+              <span id="aiSettingsLabel">AI: MATH-ONLY</span>
             </button>
           </div>
           <h1 class="page-header__title">The AI agent.</h1>
@@ -299,8 +299,8 @@ export async function mount(app) {
               <div class="gate-step__idx">01</div>
               <div class="gate-step__title">ALERT RECEIVED</div>
               <div class="gate-step__body">A conjunction or anomaly trips the watchline.
-                In this demo, alerts come from the five simulated scenarios above.
-                Live SSA feed <span class="planned-chip">PLANNED</span></div>
+                In this demo, alerts come from the five scripted scenarios above.
+                <span class="planned-chip planned-chip--connect" title="The live SSA/CDM triage queue is real — connect a backend (Settings → Connected Backend) or self-host to feed it.">CONNECT FOR LIVE FEED</span></div>
             </li>
             <li class="gate-step">
               <div class="gate-step__idx">02</div>
@@ -1063,13 +1063,18 @@ function mountDepthGrid(grid) {
 /** @param {HTMLElement} app */
 function updateAILabel(app) {
   const label = app.querySelector('#aiSettingsLabel');
-  const btn = app.querySelector('#aiSettingsBtn');
+  const btn = /** @type {HTMLElement|null} */ (app.querySelector('#aiSettingsBtn'));
   const live = hasLiveAI();
   // Provider-agnostic now (any OpenAI-compatible endpoint), so no vendor name.
-  if (label) label.textContent = live ? 'AI: LIVE' : 'AI: SIMULATED';
+  // Keyless state is "MATH-ONLY": the deterministic engine IS running; only the
+  // optional LLM advisory layer is off — not "simulated/fake".
+  if (label) label.textContent = live ? 'AI: LIVE' : 'AI: MATH-ONLY';
   if (btn) {
     btn.classList.toggle('is-live', live);
     btn.classList.toggle('is-sim', !live);
+    btn.title = live
+      ? 'Live model connected — the AI advisory layer is on.'
+      : 'Deterministic reasoning is already running. Add a model key (any provider) or self-host to turn on the AI advisory layer.';
   }
 }
 
@@ -1091,8 +1096,8 @@ function openAISettingsModal(app) {
     <div class="modal modal--small">
       <div class="modal__header">
         <div>
-          <div class="modal__eyebrow">Live AI · OpenRouter</div>
-          <h3 class="modal__title">Bring your own API key</h3>
+          <div class="modal__eyebrow">Live AI</div>
+          <h3 class="modal__title">Bring your own model</h3>
         </div>
         <button class="proposal__close" id="aiModalClose">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -1100,19 +1105,20 @@ function openAISettingsModal(app) {
       </div>
       <div class="modal__body">
         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 12px;">
-          OrbitOps is a static site with no backend — your key is stored only in this browser's
-          <code>localStorage</code> and sent directly to <code>openrouter.ai</code>, never to any OrbitOps server
-          (there isn't one). Get a free key at
-          <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noreferrer">openrouter.ai/settings/keys</a>.
+          Paste any provider key — OpenRouter, OpenAI, xAI/Grok, Groq, or any
+          OpenAI-compatible endpoint (free tiers work). It stays only on this
+          device and goes straight to your provider, never to us. Want no browser
+          keys at all? Self-host the open source.
         </p>
         <label class="modal__field">
-          <span>OpenRouter API key</span>
+          <span>Provider API key</span>
           <input type="password" id="aiKeyInput" class="modal__textarea" style="min-height:auto; padding:10px 12px;"
-            placeholder="sk-or-v1-…" value="${getStoredKey() ? '••••••••••••••••••••••••' : ''}" autocomplete="off" />
+            placeholder="sk-…  ·  sk-or-…  ·  xai-…  ·  gsk_…" value="${getStoredKey() ? '••••••••••••••••••••••••' : ''}" autocomplete="off" />
+          <span class="modal__hint">New here? <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">Get a free OpenRouter key →</a></span>
         </label>
         <div class="modal__actions">
           <button class="btn btn--ghost" id="aiKeyClear">Clear key</button>
-          <button class="btn btn--primary" id="aiKeySave">Save &amp; enable live AI</button>
+          <button class="btn btn--primary" id="aiKeySave">Save &amp; enable</button>
         </div>
       </div>
     </div>

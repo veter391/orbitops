@@ -2723,6 +2723,14 @@
   color: var(--text-mute);
   letter-spacing: 0.06em;
 }
+.modal__hint {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--text-mute);
+}
+.modal__hint a { color: var(--accent); }
+.modal__hint a:hover { text-decoration: underline; }
 .modal__textarea {
   width: 100%;
   padding: 10px 12px;

@@ -190,7 +190,7 @@ export async function mount(app) {
           <div class="dv2-panel dv2-panel--cw hover-lift">
             <div class="dv2-panel__head">
               <h3 class="dv2-panel__title">Conjunction watch · awaiting SSA feed</h3>
-              <span class="dv2-hchip dv2-hchip--planned">PLANNED</span>
+              <span class="dv2-hchip dv2-hchip--connect" title="This panel is real. Connect a backend (Settings → Connected Backend) or self-host to screen live conjunctions here.">CONNECT FOR LIVE</span>
             </div>
 
             <div class="dv2-cw-scroll">
@@ -234,10 +234,11 @@ export async function mount(app) {
               <div class="dv2-cw-empty__txt">
                 <div class="dv2-cw-empty__title">No CDM feed connected</div>
                 <p>
-                  Live SSA / CDM ingestion (Space-Track) is planned. Once
-                  connected, screened conjunctions rank into this queue by collision
+                  Connect a backend (Settings → Connected Backend) or self-host,
+                  and screened conjunctions rank into this queue by collision
                   probability — noise auto-dismissed, severity railed, every
-                  approve/dismiss written to the hash-chained audit log.
+                  approve/dismiss written to the hash-chained audit log. The
+                  screening engine is real; it just needs a feed.
                 </p>
                 <div class="dv2-cw-empty__meta">
                   <span class="dv2-hchip dv2-hchip--preview">DESIGN PREVIEW</span>
@@ -269,7 +270,7 @@ export async function mount(app) {
             <div class="dv2-deo-tracker">
               <div class="dv2-deo-tracker__head">
                 <span>PER-LICENSE COMPLIANCE TRACKER</span>
-                <span class="dv2-hchip dv2-hchip--planned">PLANNED</span>
+                <span class="dv2-hchip dv2-hchip--connect" title="Connect a backend for real King-Hele natural-decay verdicts on your fleet. Per-license EOM deadline mapping is still planned.">CONNECT FOR LIVE</span>
               </div>
               <div class="dv2-cw-scroll">
                 <div class="dv2-deo-tracker__cols" aria-hidden="true">
@@ -285,8 +286,8 @@ export async function mount(app) {
               </div>
               <p class="dv2-deo-tracker__note">
                 Post-2024 FCC licenses must deorbit within 5 years of end of
-                mission. Decay-vs-deadline tracking and the hash-chained
-                evidence export ship with the backend — the row above is the
+                mission. Decay-vs-deadline tracking and the hash-chained evidence
+                export come live when you connect a backend — the row above is the
                 final layout, holding no numbers until they are real.
               </p>
             </div>
