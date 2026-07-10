@@ -65,6 +65,7 @@ import { PROVIDERS, getLlmConfig, setLlmConfig } from '../core/llm-provider.js';
 import { MODEL_ROUTING, modelsFor } from '../core/model-routing.js';
 import { audit } from '../core/audit-log.js';
 import { isAppMode, HOSTED_DEMO_URL } from '../core/app-config.js';
+import { hint } from '../ui/hint.js';
 import {
   getBackendConfig,
   setBackendConfig,
@@ -331,11 +332,23 @@ function panel(id, idx, title, chips, bodyHTML) {
  * @param {string} controlHTML
  * @param {{ chip?: string, disabled?: boolean }} [opts]
  */
-function row(label, help, controlHTML, { chip: rowChip = '', disabled = false } = {}) {
+/**
+ * @param {string} label
+ * @param {string} help
+ * @param {string} controlHTML
+ * @param {{chip?: string, disabled?: boolean, tip?: {text: string, doc?: string}}} [opts]
+ *   `tip` renders a small "?" affordance after the label whose hover popover
+ *   explains the setting (and optionally links to the docs) — for the genuinely
+ *   technical options a first-time operator might not recognise.
+ */
+function row(label, help, controlHTML, { chip: rowChip = '', disabled = false, tip } = {}) {
+  const q = tip
+    ? hint('<span class="set-q" aria-hidden="true">?</span>', tip.text, { docRoute: tip.doc || '', place: 'up' })
+    : '';
   return `
     <div class="set-row ${disabled ? 'is-disabled' : ''}">
       <div class="set-row__meta">
-        <span class="set-row__label">${label} ${rowChip}</span>
+        <span class="set-row__label">${label} ${rowChip}${q}</span>
         ${help ? `<span class="set-row__help">${help}</span>` : ''}
       </div>
       <div class="set-row__control">${controlHTML}</div>
@@ -440,7 +453,13 @@ function sectionAI() {
       'Model routing profile',
       'Selects which fallback chain each agent task uses. <code>balanced</code> and <code>frontier</code> are yours to fill in <code>core/model-routing.js</code> — we do not invent paid model IDs.',
       profileSelect,
-      { chip: chip('real') },
+      {
+        chip: chip('real'),
+        tip: {
+          text: 'A profile is an ordered list of models the agent tries per task. "free" works out of the box; "balanced"/"frontier" are empty for you to fill with your own paid model IDs.',
+          doc: '/docs/going-live',
+        },
+      },
     )}
 
     ${row(
@@ -473,7 +492,12 @@ function sectionAI() {
           class="set-range" aria-label="Agent temperature" />
         <output id="aiTempOut" class="set-slider__out">${Number(temp).toFixed(2)}</output>
       </div>`,
-      { chip: chip('real') },
+      {
+        chip: chip('real'),
+        tip: {
+          text: 'How random the model is allowed to be. 0 = the same answer every time (deterministic); higher = more varied wording. The deterministic math is the source of truth either way.',
+        },
+      },
     )}
 
     ${row(
@@ -921,7 +945,13 @@ function sectionBackend() {
       'Backend URL',
       `Origin of your OrbitOps backend, e.g. <code>${esc(DEFAULT_BACKEND_URL)}</code> for a local dev server. A cross-origin backend must allow this page's origin via its <code>CORS_ORIGINS</code> env.`,
       urlField,
-      { chip: chip('real') },
+      {
+        chip: chip('real'),
+        tip: {
+          text: 'Connecting a backend turns the demo panels (conjunction watch, compliance, telemetry, live triage) into real data. Run it locally in a minute — no external database.',
+          doc: '/docs/going-live',
+        },
+      },
     )}
 
     ${row(

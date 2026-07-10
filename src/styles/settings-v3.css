@@ -385,6 +385,26 @@
   color: var(--s-text);
 }
 
+/* "?" help affordance next to a technical setting (wrapped by .hint). */
+.set-q {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--s-hairline-2, rgba(255, 255, 255, 0.2));
+  color: var(--s-text-2, #9aa3ad);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+.hint:hover .set-q,
+.hint:focus .set-q {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .set-row__help {
   font-size: 12.5px;
   line-height: 1.55;
