@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { migrate } from './db/migrate.js';
 import { enableRls } from './db/rls.js';
 import { buildServer } from './server.js';
+import { seedDemo } from './demo-seed.js';
 import { initTracing, shutdownTracing } from './observability.js';
 
 // Tracing first so all subsequent work is instrumented (no-op without endpoint).
@@ -16,6 +17,16 @@ if (config.DB_RLS) {
   app.log.info('row-level security enabled');
 }
 app.log.info({ applied, tracing, rls: config.DB_RLS }, 'migrations up to date');
+
+// Public-demo seed: a few real agent proposals so the demo isn't empty. Flag-
+// gated (DEMO_SEED) and idempotent — never runs on a real self-host/prod deploy.
+if (config.DEMO_SEED) {
+  try {
+    await seedDemo(app);
+  } catch (err) {
+    app.log.warn({ err }, 'demo seed failed');
+  }
+}
 
 // Telemetry retention: purge on boot, then hourly. Disabled at 0 (keep forever);
 // a TimescaleDB deployment replaces this with add_retention_policy().

@@ -412,7 +412,7 @@ function shellHTML() {
             <div class="tool-stage">
               <div class="tool-stage__head">
                 <span class="stage-label">BURN SOLUTION</span>
-                <span class="demo-chip">FIRST-ORDER ESTIMATE · DEMO</span>
+                <span class="demo-chip">FIRST-ORDER ESTIMATE</span>
               </div>
               <div class="tool-readout">
                 <div class="tool-readout__item"><div class="tool-readout__label">Delta-v · m/s</div><div class="tool-readout__value" id="rbDv">—</div></div>

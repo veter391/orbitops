@@ -47,6 +47,9 @@ export class Backend extends Container {
   sleepAfter = '10m';
   envVars = {
     AUDIT_HMAC_KEY: env.AUDIT_HMAC_KEY,
+    // This is the public demo deployment — seed a few real proposals on boot so
+    // the Conjunction Watch / triage aren't empty. Self-host builds omit this.
+    DEMO_SEED: 'true',
   };
 }
 

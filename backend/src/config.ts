@@ -79,6 +79,15 @@ const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * Seed the demo tenant with a few real agent-generated proposals on boot, so
+   * the PUBLIC demo's Conjunction Watch / triage aren't empty. Off by default —
+   * a real self-host / production deployment never seeds demo data.
+   */
+  DEMO_SEED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** Keys the audit chain's HMAC. The chain is only as trustworthy as this secret. */
   AUDIT_HMAC_KEY: z.string().min(1).default('dev-insecure-key-change-me'),
   /**
