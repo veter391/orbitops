@@ -39,6 +39,16 @@ body {
     var(--ink-void);
 }
 
+/* The router mounts each route's content into #app; the site footer is static
+   markup right after it. Reserve a viewport of height so an empty #app (during
+   the first paint, before content mounts) keeps the footer BELOW the fold instead
+   of flashing near the top and then jumping down — that jump was the dominant
+   layout shift (CLS). Standard sticky-footer reservation; no visual change once
+   content is mounted. */
+#app {
+  min-height: 100vh;
+}
+
 /* Smooth scroll only for in-page links; main scroll handled by Lenis */
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
