@@ -19,5 +19,5 @@ OrbitOps is built for a structural crisis in commercial space operations: the nu
 
 ## Links
 - Repository: https://github.com/veter391/orbitops
-- Documentation: https://orbitops.io/#/docs
-- Pricing (open-core): https://orbitops.io/#/pricing
+- Documentation: https://orbitops.shypot.com/docs
+- Pricing (open-core): https://orbitops.shypot.com/pricing

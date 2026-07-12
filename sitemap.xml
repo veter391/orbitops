@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- OrbitOps is a hash-routed single-page app, so its sub-views (#/cockpit,
-     #/docs, …) are fragments of one document, not separate crawlable URLs.
-     The single canonical entry point is listed below. When the app moves to
-     history-mode routing with a server SPA fallback, expand this sitemap with
-     the real per-page paths. -->
+<!-- OrbitOps uses clean History-API URLs with an SPA fallback, so each primary
+     view is a crawlable path (not a #fragment). The canonical home is first. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://orbitops.io/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
+  <url><loc>https://orbitops.shypot.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://orbitops.shypot.com/cockpit</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://orbitops.shypot.com/agent</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://orbitops.shypot.com/dashboard</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://orbitops.shypot.com/tools</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://orbitops.shypot.com/docs</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://orbitops.shypot.com/pricing</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
 </urlset>

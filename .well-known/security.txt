@@ -5,5 +5,5 @@ Contact: https://github.com/veter391/orbitops/security/advisories/new
 Contact: https://github.com/veter391/orbitops/issues
 Expires: 2027-07-01T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://orbitops.io/.well-known/security.txt
+Canonical: https://orbitops.shypot.com/.well-known/security.txt
 Policy: https://github.com/veter391/orbitops/blob/main/SECURITY.md
