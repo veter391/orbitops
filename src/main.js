@@ -344,11 +344,21 @@ async function main() {
         });
       }
 
-      // Close mobile menu on route change
-      window.addEventListener('hashchange', () => {
+      // Close the mobile menu when a nav item is chosen. Routing is History-API
+      // based now (clean URLs), so the old `hashchange` listener never fired —
+      // close on the router's change event, and also on a direct tap of any
+      // routable link/CTA so it shuts even when re-tapping the already-active tab.
+      const closeMobileMenu = () => {
         if (topNav) topNav.classList.remove('is-mobile-open');
         if (burger) burger.setAttribute('aria-expanded', 'false');
+      };
+      topNav.addEventListener('click', (e) => {
+        const link = /** @type {HTMLElement|null} */ (e.target)?.closest(
+          'a[data-route], .top-nav__menu-cta, .top-nav__cta-btn',
+        );
+        if (link) closeMobileMenu();
       });
+      router.on('change', closeMobileMenu);
 
       // chrome-v2 stylesheet — appended last so it overrides every other sheet
       if (!document.querySelector('link[data-chrome-v2]')) {
