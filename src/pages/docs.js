@@ -80,7 +80,7 @@ export async function mount(app) {
             <article class="docs-content">
               <div class="docs-statusbar">
                 <span class="docs-statusbar__crumb" id="docsCrumb">DOC://QUICKSTART</span>
-                <span class="docs-statusbar__meta">ORBITOPS · MIT · NO BUILD</span>
+                <span class="docs-statusbar__meta">ORBITOPS · v0.1.0 · MIT · NO BUILD</span>
               </div>
               <div class="docs-body" id="docsContent"></div>
             </article>
