@@ -104,8 +104,6 @@ against, and how we defend.
 
 - Annual SOC 2 Type II report (under NDA)
 - Public security.txt at `/.well-known/security.txt`
-<!-- Reserved for a future primary domain — orbitops.io is NOT registered by us, do not use:
-     - Status page at status.orbitops.io -->
 - Status: see the GitHub repository (Issues / Releases) until a status page exists
 - Incident post-mortems (after the affected customers are notified)
 - This security policy, updated as the threat model evolves
@@ -160,8 +158,6 @@ If you suspect a security incident:
 
 - **Anyone**: [GitHub Security Advisories](https://github.com/veter391/orbitops/security/advisories/new) (preferred) or `orbitops@shypot.com`
 - **Researchers**: see responsible disclosure above
-<!-- Reserved for a future primary domain — orbitops.io is NOT registered by us, do not use:
-     - Press: press@orbitops.io -->
 - **Press / general**: `orbitops@shypot.com`
 - **Regulators**: we handle directly, you do not need to report us
 

@@ -59,7 +59,6 @@ public spaces.
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be
 reported to the maintainers at [orbitops@shypot.com](mailto:orbitops@shypot.com).
 All complaints will be reviewed and investigated promptly and fairly.
-<!-- Reserved for a future primary domain — orbitops.io is NOT registered by us, do not use: conduct@orbitops.io -->
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
