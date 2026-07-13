@@ -103,8 +103,10 @@ against, and how we defend.
 ## What we will publish
 
 - Annual SOC 2 Type II report (under NDA)
-- Public security.txt at `/security.txt`
-- Status page at `status.orbitops.io`
+- Public security.txt at `/.well-known/security.txt`
+<!-- Reserved for a future primary domain — orbitops.io is NOT registered by us, do not use:
+     - Status page at status.orbitops.io -->
+- Status: see the GitHub repository (Issues / Releases) until a status page exists
 - Incident post-mortems (after the affected customers are notified)
 - This security policy, updated as the threat model evolves
 
@@ -124,7 +126,7 @@ against, and how we defend.
 
 We welcome security researchers. If you find a vulnerability:
 
-1. Email `security@orbitops.io` with "SECURITY" in the subject
+1. Report privately via [GitHub Security Advisories](https://github.com/veter391/orbitops/security/advisories/new) (preferred), or email `orbitops@shypot.com` with "SECURITY" in the subject
 2. Encrypt with our PGP key (published at `/security.txt`)
 3. Include reproduction steps, impact assessment, and suggested fix
 4. We will acknowledge within 24 hours
@@ -156,10 +158,11 @@ We commit to:
 
 If you suspect a security incident:
 
-- **Customers**: `security@orbitops.io` and your dedicated customer success
-  manager
+- **Anyone**: [GitHub Security Advisories](https://github.com/veter391/orbitops/security/advisories/new) (preferred) or `orbitops@shypot.com`
 - **Researchers**: see responsible disclosure above
-- **Press**: `press@orbitops.io`
+<!-- Reserved for a future primary domain — orbitops.io is NOT registered by us, do not use:
+     - Press: press@orbitops.io -->
+- **Press / general**: `orbitops@shypot.com`
 - **Regulators**: we handle directly, you do not need to report us
 
 We commit to:
