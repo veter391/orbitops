@@ -27,33 +27,22 @@ repository. This document explains how the pieces fit together.
                                          │ WebSocket (when backend available)
                                          │ or: in-browser simulation
                        ┌─────────────────▼───────────────────┐
-                       │          OrbitOps Backend            │
-                       │                                          │
-                       │   ┌──────────┐   ┌─────────────────┐ │
-                       │   │ Ingest   │──▶│ Telemetry Store  │ │
-                       │   │ Worker   │   │ (TimescaleDB)    │ │
-                       │   └──────────┘   └────────┬────────┘ │
-                       │                            │          │
-                       │                            ▼          │
-                       │                     ┌─────────────┐  │
-                       │                     │ AI Agent    │  │
-                       │                     │ Service     │  │
-                       │                     └──────┬──────┘  │
-                       │                            │          │
-                       │                            ▼          │
-                       │                     ┌─────────────┐  │
-                       │                     │ Audit Log   │  │
-                       │                     │ (signed,    │  │
-                       │                     │  append-only)│ │
-                       │                     └─────────────┘  │
-                       │                                          │
-                       └──────────────────────────────────────────┘
+                       │   OrbitOps Backend — ONE Fastify     │
+                       │   service (Node + TypeScript)        │
+                       │                                      │
+                       │   auth (API key / WS ticket)         │
+                       │     → proposals · telemetry · audit  │
+                       │     → events (WS) · LangGraph agent  │
+                       │                                      │
+                       │   HMAC-signed, append-only audit log │
+                       │   DB: pglite (dev) → Postgres (prod) │
+                       └─────────────────┬───────────────────┘
                                          ▲
-                                         │ SGP4 propagation
-                                         │ TLE updates
+                                         │ SGP4 propagation · TLE / OMM ingest
                        ┌─────────────────┴───────────────────┐
-                       │   External: CelesTrak, Space-Track,  │
-                       │   LeoLabs, 18 SDS, customer ground   │
+                       │   External data: CelesTrak (live);   │
+                       │   Space-Track / LeoLabs / 18 SDS     │
+                       │   (optional / planned feeds)         │
                        └───────────────────────────────────────┘
 ```
 
@@ -82,7 +71,7 @@ Sections:
 
 The operator's primary interface. Three.js scene with:
 - Realistic Earth (procedural + optional imagery)
-- 50+ simulated satellites (real TLEs from CelesTrak)
+- The real CelesTrak catalogue (11,000+ objects; a performant subset rendered at a time)
 - Orbit paths (computed via SGP4-lite)
 - Click-to-select satellite → detail panel
 - Time scrubber (play forward, backward, 10× speed)
@@ -94,7 +83,7 @@ The cockpit can run in three modes:
 2. **Connected mode** — WebSocket to backend, real telemetry
 3. **Replay mode** — playback from a recorded session
 
-### 3. AI Agent (`src/core/ai-agent.js`)
+### 3. AI Agent (`src/core/llm-agents.js`)
 
 The reasoning loop. Lives in two places:
 - In-browser (demo mode) — fully deterministic, no LLM, hardcoded scenarios
@@ -218,15 +207,14 @@ audit_log (
 
 ## Why no microservices
 
-We considered microservices and rejected them. The reasons:
+We considered microservices and rejected them, for now. The reasons:
 
-1. **Three of us cannot operate a microservices platform** — we would spend 30% of
-   our time debugging the deployment
-2. **Network hops add latency** — the agent loop needs to be fast
-3. **Single-tenant data planes are easier to reason about** as a monolith
-4. **The current bottleneck is product-market fit, not scale**
+1. **A small project shouldn't run a microservices platform** — it would spend most of its time on deployment plumbing instead of the product
+2. **Network hops add latency** — the agent loop should be fast
+3. **A single service is easier to reason about, test, and audit** than a mesh
+4. **The bottleneck is depth and correctness, not scale**
 
-We will revisit at 50 customers or 10M events/day, whichever comes first.
+We'd only revisit this if real scale genuinely demanded it.
 
 ---
 
@@ -288,32 +276,25 @@ In short — what the code does today, and what the deployment provides:
 
 ## Observability
 
-OpenTelemetry traces from ingest to AI proposal to operator approval. Metrics:
-- `telemetry.events.ingested` (counter)
-- `ai.proposals.generated` (counter, labelled by kind)
-- `ai.proposals.approved` / `rejected` / `modified` (counter)
-- `cockpit.frame_time` (histogram, p50 / p95 / p99)
-- `audit.log.entries` (counter)
-- `demo.constellation.uptime` (gauge)
+Observability is wired but stays out of the way by default:
 
-Logs go to Grafana Loki. Traces go to Grafana Tempo. Dashboards in Grafana.
+- **Correlation IDs** — every request gets an `X-Request-Id` (inbound or generated), echoed on the response and attached to every log line for that request (enriched with `customerId`/`operatorId` once auth resolves).
+- **Safe structured logs** — the request logger redacts the query string, so an API key can never land in a log line.
+- **OpenTelemetry, env-gated** — `initTracing()` only starts the SDK when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; otherwise the tracer is a documented no-op that costs nothing, and the service runs fully offline. When enabled, spans wrap the path that matters: `audit.append`, `telemetry.ingest`, and `agent.graph.run`.
 
-We instrument the cockpit in production to learn which features operators actually
-use. If a button is never clicked in three months, we cut it.
+A real deployment can point the OTLP endpoint at any collector (Jaeger, Grafana, Honeycomb, …). No specific vendor is bundled or required.
 
 ---
 
 ## Deployment topology
 
-For each customer:
-- One isolated Postgres database (managed: Neon or Supabase)
-- One OrbitOps backend process (single binary, k8s pod)
-- One Redis instance for ephemeral state
-- One TimescaleDB instance (managed, shared across customers with strict RLS)
-- One Object Storage bucket for raw telemetry archives
+**Open source / self-host.** The whole system is two things you own:
+- the static frontend on any host (it runs standalone in demo mode with zero backend), and
+- one Node + TypeScript service (the Fastify backend) — **pglite** for zero-setup dev, or **Postgres** via `DATABASE_URL` in production, behind the same `Db` interface either way.
 
-Network: customer ground systems connect via private link (AWS Direct Connect
-or GCP Partner Interconnect). Public internet is never in the path for telemetry.
+**The public demo** ships both together as a single Cloudflare deployment: one Worker serves the static app and fronts the Node backend running in a Cloudflare Container (Durable-Object-backed), routing `/v1/*` + `/health` to it and `/api/ai` to an OpenRouter proxy. It runs a single instance with an ephemeral pglite database (reseeded on cold boot) — the right trade-off for a public demo, not a production data plane.
+
+**Planned (hosted tier — not built).** Managed Postgres/TimescaleDB for durable multi-tenant data, a Redis-backed event bus for multi-instance scale, SSO/RBAC, and encryption-at-rest would be a future managed offering. The code seams already exist (the `Db` interface, a transport-agnostic event bus, `DB_RLS`) — see [INFRA.md](INFRA.md) — but none of it runs today.
 
 ---
 

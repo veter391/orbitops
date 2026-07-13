@@ -247,7 +247,7 @@ This is the "one OS" property: external inputs (a CDM) and live operations (the 
 
 ## 6. The database
 
-Six SQL migrations, applied in order by `backend/src/db/migrate.ts` (each runs once, inside its own transaction, tracked in a `_migrations` table — safe to run on every boot).
+Twelve SQL migrations, applied in order by `backend/src/db/migrate.ts` (each runs once, inside its own transaction, tracked in a `_migrations` table — safe to run on every boot).
 
 | # | File | What it adds |
 |---|------|---|
@@ -257,6 +257,12 @@ Six SQL migrations, applied in order by `backend/src/db/migrate.ts` (each runs o
 | 004 | `004_operators.sql` | `operators` table (per-operator identity, API key hashed per operator, belongs to a customer); backfills each customer's key as its "default operator" |
 | 005 | `005_fk.sql` | Foreign-key constraints (`customer_id → customers.id`, cascade delete) on `proposals`, `telemetry`, `audit_log` |
 | 006 | `006_idempotency.sql` | `idempotency_keys` table for safe POST retries |
+| 007 | `007_feedback.sql` | `feedback` — public product-feedback submissions (not tenant-scoped; public writes, authenticated reads) |
+| 008 | `008_checkpoints.sql` | Durable LangGraph checkpoints — the persistence behind native HITL `interrupt()`/resume across a process restart |
+| 009 | `009_proposal_situations.sql` | Similarity-recall store for the semantic-memory layer (per-proposal situation text + its vector) |
+| 010 | `010_rls.sql` | Postgres Row-Level Security policies on the tenant-data tables (defense-in-depth, prod-gated by `DB_RLS`) |
+| 011 | `011_operator_role.sql` | Minimal RBAC: an operator `role` column (`operator` default / `admin`) |
+| 012 | `012_demo_operator_role.sql` | Security hardening: downgrade the demo tenant's operator to `operator`, so the auto-shipped demo key can't reach owner-facing surfaces |
 
 ### Table of tables
 

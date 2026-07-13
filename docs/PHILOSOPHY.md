@@ -49,11 +49,11 @@ readable summaries over end-to-end learned policies.
 Every layer of the OrbitOps stack lives in this repository:
 - Web UI (vanilla JS + Three.js, no React/Vue/etc.)
 - Marketing site (same codebase)
-- Backend (Node + TypeScript, single binary)
-- Telemetry pipeline (in-process worker)
-- AI agent (in-process reasoning loop)
+- Backend (Node + TypeScript, a single Fastify service)
+- Telemetry pipeline (in-process module)
+- AI agent (in-process LangGraph reasoning loop)
 - Database schema (SQL migrations in repo)
-- Deployment manifests (Docker, compose, k8s)
+- Deploy config (Cloudflare Worker + Container — `wrangler.toml`, `worker.js`, `backend/Dockerfile`)
 
 We reject the "best tool for the job" trap. Best-of-breed tools compose into a
 maintenance nightmare. We are willing to write more code ourselves in exchange for
@@ -89,15 +89,15 @@ We reject the "build it and they will come" fallacy. We are our own first user.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Database | Postgres | Boring, reliable, JSONB when we need it |
-| Cache | Redis | Boring, ubiquitous |
-| Queue | Postgres-backed | Avoids Kafka tax for our scale |
-| Backend | Node + TypeScript | Fast iteration, good observability, ubiquitous |
-| Web | Vanilla JS + Three.js | Smaller bundle, fewer abstractions, our team can read every line |
+| Database | Postgres (pglite in dev, same SQL) | Boring, reliable, JSONB when we need it |
+| Backend | Node + TypeScript (Fastify) | Fast iteration, good tooling, ubiquitous |
+| Web | Vanilla JS + Three.js | Smaller bundle, fewer abstractions, readable line by line |
 | Build | None | Source is what ships. No surprises. |
-| Deploy | Docker + a single VM, then k8s when we outgrow it | Boring, observable |
-| Observability | OpenTelemetry → Grafana | Standard, boring |
-| Secrets | HashiCorp Vault or AWS KMS | Standard, boring |
+| Deploy | Cloudflare Worker + Container (one platform) | Static app and Node backend together, no second vendor |
+| Secrets | Cloudflare secrets / file-backed (`<NAME>_FILE`) | Never in the repo or a URL |
+| Observability | OpenTelemetry (env-gated, no-op by default) | Standard, and free when unused |
+
+A Redis-backed event bus and a managed database come in only if a hosted, multi-instance tier is ever built (see the roadmap) — the single-instance defaults above are deliberate for the open-source build.
 
 Exciting tech is reserved for the parts that actually matter: the AI reasoning
 loop, the 3D visualisation, the manoeuvre planner.

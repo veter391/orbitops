@@ -5,7 +5,7 @@ audit log, proposals, telemetry, a live event stream, multi-tenant isolation,
 and the AI agent loop. Decoupled from the browser app — the static frontend runs
 fully in demo mode without it.
 
-Built in vertical slices; see [../docs/BACKEND-PLAN.md](../docs/BACKEND-PLAN.md).
+Built in vertical slices; see [../docs/SYSTEM-GUIDE.md](../docs/SYSTEM-GUIDE.md) for the full, file-by-file walkthrough.
 
 ## Run it
 

@@ -1,8 +1,11 @@
 # Deploying OrbitOps
 
-OrbitOps is a **zero-build static SPA** with one small dynamic edge function. It
-deploys to **Cloudflare Workers** (Static Assets + a `/api/ai` proxy). No build
-step, no bundler — the source is what ships.
+OrbitOps deploys to **Cloudflare** as a single unit: a zero-build static SPA served
+by Cloudflare Static Assets, a small `worker.js` that proxies `POST /api/ai`, and —
+through the same `wrangler deploy` — the Node/Fastify backend running in a **Cloudflare
+Container** (`backend/Dockerfile`) that the Worker fronts for `/v1/*`, `/health` and
+WebSockets. No build step for the frontend; the container image is built by
+`wrangler deploy` itself, so Docker must be running.
 
 ## What deploys
 
@@ -10,12 +13,15 @@ step, no bundler — the source is what ships.
 |------|------------------|
 | The SPA (`index.html`, `src/`, `public/`, `robots.txt`, `sitemap.xml`, `llms.txt`, `.well-known/`) | Cloudflare **Static Assets** (`[assets]` in `wrangler.toml`) |
 | `POST /api/ai` | `worker.js` — proxies to OpenRouter with a server-only key (shared, no-BYOK live-AI mode) |
+| `/v1/*`, `/health`, WebSocket upgrades | `worker.js` → the **Cloudflare Container** (`backend/Dockerfile`, Durable-Object-backed) running the Node/Fastify backend |
 | Everything else | falls through to Static Assets (`env.ASSETS.fetch`) |
 
-`.assetsignore` keeps the backend, docs, and tooling out of the public upload.
-The app also runs fully **without** the Worker — in demo mode and BYOK mode the
-browser talks to the model (or the deterministic fallback) directly, so a plain
-static host works too; the Worker only adds the optional shared live-AI key.
+`.assetsignore` keeps the backend source, docs, and tooling out of the *static-asset*
+upload — the backend ships as a container image, not as served files. The frontend
+still runs fully **without** any backend: in demo and BYOK mode the browser talks to
+the model (or the deterministic fallback) directly, so a plain static host works too.
+On Cloudflare, the same deploy also stands up the live backend Container — that is how
+the public demo shows real backend, audit and proposal output.
 
 > **Deploy from a clean checkout.** Cloudflare Static Assets caps a project at
 > 20,000 files. A clean `git` checkout of this repo is **189 files** (well under
@@ -39,9 +45,10 @@ wrangler login             # authorize your Cloudflare account
 wrangler deploy            # or: npm run deploy
 ```
 
-That uploads `worker.js` + the static assets and prints the `*.workers.dev` URL
-(bind a custom domain in the Cloudflare dashboard). Validate the config without
-deploying first with:
+That builds and pushes the backend container image, uploads `worker.js` + the static
+assets, and prints the `*.workers.dev` URL (bind a custom domain in the Cloudflare
+dashboard). **Docker must be running** for the container build. Validate the config
+without deploying first with:
 
 ```bash
 wrangler deploy --dry-run
