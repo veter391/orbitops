@@ -36,10 +36,16 @@ binding = "ASSETS"
 # carries the home metadata — and static assets (src/, public/, …) never hit
 # the Worker, so they stay free and cached as before.
 not_found_handling = "single-page-application"
+# Only the WORKER-handled routes are listed: the API/health/ai paths, and each
+# KNOWN app route (exact — not "/docs/*") so the Worker rewrites its per-route
+# metadata. Unknown paths (incl. an unregistered "/docs/x", which the router
+# renders as home) are deliberately NOT here — they fall to the SPA shell whose
+# index.html carries the home metadata, so no crawler sees a self-canonical URL
+# the router can't serve. This list mirrors the known routes in route-meta.js.
 run_worker_first = [
   "/v1/*", "/health", "/api/ai",
   "/cockpit", "/agent", "/dashboard", "/tools", "/pricing", "/settings",
-  "/docs", "/docs/*",
+  "/docs", "/docs/going-live", "/docs/terms", "/docs/privacy", "/docs/data",
 ]
 
 # LIVE BACKEND — the Node backend (backend/Dockerfile) runs in a Cloudflare

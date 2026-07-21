@@ -32,7 +32,7 @@ export const CANONICAL_ORIGIN = 'https://orbitops.shypot.com';
 export const ROUTE_META = {
   '/': [
     'OrbitOps — Mission control for the real sky',
-    'Open-source mission control for satellite operators: the live CelesTrak catalogue propagated with SGP4, an accountable AI co-pilot, and a human in every loop.',
+    'OrbitOps is open-source mission control for satellite constellation operators — the live CelesTrak catalog propagated with SGP4 in your browser, an accountable AI co-pilot with a human in every loop, and a hash-chained audit log. MIT-licensed, zero install.',
   ],
   '/cockpit': [
     'Cockpit — OrbitOps',
@@ -81,22 +81,43 @@ export const ROUTE_META = {
 };
 
 /**
- * Resolve the metadata for a path: exact match first, then the `/docs` prefix
- * family, then the home fallback (mirrors the router, whose unknown paths
- * render the home view).
+ * Normalize a path for lookup: strip a single trailing slash (except root).
+ * @param {string} path
+ */
+function cleanPath(path) {
+  return path !== '/' && path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+/**
+ * True when `path` is a registered route with its own metadata. Crucially,
+ * unregistered paths are NOT known — including unknown `/docs/*` such as
+ * `/docs/quickstart`, which is a within-page sidebar switch, not a clean-URL
+ * route: the router renders those as the home view, so they must resolve to
+ * home metadata and a home canonical, never a self-referential URL the router
+ * can't actually serve (that would mint an unbounded soft-404 / duplicate-URL
+ * space for crawlers). Shared by the browser and the edge worker so both agree
+ * on exactly which paths get route-specific SEO.
+ * @param {string} path
+ */
+export function isKnownRoute(path) {
+  return Object.prototype.hasOwnProperty.call(ROUTE_META, cleanPath(path));
+}
+
+/**
+ * Resolve the metadata for a path: exact match, else home. No prefix fallback —
+ * an unregistered path renders the home view client-side, so its metadata and
+ * canonical are home's, matching what actually renders.
  * @param {string} path
  * @returns {{ title: string, description: string, canonical: string }}
  */
 export function resolveRouteMeta(path) {
-  const clean = path !== '/' && path.endsWith('/') ? path.slice(0, -1) : path;
-  const entry = ROUTE_META[clean] || (clean.startsWith('/docs') ? ROUTE_META['/docs'] : ROUTE_META['/']);
-  const known = Object.prototype.hasOwnProperty.call(ROUTE_META, clean);
-  // Unknown paths render the home view client-side, so they canonicalize to
-  // the home URL rather than minting a duplicate URL per typo.
-  const canonicalPath = known || clean.startsWith('/docs') ? clean : '/';
+  const clean = cleanPath(path);
+  const known = isKnownRoute(clean);
+  const entry = known ? ROUTE_META[clean] : ROUTE_META['/'];
+  const canonicalPath = known ? clean : '/';
   return {
     title: entry[0],
     description: entry[1],
-    canonical: `${CANONICAL_ORIGIN}${canonicalPath === '/' ? '/' : canonicalPath}`,
+    canonical: `${CANONICAL_ORIGIN}${canonicalPath}`,
   };
 }

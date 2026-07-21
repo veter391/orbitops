@@ -166,6 +166,11 @@ function parseJsonResult(result) {
 // not do is hang silently. Cap time-to-first-byte separately from the total.
 const STREAM_FIRST_BYTE_TIMEOUT_MS = 25000;
 const STREAM_TOTAL_TIMEOUT_MS = 60000;
+// Upper bound on an accumulated streamed completion. The three agents each emit
+// a small strict-JSON object (~700 tokens ≈ a few KB); 64 KB is far above any
+// legitimate response and caps memory + render cost against a hostile or
+// malfunctioning BYOK endpoint that streams without terminating.
+const MAX_STREAM_CONTENT_CHARS = 64 * 1024;
 
 /**
  * Incremental parser for OpenAI-style server-sent events. Pure and stateful:
@@ -307,6 +312,7 @@ export async function chatJSONStream(messages, opts = {}) {
       const sse = createSseParser();
       let content = '';
       let done = false;
+      let overflowed = false;
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         clearTimeout(firstByteTimer);
@@ -322,6 +328,16 @@ export async function chatJSONStream(messages, opts = {}) {
             const delta = evt?.choices?.[0]?.delta?.content;
             if (typeof delta === 'string' && delta.length > 0) {
               content += delta;
+              // Hard cap: the agents emit a small (~700-token) JSON object, so a
+              // response past this bound is a broken or hostile endpoint, not a
+              // real answer. Stop before the growing string turns onDelta's
+              // per-token O(n) re-scan + textContent layout into a tab-freeze.
+              if (content.length > MAX_STREAM_CONTENT_CHARS) {
+                overflowed = true;
+                done = true;
+                controller.abort();
+                break;
+              }
               opts.onDelta?.(content);
             }
           } catch {
@@ -332,16 +348,28 @@ export async function chatJSONStream(messages, opts = {}) {
       clearTimeout(totalTimer);
       clearTimeout(firstByteTimer);
 
+      if (overflowed) {
+        lastError = `${model} exceeded the ${MAX_STREAM_CONTENT_CHARS}-char stream cap`;
+        continue;
+      }
       if (!content) {
         lastError = 'Empty streamed completion';
         continue;
       }
-      return parseJsonResult({
+      const parsed = parseJsonResult({
         ok: true,
         content,
         model,
         latencyMs: Math.round(performance.now() - started),
       });
+      // A model that streamed to completion but produced non-JSON (some free
+      // models ignore the JSON instruction) should not fail the whole call —
+      // walk to the next model, exactly as the non-JSON path does buffered.
+      if (!parsed.ok) {
+        lastError = parsed.error;
+        continue;
+      }
+      return parsed;
     } catch (e) {
       clearTimeout(totalTimer);
       clearTimeout(firstByteTimer);

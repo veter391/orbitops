@@ -13,6 +13,11 @@ scratchpad
 .data
 .git
 .github
+test
+test-results
+playwright-report
+playwright.config.js
+.wrangler
 worker.js
 wrangler.toml
 .assetsignore

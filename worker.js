@@ -35,7 +35,7 @@
 
 import { Container, getContainer } from '@cloudflare/containers';
 import { env } from 'cloudflare:workers';
-import { ROUTE_META, resolveRouteMeta } from './src/core/route-meta.js';
+import { resolveRouteMeta, isKnownRoute } from './src/core/route-meta.js';
 
 /**
  * The OrbitOps backend container. Fastify listens on 0.0.0.0:8790 inside the
@@ -133,11 +133,16 @@ export default {
   },
 };
 
-/** True for app routes whose HTML metadata should be rewritten per path. */
+/**
+ * True for app routes whose HTML metadata should be rewritten per path. Only
+ * KNOWN routes qualify — "/" stays on the free static path (its index.html
+ * already carries the home metadata), and unregistered paths (incl. unknown
+ * `/docs/*`) fall through to the static SPA shell, which is the home metadata
+ * they should present since the router renders them as home. Shares the exact
+ * route set with resolveRouteMeta via isKnownRoute so the two never desync.
+ */
 function isSeoRoute(pathname) {
-  const clean = pathname !== '/' && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-  if (clean === '/') return false; // static index.html already carries home meta
-  return Object.prototype.hasOwnProperty.call(ROUTE_META, clean) || clean.startsWith('/docs');
+  return pathname !== '/' && isKnownRoute(pathname);
 }
 
 /**
