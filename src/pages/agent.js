@@ -689,9 +689,15 @@ function mountLiveTriage(app) {
 
   async function loadQueue() {
     try {
-      const { proposals } = await client.listProposals({ limit: 50 });
+      const data = await client.listProposals({ limit: 50 });
       if (disposed) return;
-      const list = Array.isArray(proposals) ? proposals : [];
+      // Defense in depth: a 200 that isn't the real API (e.g. a static host's
+      // SPA fallback → `request()` returns null) must surface a clean message,
+      // not a raw "cannot destructure" from blindly unpacking the response.
+      if (!data || !Array.isArray(data.proposals)) {
+        throw new Error('backend returned an unexpected response');
+      }
+      const list = data.proposals;
       renderQueue(list);
       const pending = list.filter((p) => p.status === 'pending').length;
       setConn('ok', `${list.length} in queue · ${pending} pending${streaming ? ' · live' : ''}`);

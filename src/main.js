@@ -541,6 +541,17 @@ async function autoConnectDemoBackend() {
     const res = await fetch('/health', { signal: ctrl.signal }).catch(() => null);
     clearTimeout(timer);
     if (!res || !res.ok) return;
+    // A static host serves the SPA's index.html (HTTP 200) for /health, so
+    // res.ok alone would false-connect the demo against a non-backend and then
+    // crash the triage on the first /v1 call. Confirm /health is really the
+    // backend: it must parse as JSON reporting status "ok".
+    let health = null;
+    try {
+      health = await res.json();
+    } catch {
+      return; // not JSON → not our backend (e.g. a plain static deploy)
+    }
+    if (!health || health.status !== 'ok') return;
     setBackendConfig({ mode: 'connected', url: window.location.origin, key: 'demo-key' });
     router.resolve();
   } catch {
