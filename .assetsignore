@@ -13,6 +13,8 @@ scratchpad
 .data
 .git
 .github
+.claude
+CLAUDE.md
 test
 test-results
 playwright-report
