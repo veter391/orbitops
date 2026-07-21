@@ -30,8 +30,32 @@
 
 'use strict';
 
-import { chatJSON, hasLiveAI } from './openrouter-client.js';
+import { chatJSONStream, extractJsonStringField, hasLiveAI } from './openrouter-client.js';
 import { modelsFor } from './model-routing.js';
+
+/**
+ * Each stage streams its completion; the UI wants readable narrative text, not
+ * raw JSON tokens — so per stage we live-extract the primary narrative string
+ * field from the partial JSON as it grows. @type {Record<string, string>}
+ */
+const STAGE_STREAM_FIELD = {
+  analyst: 'thinkNarrative',
+  strategist: 'scoreNarrative',
+  safety: 'notes',
+};
+
+/**
+ * @param {'analyst'|'strategist'|'safety'} stage
+ * @param {((stage: string, text: string) => void)|undefined} onToken
+ * @returns {((content: string) => void)|undefined}
+ */
+function streamHandler(stage, onToken) {
+  if (!onToken) return undefined;
+  return (content) => {
+    const text = extractJsonStringField(content, STAGE_STREAM_FIELD[stage]);
+    if (text) onToken(stage, text);
+  };
+}
 
 const SYSTEM_ANALYST = `You are the Flight Dynamics Analyst inside OrbitOps, an AI co-pilot for satellite constellation operators. You are given verified telemetry and orbital-mechanics data that has already been computed by deterministic flight-dynamics code — you must never contradict or invent numbers, only interpret them. Write in the terse, precise register of a real flight dynamics engineer briefing at 03:00: no hype, no hedging filler, state findings and their operational significance. Respond with ONLY a JSON object: {"thinkNarrative": string (2-4 sentences), "riskLevel": "low"|"medium"|"high"|"critical", "keyFactors": string[] (2-4 short bullet phrases)}.`;
 
@@ -47,16 +71,17 @@ const SYSTEM_SAFETY = `You are the Safety Reviewer inside OrbitOps. OrbitOps's c
 /**
  * @param {string} scenarioTitle
  * @param {Array<{phase: string, title: string, body: string, data?: object}>} observeThinkSteps
+ * @param {(content: string) => void} [onDelta]
  * @returns {Promise<AnalystOk | AgentErr>}
  */
-async function runAnalyst(scenarioTitle, observeThinkSteps) {
+async function runAnalyst(scenarioTitle, observeThinkSteps, onDelta) {
   const context = observeThinkSteps
     .map((s) => `[${s.phase}] ${s.title}\n${JSON.stringify(s.data || {})}`)
     .join('\n\n');
-  const result = await chatJSON([
+  const result = await chatJSONStream([
     { role: 'system', content: SYSTEM_ANALYST },
     { role: 'user', content: `Scenario: ${scenarioTitle}\n\nVerified data so far:\n${context}` },
-  ], { models: modelsFor('analyst') });
+  ], { models: modelsFor('analyst'), onDelta });
   if (!result.ok) return result;
   const { thinkNarrative, riskLevel, keyFactors } = result.parsed || {};
   if (!thinkNarrative || !riskLevel) {
@@ -69,16 +94,17 @@ async function runAnalyst(scenarioTitle, observeThinkSteps) {
  * @param {string} scenarioTitle
  * @param {{thinkNarrative: string, riskLevel: string, keyFactors: string[]}} analysis
  * @param {Array<object>} alternatives - deterministically computed candidate strategies
+ * @param {(content: string) => void} [onDelta]
  * @returns {Promise<StrategistOk | AgentErr>}
  */
-async function runStrategist(scenarioTitle, analysis, alternatives) {
-  const result = await chatJSON([
+async function runStrategist(scenarioTitle, analysis, alternatives, onDelta) {
+  const result = await chatJSONStream([
     { role: 'system', content: SYSTEM_STRATEGIST },
     {
       role: 'user',
       content: `Scenario: ${scenarioTitle}\n\nAnalyst assessment:\n${JSON.stringify(analysis)}\n\nCandidate strategies (real computed data):\n${JSON.stringify(alternatives)}`,
     },
-  ], { models: modelsFor('strategist') });
+  ], { models: modelsFor('strategist'), onDelta });
   if (!result.ok) return result;
   const { scoreNarrative, proposeNarrative, recommendedLabel, confidence, considerations } =
     result.parsed || {};
@@ -99,16 +125,17 @@ async function runStrategist(scenarioTitle, analysis, alternatives) {
 /**
  * @param {string} scenarioTitle
  * @param {object} strategistOutput
+ * @param {(content: string) => void} [onDelta]
  * @returns {Promise<SafetyOk | AgentErr>}
  */
-async function runSafetyReviewer(scenarioTitle, strategistOutput) {
-  const result = await chatJSON([
+async function runSafetyReviewer(scenarioTitle, strategistOutput, onDelta) {
+  const result = await chatJSONStream([
     { role: 'system', content: SYSTEM_SAFETY },
     {
       role: 'user',
       content: `Scenario: ${scenarioTitle}\n\nStrategist proposal:\n${JSON.stringify(strategistOutput)}`,
     },
-  ], { models: modelsFor('safety') });
+  ], { models: modelsFor('safety'), onDelta });
   if (!result.ok) return result;
   const { verdict, notes, confidenceAdjustment } = result.parsed || {};
   if (!verdict || !notes) return { ok: false, error: 'Safety Reviewer returned incomplete JSON.' };
@@ -138,9 +165,13 @@ async function runSafetyReviewer(scenarioTitle, strategistOutput) {
  * @param {Array<object>} alternatives - the SCORE step's `data.alternatives`
  * @param {(stage: 'analyst'|'strategist'|'safety') => void} [onStage] - called
  *   right before each agent call starts, so the UI can show live progress.
+ * @param {(stage: string, text: string) => void} [onToken] - called with the
+ *   growing narrative text of the active stage as the model streams it, so the
+ *   console can render output token-by-token (never raw JSON — the narrative
+ *   string field is live-extracted from the partial JSON).
  * @returns {Promise<{ok: true, analyst: AnalystOk, strategist: StrategistOk, safety: SafetyOk} | {ok: false, error: string, stage: string}>}
  */
-export async function runLiveAgentPipeline(scenarioTitle, deterministicProposal, alternatives, onStage) {
+export async function runLiveAgentPipeline(scenarioTitle, deterministicProposal, alternatives, onStage, onToken) {
   if (!hasLiveAI()) {
     return { ok: false, error: 'No OpenRouter key configured.', stage: 'config' };
   }
@@ -150,15 +181,15 @@ export async function runLiveAgentPipeline(scenarioTitle, deterministicProposal,
   );
 
   onStage?.('analyst');
-  const analyst = await runAnalyst(scenarioTitle, observeThinkSteps);
+  const analyst = await runAnalyst(scenarioTitle, observeThinkSteps, streamHandler('analyst', onToken));
   if (!analyst.ok) return { ok: false, error: analyst.error, stage: 'analyst' };
 
   onStage?.('strategist');
-  const strategist = await runStrategist(scenarioTitle, analyst, alternatives);
+  const strategist = await runStrategist(scenarioTitle, analyst, alternatives, streamHandler('strategist', onToken));
   if (!strategist.ok) return { ok: false, error: strategist.error, stage: 'strategist' };
 
   onStage?.('safety');
-  const safety = await runSafetyReviewer(scenarioTitle, strategist);
+  const safety = await runSafetyReviewer(scenarioTitle, strategist, streamHandler('safety', onToken));
   if (!safety.ok) return { ok: false, error: safety.error, stage: 'safety' };
 
   return { ok: true, analyst, strategist, safety };

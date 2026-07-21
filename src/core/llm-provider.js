@@ -199,7 +199,7 @@ export function resolveEndpoint(cfg) {
     /** @type {Record<string,string>} */
     const h = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
     if (referer) {
-      h['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'https://orbitops.dev';
+      h['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'https://orbitops.shypot.com';
       h['X-Title'] = 'OrbitOps';
     }
     return h;

@@ -288,6 +288,40 @@
   padding: 12px 14px;
 }
 
+/* Live LLM token stream — transient block shown while an agent stage
+   generates; replaced by the animated reasoning chain when the run completes. */
+.agent-page .agent-console__live {
+  font-family: var(--v3-mono);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 2px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.agent-page .agent-console__live-stage {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v3-ice);
+  margin-bottom: 6px;
+}
+.agent-page .agent-console__live-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--v3-text-2);
+  white-space: pre-wrap;
+}
+.agent-page .agent-console__live-text::after {
+  content: '▍';
+  color: var(--v3-ice);
+  animation: v3-caret 1s steps(1) infinite;
+}
+@keyframes v3-caret {
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-page .agent-console__live-text::after { animation: none; }
+}
+
 /* reasoning steps — flight-ops log entries */
 .agent-page .agent-step {
   background: transparent;

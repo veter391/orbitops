@@ -438,8 +438,37 @@ export async function mount(app) {
       phase.textContent = AI_STAGE_LABELS[stage];
       phase.className = `agent-console__phase agent-console__phase--${stage === 'fallback' ? 'alert' : 'running'}`;
     }
+    // A finished/failed pipeline retires the live streaming block (the animated
+    // reasoning chain takes over from here).
+    if (stage === 'done' || stage === 'fallback') {
+      app.querySelector('#aiLiveStream')?.remove();
+    }
   };
   agent.on('ai-stage', onAIStage);
+
+  // Live token stream: while an agent stage generates, its narrative renders
+  // token-by-token in the console instead of a silent multi-second wait. The
+  // block is transient — it is replaced by the full animated reasoning chain
+  // the moment the pipeline completes.
+  /** @param {{ stage: string, text: string }} arg */
+  const onAIToken = ({ stage, text }) => {
+    const stream = app.querySelector('#agentStream');
+    if (!stream) return;
+    let live = stream.querySelector('#aiLiveStream');
+    if (!live) {
+      live = document.createElement('div');
+      live.id = 'aiLiveStream';
+      live.className = 'agent-console__live';
+      live.innerHTML = '<div class="agent-console__live-stage"></div><div class="agent-console__live-text"></div>';
+      stream.appendChild(live);
+    }
+    const stageEl = /** @type {HTMLElement} */ (live.querySelector('.agent-console__live-stage'));
+    const textEl = /** @type {HTMLElement} */ (live.querySelector('.agent-console__live-text'));
+    stageEl.textContent = AI_STAGE_LABELS[stage] || stage.toUpperCase();
+    textEl.textContent = text; // textContent — streamed model output is data, never HTML
+    stream.scrollTop = stream.scrollHeight;
+  };
+  agent.on('ai-token', onAIToken);
 
   // Connected mode (§03 Settings): surface the LIVE backend triage queue above
   // the simulation console. Additive — untouched when no backend is configured.
@@ -451,6 +480,7 @@ export async function mount(app) {
       if (activeRunTimer) { clearInterval(activeRunTimer); activeRunTimer = null; }
       if (auditRefreshTimer) clearInterval(auditRefreshTimer);
       agent.off('ai-stage', onAIStage);
+      agent.off('ai-token', onAIToken);
       if (liveTriage) liveTriage();
       if (deckIo) { deckIo.disconnect(); deckIo = null; }
       if (unmountDepthGrid) { unmountDepthGrid(); unmountDepthGrid = null; }

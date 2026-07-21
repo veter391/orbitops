@@ -68,7 +68,7 @@ export async function mount(app) {
               ], 2)}
               ${sidebarGroupHtml('project', 'Project', [
                 ['contributing', 'Contributing'],
-                ['planned', 'Planned services'],
+                ['planned', 'Roadmap &amp; planned'],
               ], 3)}
               ${sidebarGroupHtml('legal', 'Legal', [
                 ['terms', 'Terms of Use'],
@@ -602,31 +602,35 @@ import { runLiveAgentPipeline } from './src/core/llm-agents.js';
 setStoredKey('sk-or-...');  // stays in localStorage, never in source
 hasLiveAI();                // => true
 
-// The agent page calls this after the deterministic proposal is built:
-await runLiveAgentPipeline(scenarioTitle, proposal, alternatives, onStage);</code></pre>
+// The agent page calls this after the deterministic proposal is built.
+// onStage flips the console phase; onToken streams each agent's narrative
+// token-by-token into the console while it generates:
+await runLiveAgentPipeline(scenarioTitle, proposal, alternatives, onStage, onToken);</code></pre>
     <p>The LLM never invents numbers — it interprets values already computed by
        the deterministic flight-dynamics code. Without a key, the agent falls
        back to the deterministic chains and everything still works.</p>`,
 
-  planned: `<h1>Planned services</h1>
-    <p>Nothing on this page is shipped. It exists so the roadmap is explicit and
-       nobody mistakes plans for product.</p>
-    <h2>Backend <span class="planned-chip">PLANNED</span></h2>
-    <ul>
-      <li>Go service for telemetry ingestion and a REST API</li>
-      <li>Time-series telemetry store</li>
-      <li>WebSocket telemetry pipeline</li>
-      <li>Single-tenant managed data plane</li>
-    </ul>
+  planned: `<h1>Roadmap — shipped &amp; planned</h1>
+    <p>This page keeps the line between product and plans explicit, so nobody
+       mistakes one for the other — in either direction.</p>
+    <h2>Backend — shipped</h2>
+    <p>The backend is <strong>built and open source</strong> (Node + TypeScript,
+       Fastify): authenticated REST + WebSocket API, telemetry ingest with
+       time-bucket downsampling, a tamper-evident HMAC audit chain, multi-tenant
+       isolation, and the LangGraph multi-agent copilot. The public demo runs it
+       live behind this very site. See <a href="/docs/going-live" data-route="/docs/going-live">Going live</a>
+       to connect your own.</p>
     <h2>Integrations <span class="planned-chip">PLANNED</span></h2>
     <ul>
-      <li>Slack + PagerDuty alerting</li>
-      <li>LeoLabs / 18 SDS conjunction data</li>
+      <li>Credentialed SSA feeds — Space-Track / LeoLabs / 18 SDS (the vendor-neutral ingest layer ships today; the paid-feed fetchers do not)</li>
+      <li>Alert delivery — Slack / PagerDuty webhooks (the escalation policy engine ships today; delivery wiring does not)</li>
+      <li>OpenMCT / Yamcs interop — OrbitOps as a copilot + audit layer on an existing C2 stack</li>
     </ul>
-    <h2>Surfaces <span class="planned-chip">PLANNED</span></h2>
+    <h2>Platform <span class="planned-chip">PLANNED</span></h2>
     <ul>
-      <li>Mobile companion app</li>
-      <li>On-premise deployment bundle</li>
+      <li>Managed hosted tier — durable multi-tenant Postgres, SSO/RBAC, encryption at rest</li>
+      <li>Full 3D / Monte-Carlo probability of collision for slow or highly-curved encounters</li>
+      <li>Fleet-wide ground-contact / pass-scheduling board</li>
     </ul>
     <p>Progress happens in the open — follow the
        <a href="${GITHUB_URL}" target="_blank" rel="noreferrer">GitHub repository</a>.</p>`,
@@ -646,7 +650,8 @@ await runLiveAgentPipeline(scenarioTitle, proposal, alternatives, onStage);</cod
        and no managed service.</p>
     <h2>What you are using</h2>
     <ul>
-      <li>A static demo site that runs entirely in your browser — no OrbitOps server, no sign-up, no login</li>
+      <li>A demo site that runs in your browser — no sign-up, no login, no accounts</li>
+      <li>The public demo also talks to a live demo backend whose database is ephemeral (it resets on restart); nothing you submit there is durably stored</li>
       <li>The managed service described on the pricing page is planned, not available; nothing on this site sells you anything</li>
     </ul>
     <h2>License</h2>

@@ -136,8 +136,13 @@ class AIAgent extends Emitter {
     const alternatives =
       scoreStep?.data?.alternatives || scoreStep?.data?.options || (scoreStep?.data ? [scoreStep.data] : []);
 
-    const result = await runLiveAgentPipeline(proposal.title, proposal, alternatives, (stage) =>
-      this.emit('ai-stage', { stage, scenarioId: proposal.scenarioId })
+    const result = await runLiveAgentPipeline(
+      proposal.title,
+      proposal,
+      alternatives,
+      (stage) => this.emit('ai-stage', { stage, scenarioId: proposal.scenarioId }),
+      // Streamed narrative of the active stage — the console renders it live.
+      (stage, text) => this.emit('ai-token', { stage, text, scenarioId: proposal.scenarioId })
     );
 
     if (!result.ok) {
