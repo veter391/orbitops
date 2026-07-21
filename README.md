@@ -5,7 +5,7 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-8b5cf6.svg)](CHANGELOG.md)
 [![No build step](https://img.shields.io/badge/build-none-blue.svg)](#quick-start)
-[![Tests](https://img.shields.io/badge/tests-161%20backend%20%2B%2015%20frontend-brightgreen.svg)](#run-and-verify-it-yourself)
+[![Tests](https://img.shields.io/badge/tests-161%20backend%20%2B%2029%20frontend-brightgreen.svg)](#run-and-verify-it-yourself)
 [![npm](https://img.shields.io/badge/npm-create--orbitops-red.svg)](https://www.npmjs.com/package/create-orbitops)
 
 ### 🛰️ [**Try the live demo**](https://orbitops.shypot.com)
@@ -218,7 +218,7 @@ Yes. MIT, the whole core, forever — clone it, self-host it, fork it, own it.
 
 ```bash
 cd backend && npm install && npm run migrate && npm test   # 161 backend tests (in-process pglite)
-npm test                                                    # 15 frontend pure-math tests (repo root)
+npm test                                                    # 29 frontend unit tests (repo root)
 npm run typecheck                                           # tsc --noEmit
 ```
 

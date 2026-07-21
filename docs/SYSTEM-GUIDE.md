@@ -284,7 +284,7 @@ Twelve SQL migrations, applied in order by `backend/src/db/migrate.ts` (each run
 ```bash
 cd backend
 npm install         # install dependencies
-npm run migrate     # apply the 6 SQL migrations to the local database (pglite, no setup)
+npm run migrate     # apply the 12 SQL migrations to the local database (pglite, no setup)
 npm run dev          # start on http://127.0.0.1:8790 (tsx watch — auto-restarts on save)
 npm test             # run the full node:test suite (in-memory pglite, no external setup)
 npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
@@ -323,10 +323,12 @@ npm run typecheck    # tsc --noEmit — verifies types with zero compiled output
 | `test/rls.test.ts` | Row-Level Security tenant isolation (cross-tenant reads/inserts blocked, fail-closed, maintenance-scope retention, single-transaction binding) | 9 |
 | **Total** | **27 files** | **161** |
 
-Plus a **frontend** `node:test` suite (`npm test` at the repo root) — 15 tests over the
-pure-math core: `test/omm.test.js` (TLE checksum + OMM→TLE self-consistency),
+Plus a **frontend** `node:test` suite (`npm test` at the repo root) — 29 tests across
+5 files: the pure-math core `test/omm.test.js` (TLE checksum + OMM→TLE self-consistency),
 `test/orbit-propagator.test.js` (Kepler's-equation identity, orbital-element recovery),
-`test/maneuver-planner.test.js` (Δv + Tsiolkovsky fuel).
+`test/maneuver-planner.test.js` (Δv + Tsiolkovsky fuel); plus `test/route-meta.test.js`
+(per-route SEO metadata + soft-404 fallback) and `test/llm-stream.test.js` (the SSE parser
+and partial-JSON field extractor behind token-by-token rendering).
 
 Run serial for a deterministic count: `node --import tsx --test --test-concurrency=1 test/*.test.ts` (parallel pglite instances can cause file-level flakiness that is not a regression). The frontend has its own gates: `npx tsc --noEmit` (the `// @ts-check` modules) and `npx eslint src/`.
 
