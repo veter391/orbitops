@@ -349,11 +349,28 @@ export async function mountCockpit(host, THREE) {
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.01, 2000);
 
-  const renderer = new THREE.WebGLRenderer({
-    canvas: stage.querySelector('#cockpitCanvas'),
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
+  // Create the WebGL renderer defensively: a locked-down or headless browser, or
+  // a blocklisted GPU, has no WebGL context and `new WebGLRenderer` throws. When
+  // it does, degrade honestly to a notice instead of letting the throw leave a
+  // blank cockpit, and stop building the scene — the rest of the app is fine.
+  const renderer = (() => {
+    try {
+      return new THREE.WebGLRenderer({
+        canvas: stage.querySelector('#cockpitCanvas'),
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+    } catch {
+      return null;
+    }
+  })();
+  if (!renderer) {
+    stage.innerHTML =
+      '<div class="cockpit-webgl-fallback" role="status" style="display:flex;align-items:center;justify-content:center;height:100%;min-height:240px;padding:2rem;text-align:center;color:#c3ccda;font:14px/1.6 system-ui,sans-serif">' +
+      '3D view unavailable — this browser has no WebGL context. Enable hardware acceleration or use a WebGL-capable browser to see the live orbital scene.' +
+      '</div>';
+    return { unmount() {} };
+  }
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;

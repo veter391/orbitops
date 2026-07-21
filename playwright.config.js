@@ -12,13 +12,13 @@ export default defineConfig({
   testMatch: '**/*.spec.js',
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
-  // Cap workers so the three-engine matrix (3× the specs) never oversubscribes
-  // the machine. Playwright's default (~50% of logical cores) launches enough
-  // parallel WebKit/Firefox processes on a many-core host that a headless
-  // browser process can crash under memory pressure (observed on Windows:
-  // exit 0xC0000409), failing an unrelated spec. 4 is well below that threshold
-  // and verified stable across repeated full-matrix runs; CI runners get 2.
-  workers: process.env.CI ? 2 : 4,
+  // Cap workers at 2 for the three-engine matrix. Playwright's default (~50% of
+  // logical cores) launches enough parallel WebKit/Firefox processes that a
+  // headless browser process turns unstable under memory pressure — seen on
+  // Windows as a hard crash (exit 0xC0000409) or a sporadically failing,
+  // unrelated spec. 2 runs the full matrix reliably on both a dev machine and
+  // the 2-core CI runners, for ~30s more wall-clock than 4.
+  workers: 2,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://127.0.0.1:8123',
@@ -36,23 +36,7 @@ export default defineConfig({
   // before an operator hits it. WebKit is the Safari stand-in.
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
-    {
-      name: 'firefox',
-      use: {
-        browserName: 'firefox',
-        // Headless Firefox on Linux CI blocklists the GPU, which disables WebGL
-        // and leaves the cockpit's Three.js scene with no <canvas> (the smoke
-        // test then times out). Force WebGL on so it uses the software renderer
-        // (Mesa/llvmpipe) — matching a real desktop Firefox, where WebGL is
-        // available. A no-op where WebGL already works (e.g. local runs).
-        launchOptions: {
-          firefoxUserPrefs: {
-            'webgl.force-enabled': true,
-            'webgl.disabled': false,
-          },
-        },
-      },
-    },
+    { name: 'firefox', use: { browserName: 'firefox' } },
     { name: 'webkit', use: { browserName: 'webkit' } },
   ],
 });
