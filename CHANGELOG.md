@@ -16,8 +16,8 @@ All notable changes to OrbitOps are documented here. The format follows
 - Two real accessibility bugs the new gate caught: the dashboard's scrollable satellite table was unreachable by keyboard; the CelesTrak source switch had no accessible name.
 - The in-app "Planned services" docs article still described the backend as an unbuilt Go service — it is the shipped Node + TypeScript backend running live behind the public demo. The article now separates shipped from genuinely planned, and the Terms page discloses the ephemeral demo backend.
 
-Remaining in **Phase 2 — Operator-grade experience & trust**: the high-contrast
-operator "console mode" and cross-browser hardening.
+Remaining in **Phase 2 — Operator-grade experience & trust**: cross-browser
+hardening.
 
 ## [0.1.0] — 2026-07-10 — "First Light"
 
