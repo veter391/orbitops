@@ -65,6 +65,7 @@ import { PROVIDERS, getLlmConfig, setLlmConfig } from '../core/llm-provider.js';
 import { MODEL_ROUTING, modelsFor } from '../core/model-routing.js';
 import { audit } from '../core/audit-log.js';
 import { isAppMode, HOSTED_DEMO_URL } from '../core/app-config.js';
+import { isConsoleMode, setConsoleMode } from '../core/console-mode.js';
 import { hint } from '../ui/hint.js';
 import {
   getBackendConfig,
@@ -1154,6 +1155,13 @@ function sectionCompute() {
     )}
 
     ${row(
+      'Operator console mode',
+      'The operator-grade presentation: higher contrast, denser layout, no decorative motion or atmosphere. The cinematic look stays the default on the public site; self-host boots into console. Toggling reloads the page.',
+      `<label class="set-switch"><input type="checkbox" id="consoleModeToggle" aria-label="Operator console mode" ${isConsoleMode() ? 'checked' : ''}><span class="set-switch__track"></span></label>`,
+      { chip: chip('real') },
+    )}
+
+    ${row(
       'Effects',
       'Toggle the atmospheric layers. Turning these off is the fastest way to reclaim frames on low-power machines.',
       `<div class="set-fxlist">
@@ -1201,6 +1209,7 @@ function wireComputeSection(root) {
   const capGrid = root.querySelector('#setCapGrid');
   const density = /** @type {HTMLInputElement} */ (root.querySelector('#setDensity'));
   const densityOut = /** @type {HTMLElement} */ (root.querySelector('#setDensityOut'));
+  const consoleToggle = /** @type {HTMLInputElement} */ (root.querySelector('#consoleModeToggle'));
   const fxAmbient = /** @type {HTMLInputElement} */ (root.querySelector('#fxAmbient'));
   const fxGrain = /** @type {HTMLInputElement} */ (root.querySelector('#fxGrain'));
   const fxScanlines = /** @type {HTMLInputElement} */ (root.querySelector('#fxScanlines'));
@@ -1235,8 +1244,13 @@ function wireComputeSection(root) {
   });
   on(density, 'change', () => setLS(K.particleDensity, density.value));
 
+  // Console mode changes mount-time decisions everywhere, so it persists and
+  // reloads for a fully-applied state (see core/console-mode.js).
+  on(consoleToggle, 'change', () => setConsoleMode(consoleToggle.checked));
+
   // Effect toggles apply to THIS page immediately where they can (grain,
-  // scanlines); ambient is a page-render setting other views read on mount.
+  // scanlines); ambient is a page-render setting every view honors on mount
+  // (core/console-mode.js ambientAllowed()).
   on(fxAmbient, 'change', () => setLS(K.fxAmbient, fxAmbient.checked ? '1' : '0'));
   on(fxGrain, 'change', () => {
     setLS(K.fxGrain, fxGrain.checked ? '1' : '0');

@@ -27,6 +27,8 @@
 
 'use strict';
 
+import { ambientAllowed } from '../core/console-mode.js';
+
 const DPR_CAP = 1.5;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -63,6 +65,12 @@ const OBJECT_SVGS = {
  */
 export function mountAmbient(host, opts = {}) {
   const { object = 'none', density = 1, zIndex = 0 } = opts;
+
+  // Atmosphere is decoration. The Settings "Ambient scene" toggle and the
+  // operator console mode both turn it off entirely — return an inert handle
+  // so callers need no special-casing.
+  if (!ambientAllowed()) return { unmount() {} };
+
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   if (getComputedStyle(host).position === 'static') host.style.position = 'relative';

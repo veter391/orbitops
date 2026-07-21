@@ -22,7 +22,13 @@ import { maybeShowOnboarding } from './ui/onboarding.js';
 import { initHints } from './ui/hint.js';
 import { getBackendConfig, setBackendConfig } from './core/backend-client.js';
 import { resolveRouteMeta } from './core/route-meta.js';
+import { applyConsoleMode, isConsoleMode } from './core/console-mode.js';
 import { esc } from './utils.js';
+
+// Operator console mode keys everything (CSS tokens, motion, decor) off one
+// root attribute — apply it before any page mounts so no frame renders in the
+// wrong mode. See core/console-mode.js.
+applyConsoleMode();
 
 const boot = document.getElementById('boot');
 const bootMsg = document.getElementById('bootMsg');
@@ -294,9 +300,10 @@ async function main() {
         });
       }
 
-      // Dock magnification over the tab list (B1)
+      // Dock magnification over the tab list (B1) — a cinematic flourish, so
+      // the operator console leaves the tabs still.
       const navLinksEl = /** @type {HTMLElement|null} */ (topNav.querySelector('.top-nav__links'));
-      if (navLinksEl) initDockMagnify(navLinksEl);
+      if (navLinksEl && !isConsoleMode()) initDockMagnify(navLinksEl);
 
       // Wire burger
       const burger = topNav.querySelector('#topNavBurger');
@@ -441,7 +448,8 @@ async function main() {
     // window.__orbitopsCursorSat flag inside mountCursorSat() guards doubles.
     const cursorSatAllowed =
       window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+      !isConsoleMode();
     /** @type {{unmount: () => void}|null} */
     let cursorSat = null;
     router.on('change', (path) => {

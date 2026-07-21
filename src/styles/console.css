@@ -1,0 +1,97 @@
+/* ============================================================
+   OPERATOR CONSOLE MODE — high-contrast, dense, low-motion skin.
+
+   Every rule in this file is scoped under `html[data-console]`, set by
+   core/console-mode.js before any page mounts. With the attribute absent this
+   file is inert — the cinematic default design is untouched by construction.
+
+   Direction (CERN-VISTAR archetype, community-requested): the same layout and
+   components, with the glamour stripped — brighter text, harder lines, flatter
+   surfaces, tighter section rhythm, and no decorative motion. Semantic status
+   colors are unchanged.
+   ============================================================ */
+
+/* ----- Tokens: contrast up, decoration down, rhythm tighter ----- */
+html[data-console] {
+  /* Text hierarchy keeps its shape, every step reads brighter. */
+  --text-primary: #F2F5FA;
+  --text-secondary: #C3CCDA;
+  --text-mute: #8D97A9;
+  --text-faint: #6E7889;
+
+  /* Hairlines harden so panel boundaries read at a glance. */
+  --line: #2A313D;
+  --line-2: #39414F;
+  --line-3: #475062;
+
+  /* Decorative light is not part of the console. */
+  --accent-glow: rgba(111, 168, 255, 0);
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+
+  /* Flatter chrome. */
+  --r-lg: 4px;
+  --r-xl: 4px;
+  --r-2xl: 6px;
+
+  /* Section rhythm tightens (page-scale spacing only — component spacing,
+     --space-1..9, is untouched so controls keep their hit areas). */
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 56px;
+  --space-13: 64px;
+  --space-14: 88px;
+
+  /* Motion collapses to instant. */
+  --dur-fast: 0.01ms;
+  --dur-base: 0.01ms;
+  --dur-slow: 0.01ms;
+  --dur-xslow: 0.01ms;
+
+  /* The v3 pages' muted-text literal (#5A6169) sits at 3.2:1 on the page
+     ground — unmeasurable under the cinematic atmosphere, but console mode
+     removes the atmosphere and holds every readable string to WCAG AA. One
+     step brighter (5.4:1), hierarchy preserved. `html[data-console]` outranks
+     the pages' own `:root` declarations by specificity. */
+  --v3-mute: #8D97A9;
+}
+
+/* ----- Kill decorative surfaces & effects ----- */
+html[data-console] .chrome-grain::after,
+html[data-console] .top-nav__tab-shine,
+html[data-console] .set-scanlines::before {
+  display: none !important;
+}
+
+html[data-console] * {
+  backdrop-filter: none !important;
+}
+
+/* ----- Motion: everything arrives settled ----- */
+/* Scroll-reveal content is simply present — an operator scanning a console
+   never waits for copy to fade in. */
+html[data-console] .hv3.hv3-js [data-hv3-reveal],
+html[data-console] .agent-step,
+html[data-console] .docs-sidebar__root,
+html[data-console] .docs-sidebar__link,
+html[data-console] .is-entering {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+html[data-console] *,
+html[data-console] *::before,
+html[data-console] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* The route-loader / boot pulse can stay static — it is a status, not a show. */
+html[data-console] .boot__mark {
+  animation: none !important;
+}
