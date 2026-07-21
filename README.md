@@ -168,7 +168,7 @@ the UI until it ships.
 > Hardened Fastify backend; LangGraph multi-agent copilot (supervisor → specialists → critic → drafter → HITL); NASA-validated full-covariance Pc; CDM + OMM ingest; durable interrupt/resume + four-eyes countersign; Postgres RLS multi-tenancy; one-click evidence-pack export; evals-gated CI; one-Cloudflare deploy; `create-orbitops` self-host.
 
 **◐ Phase 2 — Operator-grade experience & trust** _(in progress)_
-> Shipped so far: **versioned documentation**, **streaming LLM reasoning** in the console, and **end-to-end + accessibility checks in CI** (axe-core WCAG gate). Remaining: a high-contrast, dense, low-motion **"console mode"** for real operators alongside the cinematic demo, and cross-browser hardening.
+> Shipped so far: **versioned documentation**, **streaming LLM reasoning** in the console, **end-to-end + accessibility checks in CI** (axe-core WCAG gate), and the high-contrast, dense, low-motion **operator console mode** alongside the cinematic demo (Settings → Operator console mode; the default in self-host builds). Remaining: cross-browser hardening.
 
 **⬜ Phase 3 — Live space-situational-awareness & standards depth**
 > Real credentialed feeds (Space-Track / LeoLabs / 18 SDS); fleet-wide ground-contact / pass scheduling; full 3D / Monte-Carlo Pc; OEM + CCSDS SLE; OpenMCT / Yamcs interop as a copilot + audit layer.
