@@ -169,8 +169,16 @@ const STREAM_TOTAL_TIMEOUT_MS = 60000;
 // Upper bound on an accumulated streamed completion. The three agents each emit
 // a small strict-JSON object (~700 tokens ≈ a few KB); 64 KB is far above any
 // legitimate response and caps memory + render cost against a hostile or
-// malfunctioning BYOK endpoint that streams without terminating.
+// malfunctioning BYOK endpoint.
 const MAX_STREAM_CONTENT_CHARS = 64 * 1024;
+// Upper bound on RAW bytes read from the stream, independent of parsed content.
+// The content cap above only trips once a COMPLETE SSE event parses; an endpoint
+// that streams bytes which never form a terminated event (no `\n\n`) would leave
+// `content` empty and never hit that cap — only this guard bounds that case.
+// 256 KB comfortably clears a full ~700-token response with SSE envelope overhead
+// (~150-200 B/token) while still capping an endless stream well before the 60 s
+// total timeout would.
+const MAX_STREAM_RAW_CHARS = 256 * 1024;
 
 /**
  * Incremental parser for OpenAI-style server-sent events. Pure and stateful:
@@ -311,6 +319,7 @@ export async function chatJSONStream(messages, opts = {}) {
       const decoder = new TextDecoder();
       const sse = createSseParser();
       let content = '';
+      let rawSeen = 0;
       let done = false;
       let overflowed = false;
       while (!done) {
@@ -318,7 +327,17 @@ export async function chatJSONStream(messages, opts = {}) {
         clearTimeout(firstByteTimer);
         firstByteTimer = setTimeout(() => controller.abort(), STREAM_FIRST_BYTE_TIMEOUT_MS);
         if (readerDone) break;
-        for (const data of sse.push(decoder.decode(value, { stream: true }))) {
+        const chunk = decoder.decode(value, { stream: true });
+        rawSeen += chunk.length;
+        if (rawSeen > MAX_STREAM_RAW_CHARS) {
+          // Bytes are flowing but not forming terminated events, so `content`
+          // never grows into its cap — bound the raw side too.
+          overflowed = true;
+          controller.abort();
+          break;
+        }
+        let grew = false;
+        for (const data of sse.push(chunk)) {
           if (data === '[DONE]') {
             done = true;
             break;
@@ -330,20 +349,24 @@ export async function chatJSONStream(messages, opts = {}) {
               content += delta;
               // Hard cap: the agents emit a small (~700-token) JSON object, so a
               // response past this bound is a broken or hostile endpoint, not a
-              // real answer. Stop before the growing string turns onDelta's
-              // per-token O(n) re-scan + textContent layout into a tab-freeze.
+              // real answer.
               if (content.length > MAX_STREAM_CONTENT_CHARS) {
                 overflowed = true;
                 done = true;
                 controller.abort();
                 break;
               }
-              opts.onDelta?.(content);
+              grew = true;
             }
           } catch {
             // Comment/keep-alive lines and provider extras are skippable noise.
           }
         }
+        // Coalesce the UI update to once per network chunk rather than once per
+        // SSE event: several tokens usually arrive together, and only the last
+        // render paints — this collapses a burst of per-token O(n) re-scans and
+        // forced reflows into a single one, with identical final output.
+        if (grew && !overflowed) opts.onDelta?.(content);
       }
       clearTimeout(totalTimer);
       clearTimeout(firstByteTimer);
