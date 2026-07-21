@@ -36,7 +36,23 @@ export default defineConfig({
   // before an operator hits it. WebKit is the Safari stand-in.
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
-    { name: 'firefox', use: { browserName: 'firefox' } },
+    {
+      name: 'firefox',
+      use: {
+        browserName: 'firefox',
+        // Headless Firefox on Linux CI blocklists the GPU, which disables WebGL
+        // and leaves the cockpit's Three.js scene with no <canvas> (the smoke
+        // test then times out). Force WebGL on so it uses the software renderer
+        // (Mesa/llvmpipe) — matching a real desktop Firefox, where WebGL is
+        // available. A no-op where WebGL already works (e.g. local runs).
+        launchOptions: {
+          firefoxUserPrefs: {
+            'webgl.force-enabled': true,
+            'webgl.disabled': false,
+          },
+        },
+      },
+    },
     { name: 'webkit', use: { browserName: 'webkit' } },
   ],
 });
