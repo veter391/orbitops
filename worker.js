@@ -35,6 +35,7 @@
 
 import { Container, getContainer } from '@cloudflare/containers';
 import { env } from 'cloudflare:workers';
+import { ROUTE_META, resolveRouteMeta } from './src/core/route-meta.js';
 
 /**
  * The OrbitOps backend container. Fastify listens on 0.0.0.0:8790 inside the
@@ -112,10 +113,66 @@ export default {
       return getContainer(env.BACKEND).fetch(request);
     }
 
+    // SEO: the SPA serves one index.html for every route, so without help every
+    // crawler and social scraper (no JS execution) would read the HOME page's
+    // title/description/canonical on /cockpit, /docs, etc. For the known app
+    // routes (listed in wrangler.toml `run_worker_first`, which is what brings
+    // these requests here instead of straight to the asset host), rewrite the
+    // served HTML's metadata per route at the edge. "/" is deliberately NOT
+    // routed through the worker: the static index.html is already the home
+    // page's correct metadata, so home stays on the free static path.
+    if (isSeoRoute(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
+      const page = await env.ASSETS.fetch(request);
+      const type = page.headers.get('content-type') || '';
+      if (page.ok && type.includes('text/html')) return rewriteRouteMeta(page, url.pathname);
+      return page;
+    }
+
     // Everything else: serve the static site as normal.
     return env.ASSETS.fetch(request);
   },
 };
+
+/** True for app routes whose HTML metadata should be rewritten per path. */
+function isSeoRoute(pathname) {
+  const clean = pathname !== '/' && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  if (clean === '/') return false; // static index.html already carries home meta
+  return Object.prototype.hasOwnProperty.call(ROUTE_META, clean) || clean.startsWith('/docs');
+}
+
+/**
+ * Rewrite the SPA shell's head metadata for one route: title, description,
+ * canonical, og:*, twitter:*. The og:image (the shared social card) is global
+ * and stays untouched. HTMLRewriter streams — no buffering of the document.
+ * @param {Response} page the index.html response from the asset host
+ * @param {string} pathname the requested route
+ */
+function rewriteRouteMeta(page, pathname) {
+  const meta = resolveRouteMeta(pathname);
+  const setContent = (value) => ({
+    element(el) {
+      el.setAttribute('content', value);
+    },
+  });
+  return new HTMLRewriter()
+    .on('title', {
+      element(el) {
+        el.setInnerContent(meta.title);
+      },
+    })
+    .on('meta[name="description"]', setContent(meta.description))
+    .on('link[rel="canonical"]', {
+      element(el) {
+        el.setAttribute('href', meta.canonical);
+      },
+    })
+    .on('meta[property="og:title"]', setContent(meta.title))
+    .on('meta[property="og:description"]', setContent(meta.description))
+    .on('meta[property="og:url"]', setContent(meta.canonical))
+    .on('meta[name="twitter:title"]', setContent(meta.title))
+    .on('meta[name="twitter:description"]', setContent(meta.description))
+    .transform(page);
+}
 
 /**
  * Fetch and rank the current free-tier text models from OpenRouter's own

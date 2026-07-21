@@ -21,6 +21,7 @@ import { isAppMode, hiddenInApp, resolveInitialRoute } from './core/app-config.j
 import { maybeShowOnboarding } from './ui/onboarding.js';
 import { initHints } from './ui/hint.js';
 import { getBackendConfig, setBackendConfig } from './core/backend-client.js';
+import { resolveRouteMeta } from './core/route-meta.js';
 import { esc } from './utils.js';
 
 const boot = document.getElementById('boot');
@@ -95,52 +96,15 @@ const TAB_ICONS = {
     '<circle cx="8" cy="8" r="2.3"/><path d="M8 1.4l.75 1.55a5.7 5.7 0 0 1 1.5.62l1.65-.5.95 1.65-1.2 1.2a5.7 5.7 0 0 1 0 1.62l1.2 1.2-.95 1.65-1.65-.5a5.7 5.7 0 0 1-1.5.62L8 14.6l-.75-1.55a5.7 5.7 0 0 1-1.5-.62l-1.65.5-.95-1.65 1.2-1.2a5.7 5.7 0 0 1 0-1.62l-1.2-1.2.95-1.65 1.65.5a5.7 5.7 0 0 1 1.5-.62L8 1.4z"/>',
 };
 
-/** Per-route document title + meta description. Hash routing means crawlers see
-   one URL, so this is for the browser tab, history entries and shared/bookmarked
-   links rather than deep SEO — honest, concrete copy, no marketing inflation.
-   @type {Record<string, [string, string]>} */
-const ROUTE_META = {
-  '/': [
-    'OrbitOps — Mission control for the real sky',
-    'Open-source mission control for satellite operators: the live CelesTrak catalogue propagated with SGP4, an accountable AI co-pilot, and a human in every loop.',
-  ],
-  '/cockpit': [
-    'Cockpit — OrbitOps',
-    'A live 3D constellation from the real CelesTrak catalogue, propagated with SGP4 in your browser. Pick any object for its position, velocity and next pass.',
-  ],
-  '/agent': [
-    'AI Agent — OrbitOps',
-    'An accountable AI co-pilot that drafts maneuvers and anomaly responses, shows its full reasoning, and never acts until a human approves.',
-  ],
-  '/dashboard': [
-    'Dashboard — OrbitOps',
-    'Constellation analytics over the real catalogue: altitude bands, orbital shells, inclination families and launch history — computed, never faked.',
-  ],
-  '/tools': [
-    'Flight tools — OrbitOps',
-    'Orbit calculator, conjunction check, burn planner and pass predictor — real client-side math with honestly labelled limits.',
-  ],
-  '/pricing': [
-    'Pricing — OrbitOps',
-    'Free forever to self-host, MIT-licensed. A managed cloud is planned. Support the work through GitHub Sponsors.',
-  ],
-  '/docs': [
-    'Docs — OrbitOps',
-    'How OrbitOps works: install, data sources and accuracy, the orbit engine, the AI agent, and the audit log.',
-  ],
-  '/settings': [
-    'Settings — OrbitOps',
-    'Bring your own model key, choose data sources and compute profiles, and export your audit data — all kept locally in your browser.',
-  ],
-};
-
-/** Set the tab title + meta description for a route (docs sub-paths share /docs). @param {string} path */
+/** Set the tab title + meta description for a route. The route → meta map is
+   shared with the edge worker (which rewrites the served HTML for crawlers), so
+   the browser tab and the crawler-visible tags can never drift apart — one
+   source of truth in core/route-meta.js. @param {string} path */
 function setRouteMeta(path) {
-  const key = path.startsWith('/docs') ? '/docs' : path;
-  const [title, desc] = ROUTE_META[key] || ROUTE_META['/'];
+  const { title, description } = resolveRouteMeta(path);
   document.title = title;
   const m = document.querySelector('meta[name="description"]');
-  if (m && desc) m.setAttribute('content', desc);
+  if (m && description) m.setAttribute('content', description);
 }
 
 /**

@@ -30,8 +30,17 @@ binding = "ASSETS"
 # Clean URLs: serve index.html for any non-file path so history-API routes
 # (/cockpit, /docs/going-live) resolve on deep-link and refresh. The API/health
 # paths must reach the Worker (→ container) FIRST, before this SPA fallback.
+# The app ROUTES are also worker-first so the Worker can rewrite the served
+# HTML's title/description/canonical/og per route for crawlers (worker.js
+# rewriteRouteMeta). "/" stays on the free static path — index.html already
+# carries the home metadata — and static assets (src/, public/, …) never hit
+# the Worker, so they stay free and cached as before.
 not_found_handling = "single-page-application"
-run_worker_first = ["/v1/*", "/health", "/api/ai"]
+run_worker_first = [
+  "/v1/*", "/health", "/api/ai",
+  "/cockpit", "/agent", "/dashboard", "/tools", "/pricing", "/settings",
+  "/docs", "/docs/*",
+]
 
 # LIVE BACKEND — the Node backend (backend/Dockerfile) runs in a Cloudflare
 # Container fronted by this Worker; worker.js routes /v1/* + /health to it. The
@@ -66,3 +75,11 @@ simple = { limit = 30, period = 60 }
 
 [observability]
 enabled = true
+
+# Local `wrangler dev` runs the static site + worker only. Containers can't run
+# in local dev on Windows (wrangler's own guidance is to disable them), and
+# worker.js already guards every backend route on `env.BACKEND`, so the app
+# behaves like a plain static deploy locally. Production deploys are unaffected
+# ([dev] applies only to `wrangler dev`).
+[dev]
+enable_containers = false

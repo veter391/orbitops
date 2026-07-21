@@ -5,7 +5,7 @@
 OrbitOps is built for a structural crisis in commercial space operations: the number of satellites doubles roughly every 18 months while the number of qualified flight-dynamics engineers does not. It is honest by design — every value is labelled REAL (computed from public data) or SIMULATED (modelled, only where no public feed exists), and it never fabricates telemetry or orbital numbers.
 
 ## What it does
-- **Cockpit** — a live 3D Earth ringed by 2,200+ real catalogued objects (Starlink, OneWeb), propagated with SGP4 in the browser; select any object for its real position, velocity, and next pass over a location.
+- **Cockpit** — a live 3D Earth over the real public catalog: 11,000+ tracked objects (Starlink, OneWeb, stations), with a 2,200-object subset rendered per frame, propagated with SGP4 in the browser; select any object for its real position, velocity, and next pass over a location.
 - **AI Agent** — a human-in-the-loop reasoning pipeline (bring-your-own OpenRouter key) that drafts maneuver and anomaly-response proposals, shows its full reasoning chain, and waits for a named human operator to approve, reject, or modify. Nothing executes autonomously.
 - **Dashboard** — constellation analytics computed from the real catalog: altitude bands, orbital shells, inclination families, and launch history.
 - **Tools** — orbit calculator, conjunction checker, burn planner, and pass predictor; real client-side math with honestly labelled accuracy limits.
