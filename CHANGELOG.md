@@ -8,6 +8,7 @@ All notable changes to OrbitOps are documented here. The format follows
 
 ### Added
 - **Per-route SEO metadata at the edge** — the Worker rewrites title, description, canonical and og:*/twitter:* per route with HTMLRewriter from a single shared route-meta module, so crawlers and social scrapers see each page's real metadata instead of the home page's on every URL. Sitemap gains lastmod + the going-live page; a WebSite JSON-LD block joins the SoftwareApplication one.
+- **Cross-browser e2e + accessibility matrix** — the Playwright suite now runs on **Chromium, Firefox and WebKit** (the Safari stand-in), so an engine-specific regression in the WebGL cockpit, SSE streaming, CSS custom properties or edge-fed metadata fails CI before an operator hits it. Completes Phase 2.
 - **End-to-end + accessibility gate in CI** — a Playwright suite (fully offline, bundled-snapshot path) drives every primary route in a real browser, and an axe-core WCAG 2.x A/AA scan fails the build on any serious/critical violation. New frontend-ci workflow runs typecheck, lint, unit tests and e2e on every frontend-touching push/PR.
 - **Operator console mode** — a high-contrast, dense, low-motion presentation mode (CERN-console archetype the community asked for): one root attribute + one scoped stylesheet, so the cinematic default is untouched when off. Defaults ON in self-host app mode, OFF on the public site; Settings toggle either way. Ambient/decor layers never mount in-mode, and the Settings "Ambient scene" toggle is now honored on every page (it was stored but unread).
 - **Streaming LLM output in the reasoning console** — BYOK agent stages stream over SSE; the console renders each agent's narrative token-by-token (never raw JSON) with graceful fallback to the buffered path. The decision path is unchanged: validated complete JSON, model fallback chain, deterministic without a key.
@@ -16,8 +17,9 @@ All notable changes to OrbitOps are documented here. The format follows
 - Two real accessibility bugs the new gate caught: the dashboard's scrollable satellite table was unreachable by keyboard; the CelesTrak source switch had no accessible name.
 - The in-app "Planned services" docs article still described the backend as an unbuilt Go service — it is the shipped Node + TypeScript backend running live behind the public demo. The article now separates shipped from genuinely planned, and the Terms page discloses the ephemeral demo backend.
 
-Remaining in **Phase 2 — Operator-grade experience & trust**: cross-browser
-hardening.
+**Phase 2 — Operator-grade experience & trust** is complete: versioned docs,
+streaming LLM reasoning, the cross-browser e2e + accessibility CI matrix, and
+operator console mode.
 
 ## [0.1.0] — 2026-07-10 — "First Light"
 
