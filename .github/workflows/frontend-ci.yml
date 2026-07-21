@@ -38,9 +38,11 @@ jobs:
 
   e2e:
     # End-to-end + accessibility gate: the real app served statically, driven in
-    # a real browser, with an axe-core scan (serious/critical = fail) on every
+    # real browsers, with an axe-core scan (serious/critical = fail) on every
     # primary page. Runs offline — external hosts are blocked in the specs, so
     # the catalog exercises the bundled-snapshot path deterministically.
+    # Cross-engine: every spec runs on Chromium, Firefox and WebKit (the Safari
+    # stand-in) so engine-specific breakage fails CI before an operator sees it.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +51,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

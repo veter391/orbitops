@@ -12,7 +12,13 @@ export default defineConfig({
   testMatch: '**/*.spec.js',
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Cap workers so the three-engine matrix (3× the specs) never oversubscribes
+  // the machine. Playwright's default (~50% of logical cores) launches enough
+  // parallel WebKit/Firefox processes on a many-core host that a headless
+  // browser process can crash under memory pressure (observed on Windows:
+  // exit 0xC0000409), failing an unrelated spec. 4 is well below that threshold
+  // and verified stable across repeated full-matrix runs; CI runners get 2.
+  workers: process.env.CI ? 2 : 4,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://127.0.0.1:8123',
@@ -24,5 +30,13 @@ export default defineConfig({
     port: 8123,
     reuseExistingServer: !process.env.CI,
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  // Three engines: the app is a hand-rolled, zero-build SPA (WebGL cockpit,
+  // SSE streaming, CSS custom properties, HTMLRewriter-fed metadata), so it is
+  // exercised on Chromium, Firefox and WebKit to catch engine-specific breakage
+  // before an operator hits it. WebKit is the Safari stand-in.
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'firefox', use: { browserName: 'firefox' } },
+    { name: 'webkit', use: { browserName: 'webkit' } },
+  ],
 });
