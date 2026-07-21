@@ -701,7 +701,7 @@ function sectionSources() {
     ${feed(
       'CelesTrak',
       'real',
-      `<label class="set-switch"><input type="checkbox" id="srcCelestrak" ${src.celestrak ? 'checked' : ''}><span class="set-switch__track"></span></label>`,
+      `<label class="set-switch"><input type="checkbox" id="srcCelestrak" aria-label="CelesTrak live feed" ${src.celestrak ? 'checked' : ''}><span class="set-switch__track"></span></label>`,
       '',
       'The default open feed — real catalogued TLEs, CORS-enabled, no key, ~2h cadence. Toggle off to rely on your own source.',
     )}

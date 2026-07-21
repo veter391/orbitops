@@ -319,7 +319,7 @@ export async function mount(app) {
               <h3 class="dv2-panel__title" id="tableTitle">Satellite status</h3>
               <span class="dv2-panel__tag">fleet roster</span>
             </div>
-            <div class="dv2-table-wrap"><table class="dv2-table" id="satTable"></table></div>
+            <div class="dv2-table-wrap" tabindex="0" role="region" aria-label="Satellite table, scrollable"><table class="dv2-table" id="satTable"></table></div>
           </div>
         </div>
       </section>

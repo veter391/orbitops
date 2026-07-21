@@ -46,3 +46,7 @@ internal/
 
 # npm auth token for local publish (never commit)
 .npmrc
+
+# Playwright output (e2e suite)
+test-results/
+playwright-report/

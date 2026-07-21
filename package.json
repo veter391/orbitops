@@ -13,6 +13,7 @@
     "format": "prettier --write \"src/**/*.{js,css,md}\" \"*.md\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"src/**/*.{js,css,md}\" \"*.md\" \"docs/**/*.md\"",
     "test": "node --test \"test/**/*.test.js\"",
+    "test:e2e": "playwright test",
     "cf:dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
@@ -38,7 +39,9 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@cloudflare/containers": "^0.3.7",
+    "@playwright/test": "^1.61.1",
     "eslint": "^9.0.0",
     "prettier": "^3.2.5",
     "typescript": "^5.7.0"
@@ -51,7 +54,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/orbitops/orbitops.git"
+    "url": "https://github.com/veter391/orbitops.git"
   },
   "bugs": {
     "url": "https://github.com/veter391/orbitops/issues"
