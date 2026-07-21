@@ -6,10 +6,17 @@ All notable changes to OrbitOps are documented here. The format follows
 
 ## [Unreleased]
 
-Work toward **Phase 2 — Operator-grade experience & trust** (see the roadmap in
-[README.md](README.md)): a high-contrast operator "console mode", streaming LLM
-reasoning, versioned docs surfaced across the app, and full end-to-end / visual /
-accessibility checks in CI.
+### Added
+- **Per-route SEO metadata at the edge** — the Worker rewrites title, description, canonical and og:*/twitter:* per route with HTMLRewriter from a single shared route-meta module, so crawlers and social scrapers see each page's real metadata instead of the home page's on every URL. Sitemap gains lastmod + the going-live page; a WebSite JSON-LD block joins the SoftwareApplication one.
+- **End-to-end + accessibility gate in CI** — a Playwright suite (fully offline, bundled-snapshot path) drives every primary route in a real browser, and an axe-core WCAG 2.x A/AA scan fails the build on any serious/critical violation. New frontend-ci workflow runs typecheck, lint, unit tests and e2e on every frontend-touching push/PR.
+- **Streaming LLM output in the reasoning console** — BYOK agent stages stream over SSE; the console renders each agent's narrative token-by-token (never raw JSON) with graceful fallback to the buffered path. The decision path is unchanged: validated complete JSON, model fallback chain, deterministic without a key.
+
+### Fixed
+- Two real accessibility bugs the new gate caught: the dashboard's scrollable satellite table was unreachable by keyboard; the CelesTrak source switch had no accessible name.
+- The in-app "Planned services" docs article still described the backend as an unbuilt Go service — it is the shipped Node + TypeScript backend running live behind the public demo. The article now separates shipped from genuinely planned, and the Terms page discloses the ephemeral demo backend.
+
+Remaining in **Phase 2 — Operator-grade experience & trust**: the high-contrast
+operator "console mode" and cross-browser hardening.
 
 ## [0.1.0] — 2026-07-10 — "First Light"
 
